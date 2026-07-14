@@ -364,11 +364,18 @@ jobs:
           # enumerating plugins/$PLUGIN/skills/*. Fall back to the static
           # baseline+skilled experiment if generation fails (Plugin columns are
           # then simply absent — the dashboard degrades gracefully).
+          #
+          # The generated file MUST live at the content root ($GITHUB_WORKSPACE),
+          # alongside the base experiment: vally resolves an experiment's relative
+          # `evals:` globs and `environment.skills` paths against the experiment
+          # FILE's own directory, not the process CWD. Writing it under
+          # $RESULTS_DIR would make `tests/*/.../eval.yaml` resolve to zero files
+          # ("eval patterns matched zero files") and drop every eval silently.
           EXPERIMENT_FILE="dotnet-skills.experiment.yaml"
           if GEN=$(node eng/vally-adapter/gen-experiment.mjs \
                 --plugin "$PLUGIN" \
                 --base dotnet-skills.experiment.yaml \
-                --out "$RESULTS_DIR/_experiment.$PLUGIN.plugin.yaml"); then
+                --out "$GITHUB_WORKSPACE/_experiment.$PLUGIN.plugin.yaml"); then
             EXPERIMENT_FILE="$GEN"
             echo "Using generated experiment with plugin variant: $EXPERIMENT_FILE"
           else
