@@ -100,6 +100,9 @@ stimuli:
       - Does not use CancellationToken.None when TestContext.CancellationToken is available
       - Seals the test class
   - name: Fix swapped Assert.AreEqual arguments
+    # Unaided-by-design: the rubric requires diagnosing the swapped-argument root
+    # cause without the skill, so no skill activation is expected (per dotnet/skills#875).
+    expect_activation: false
     prompt: |
       Something seems off with my MSTest tests — can you review and fix the MSTest assertions following MSTest best practices?
 
