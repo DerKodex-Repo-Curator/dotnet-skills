@@ -1,18 +1,31 @@
 # Skill-vs-baseline experiment for every dotnet skill.
 #
-# Each eval under tests/<plugin>/<skill>/eval.vally.yaml is run twice:
+# Each eval under tests/<plugin>/<skill>/eval.yaml is run with up to three
+# variants:
 #   - baseline: no skills loaded (a true skill-free control)
 #   - skilled:  exactly the one skill under test, loaded via environment.skills
+#   - plugin:   the WHOLE plugin loaded (every plugins/<plugin>/skills/<skill>
+#               directory with a SKILL.md) — mirrors how a skill behaves when its
+#               entire plugin is available, not just the one skill in isolation.
 #
-# The skill directory is derived from the eval's path:
-#   tests/<plugin>/<skill>/eval.vally.yaml -> plugins/<plugin>/skills/<skill>
-# i.e. ${eval.grandparent}=<plugin> and ${eval.parent}=<skill>.
+# The `baseline` and `skilled` variants below are static: the skill directory is
+# derived from the eval's path via interpolation,
+#   tests/<plugin>/<skill>/eval.yaml -> plugins/<plugin>/skills/<skill>
+#   i.e. ${eval.grandparent}=<plugin> and ${eval.parent}=<skill>.
+#
+# The `plugin` variant CANNOT be expressed statically: Vally's environment.skills
+# has no glob/enumeration and each entry must be a directory with its own
+# SKILL.md, so "load the whole plugin" requires listing every skill directory.
+# Since each CI leg is scoped to a single plugin, eng/vally-adapter/gen-experiment.mjs
+# reads this file and APPENDS a `plugin:` variant enumerating that plugin's skill
+# directories, producing a per-leg experiment file. Run that generator (or omit
+# it to run baseline+skilled only, e.g. for local single-skill iteration).
 #
 # The `agent.*` evals are excluded: they exercise orchestrator agents and do
 # not map to a single plugins/<plugin>/skills/<skill> directory.
 name: dotnet-skills
 evals:
-  - tests/*/!(agent.*)/eval.vally.yaml
+  - tests/*/!(agent.*)/eval.yaml
 overrides:
   model: claude-opus-4.6
   judge_model: claude-opus-4.6

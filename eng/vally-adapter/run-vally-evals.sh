@@ -6,7 +6,7 @@
 # Drives a single `vally experiment run` over the dotnet-skills experiment
 # (baseline = no skills, skilled = the one skill under test), then uses the
 # adapter to split the output by eval and run `vally compare` per skill,
-# producing the per-skill results.json the shadow summary consumes. A skill
+# producing the per-skill results.json the evaluation workflow consumes. A skill
 # passes only on a credible improvement (mean preference > 0 with its 95% CI
 # above 0).
 #
@@ -83,11 +83,11 @@ cd "$SKILLS_ROOT"
 FILTER=()
 SCOPE_DESC="all skills"
 if [ -n "$PLUGIN" ] && [ -n "$SKILL" ]; then
-  FILTER=(--eval-filter "tests/$PLUGIN/$SKILL/eval.vally.yaml")
+  FILTER=(--eval-filter "tests/$PLUGIN/$SKILL/eval.yaml")
   SCOPE_DESC="$PLUGIN/$SKILL"
   CLEAR_DIR="$RESULTS_ROOT/$PLUGIN/$SKILL"
 elif [ -n "$PLUGIN" ]; then
-  FILTER=(--eval-filter "tests/$PLUGIN/**/eval.vally.yaml")
+  FILTER=(--eval-filter "tests/$PLUGIN/**/eval.yaml")
   SCOPE_DESC="$PLUGIN"
   CLEAR_DIR="$RESULTS_ROOT/$PLUGIN"
 else
@@ -164,6 +164,6 @@ echo -e "  Results: $RESULTS_ROOT"
 echo -e "  Experiment output: $RUN_DIR"
 
 # Fail only when no verdict was produced at all (e.g. the experiment crashed
-# before writing output). Per-skill "no improvement" is an informational shadow
-# result, not a harness failure.
+# before writing output). Per-skill "no improvement" is an informational
+# quality result, not a harness failure.
 [ "$PRODUCED" -eq 0 ] && exit 1 || exit 0
