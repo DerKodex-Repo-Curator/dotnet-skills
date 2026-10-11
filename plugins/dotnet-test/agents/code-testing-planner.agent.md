@@ -32,36 +32,41 @@ caller. Do not reread repository files during planning.
 - Testing framework and patterns
 - Build/test commands
 - **Dependency graph** (leaf types, mid-layer, top-layer)
-- **Coverage classification** per target source file (untested / partial / substantial)
+- **Behavior evidence** per requested outcome: named assertions, demonstrated
+  gaps and unresolved context; measured coverage only with its report/scope
 
-### 2. Choose Strategy Based on Coverage Classification
+### 2. Choose Strategy Based on Scope and Evidence
 
-Check the coverage classification in the research:
+Use the caller's requested scope and the research evidence. Source-to-test
+pairing is heuristic; test counts and declaration counts are not behavioral
+coverage. Unknown or incomplete analysis cannot justify skipping a requested
+outcome or expanding the task into an unsolicited full-suite rewrite.
 
-**Broad strategy** (most files are untested or estimated coverage is unknown):
+**Broad strategy** (the user requested project/package-wide or multi-module work):
 
 - Generate tests for all files in the bounded target inventory
 - Organize into the fewest independently verifiable phases justified by
   priority and complexity
 - Assign every requested behavior and target API in the bounded inventory to a
   concrete test group; do not add shallow tests solely to touch every member
-- Use one phase for a focused target, 2-4 for a moderate scope, and add more
-  only when dependency ordering or a genuinely large inventory requires it
+- Use only the phases justified by dependency ordering and independently
+  verifiable behavior; do not target a fixed phase count
 - Assign each target file to exactly one phase
 
-**Targeted strategy** (most targets have substantial existing tests):
+**Targeted strategy** (the request is bounded to specific additions or repairs):
 
-- Focus on files estimated as **untested** or **partially tested**
-- Prioritize completely untested files, then partially tested files with complex logic
-- Put less focus on targets classified as having **substantial** existing tests
-- Fewer, more focused phases (1-3)
+- Map requested outcomes to existing assertions and the exact missing cases.
+- Prioritize demonstrated high-risk gaps, not files with the fewest tests.
+- Credit existing tests only for the behavior they actually assert.
+- Carry unknown context as a bounded research/implementation question, not a
+  claim of no coverage or a reason to duplicate tests.
 
 ### 3. Organize into Phases
 
 Group files by:
 
 - **Dependency graph layer**: Test leaf types first (no mocking needed), then mid-layer types (mock the leaves), then top-layer types
-- **Priority**: Untested files before partially tested ones
+- **Priority**: Missing requested behavior and high-consequence gaps first
 - **Dependencies**: Base classes before derived
 - **Complexity**: Simpler files first to establish patterns
 - **Logical grouping**: Related files together

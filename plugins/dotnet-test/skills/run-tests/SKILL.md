@@ -98,18 +98,36 @@ resolved. Route identification-only requests to `platform-detection`.
 |---|---|---|
 | Classic non-SDK | Repository script, or full MSBuild followed by `vstest.console.exe` / `MSTest.exe` | Assuming `dotnet test` is compatible or migrating implicitly |
 | VSTest mode / VSTest | `dotnet test [<path>] [VSTEST_OPTIONS]` | MTP-only flags such as `--report-trx` or `--treenode-filter` |
-| VSTest mode / executable MTP bridge | `dotnet test [<path>] [DOTNET_OPTIONS] -- [MTP_OPTIONS]` | Omitting the `--` separator, including on SDK 10 |
-| Native MTP mode, SDK 10+ | `dotnet test --project <path> [DOTNET_OPTIONS] [MTP_OPTIONS]` | Bare positional project paths or the bridge separator |
+| VSTest mode / supported executable MTP bridge | `dotnet test [<path>] [DOTNET_OPTIONS] -- [MTP_OPTIONS]` | Omitting `--`, or assuming MTP 2+ can bridge on SDK 10+ |
+| Native MTP mode, SDK 10+, MTP 1.7+ | `dotnet test --project <path> [DOTNET_OPTIONS] [MTP_OPTIONS]` | Bare positional project paths or treating MTP 1.6 as native-compatible |
 
 `global.json` controls the `dotnet test` command mode on SDK 10+, not
 necessarily the platform that executes tests. A VSTest-mode project with an MTP
 runner, `TestingPlatformDotnetTestSupport=true`, and final `OutputType=Exe` is
-still bridge syntax with `--`. SDK 8/9 only has VSTest command mode.
+bridge-shaped, but its resolved MTP/MSBuild version must support that SDK.
+SDK 8/9 only has VSTest command mode.
+
+Check the resolved `Microsoft.Testing.Platform` and
+`Microsoft.Testing.Platform.MSBuild` versions, including transitive packages:
+
+- MTP 1.x can use the legacy bridge on SDK 10 when configured; MTP 2+ removes
+  that support on SDK 10+. Adding `--` or the bridge property cannot make the
+  incompatible pairing work.
+- MTP 2+ retains the bridge for SDK 8/9. Native SDK 10+ integration requires
+  MTP 1.7 or later; an older bridge-capable package is not automatically
+  native-compatible.
+- For an incompatible requested command, report the blocker and the supported
+  alignment choice. Do not bypass the guard, downgrade packages, switch SDKs
+  or edit `global.json` without authorization.
+
+See [the supported integration modes](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-with-dotnet-test).
 
 `--project` is valid only in SDK 10+ **native MTP command mode** (selected by
 `global.json` `test.runner`). Never use it for VSTest mode or an SDK 8/9 bridge;
 those forms take a positional project path. Conversely, native MTP options are
-direct arguments and must not be placed after a bridge separator.
+direct arguments by default. Native MTP can also accept `--` to delimit test
+application arguments; unlike a legacy bridge, it does not require that separator.
+Keep SDK-owned options before it and do not mistake its presence for VSTest mode.
 
 Keep `dotnet test`/MSBuild options such as `--framework`, `--configuration`,
 `--no-build`, and `--verbosity` before `--`. Put only MTP application arguments
@@ -157,7 +175,8 @@ For SDK-style projects, distinguish:
 | Signal | Meaning |
 |---|---|
 | SDK 10+ `global.json` selects `Microsoft.Testing.Platform` | Native MTP command mode |
-| VSTest mode + enabled MTP runner + final `TestingPlatformDotnetTestSupport=true` + final `OutputType=Exe` | Executable VSTest-to-MTP bridge |
+| VSTest mode + enabled MTP runner + final `TestingPlatformDotnetTestSupport=true` + final `OutputType=Exe` + compatible SDK/MTP integration | Executable VSTest-to-MTP bridge |
+| SDK 10+ VSTest mode + MTP 2+ bridge configuration | Unsupported; report the version/mode conflict, not a runnable bridge or VSTest fallback |
 | VSTest mode without a complete runner-and-bridge combination | VSTest |
 | `Microsoft.NET.Test.Sdk` plus adapter, without stronger MTP signals | VSTest |
 | `TUnit` | MTP-only; use a configured bridge/native mode or the test executable |
@@ -219,7 +238,7 @@ Examples:
 # VSTest MSTest/NUnit
 dotnet test --filter "FullyQualifiedName~OrderServiceTests&TestCategory=Unit"
 
-# SDK 8/9 or SDK 10 VSTest-mode MTP bridge, xUnit v3
+# Supported VSTest-mode MTP bridge (SDK 10 requires compatible MTP 1.x), xUnit v3
 dotnet test -- --filter-trait "Category=Integration"
 
 # Native MTP, xUnit v3
@@ -302,6 +321,8 @@ platform-specific syntax and rerun before reporting success.
 ## Validation
 
 - The command matches classic, VSTest, bridged MTP, or native MTP mode.
+- The resolved SDK/MTP integration supports that mode; a correct separator
+  does not validate an unsupported MTP 2+/SDK 10+ bridge.
 - The framework-specific filter targets the requested subset.
 - `--framework` and other `dotnet test` options are before any bridge separator.
 - SDK 8/9 bridge commands contain `--`; `--project` appears only in SDK 10+

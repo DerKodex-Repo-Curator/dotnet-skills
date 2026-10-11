@@ -277,6 +277,8 @@ bundle install
 
 Never `gem install` outside Bundler — it bypasses the lockfile and changes the global Ruby environment.
 
-## Skip Coverage Tools
+## Coverage when requested
 
-Do not configure or run coverage tools (SimpleCov). Coverage is measured separately by the evaluation harness.
+Follow the [shared coverage policy](../../code-testing/unit-test-generation.prompt.md#test-scope-guidelines).
+Reuse configured SimpleCov when measurement is required; do not add it by
+default or assume a harness collects the report.

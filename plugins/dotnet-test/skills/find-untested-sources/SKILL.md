@@ -15,22 +15,24 @@ license: MIT
 
 ## Purpose
 
-Coverage tools answer "which lines were executed?" — they require a green build
-and a passing test run, which is minutes-to-tens-of-minutes on a real repo. The
-question this skill answers is different and much cheaper:
+Coverage tools answer "which lines were executed?" using instrumented execution.
+This skill answers a different, static question:
 
-> _Which source files have no test file referencing any of their declared
+> _Which source files have no detected test reference to any of their declared
 > types/symbols?_
 
 That's the question an agent asks **before** writing a new test — and it can be
-answered statically in a few seconds by parsing source files, with **no build,
+answered by parsing source files, with **no target-project build,
 no dependency resolution, and no compilation**. The output is a deterministic
-test-pairing map that lets the agent pick the next file to test without reading
-the entire codebase first.
+heuristic reference map, not proof that behavior is tested. Analyzer runtime
+dependencies remain prerequisites; launching the analyzer does not compile the
+analyzed project.
 
 ## Two engines — pick one
 
-This skill ships two interchangeable analyzers with a compatible JSON contract:
+This skill ships two analyzers with **different legacy schemas**. Pick the
+engine first and use its matching keys. A common envelope/data shape is available
+only through the explicit `--output-format json-v1` option on either engine.
 
 | Engine | Script | Use when |
 |--------|--------|----------|
@@ -54,14 +56,46 @@ pairing beats the polyglot engine's identifier overlap.
    Treat analyzer dependencies as environment prerequisites: do not install
    packages, try the wrong engine, build the repository, or fall back to a manual
    scan when an analyzer invocation fails. Report the prerequisite failure instead.
-3. Base the result on the analyzer's JSON. Preserve its paired/unpaired
-   classification and suggested relative path; do not guess a different path.
+3. Check exit status, output version, completeness and diagnostics before using
+   the JSON. Preserve supported paired/unpaired classifications and suggested
+   paths; do not infer unpaired sources from failed or omitted analysis.
 4. When the caller named a subdirectory, prefix analyzer-relative paths with
    that subdirectory so reported paths are workspace-relative.
 5. Report the requested result plus the static-pairing coverage caveat. Do not
    append build, package-install, test-run, or coverage commands. When paired
-   sources exist, name their covering test files so the unpaired classification
-   is auditable.
+   sources exist, name their referring test files so the classification is
+   auditable; a reference does not prove an assertion reaches the behavior.
+
+## Output compatibility and completeness
+
+Default output stays legacy: Roslyn uses `repo`, `counts`, `untested` and
+`source_to_tests`; Python uses `repo_root`, `summary`, `untested_sources` and
+optional `tested_sources`. Do not feed one engine's legacy JSON to the other's
+consumer or silently change its output mode.
+
+If the caller opts into JSON v1, add `--output-format json-v1` to the selected
+command (after `--` for the C# file-based app). The envelope contains
+`schema_version: "1"`, `tool`, `tool_version`, `status`, `scope`, `inputs`
+with path/SHA-256 identity, `diagnostics` and `data`. Both engines use
+`data.repo_root`, `data.summary`, `data.untested_sources`,
+`data.orphan_tests` and, only with `--include-tested`, `data.tested_sources`.
+The inclusion flag applies to both engines in v1. Declaration semantics remain
+engine-specific and are identified in `scope`; do not assume equivalent counts
+merely because the keys match. `scope.source_revision` is null: input hashes
+bind the source bytes read, not an attested commit or complete working-tree state.
+
+In v1, exit `0` means `complete`, `3` means `partial`, and `2` means `error`
+(invalid input, missing dependency or internal failure). Surface diagnostics
+and unresolved files; partial analysis cannot establish that every file was
+paired or unpaired. Legacy retains its argument-error exits but uses exit `3`
+without a success-shaped payload when incomplete/unknown results cannot be
+represented. Never interpret empty output as a clean inventory or install
+dependencies automatically after a failure.
+
+Respect explicit truncation metadata in `scope`: a limited display is not the
+entire inventory. Rust `test_regions` identify inline test-bearing regions;
+a mixed source/test physical file can belong to both sets, so their counts
+overlap and must not be added as disjoint totals.
 
 ## When to Use
 
@@ -96,8 +130,9 @@ pairing beats the polyglot engine's identifier overlap.
 # From the skill folder
 dotnet run scripts/Find-UntestedSources.cs -- <repo-root> [--top N]
 
-# Save the report
-dotnet run scripts/Find-UntestedSources.cs -- <repo-root> > pairing.json
+# Save the report after separately building the file-based analyzer.
+# Resolve its DLL from the successful build output, not a guessed framework path.
+dotnet <built-analyzer.dll> <repo-root> > pairing.json
 
 # Iterate the untested list, highest-API-surface first
 $report = Get-Content pairing.json | ConvertFrom-Json
@@ -105,6 +140,10 @@ $report.untested | Select-Object -First 10 source, decl_count, suggested_test_pa
 ```
 
 Diagnostics go to stderr; JSON goes to stdout.
+This separation applies to the analyzer process, not to the `dotnet run`
+build/restore launcher. Capture the build separately, then invoke the built
+analyzer for machine-readable output. Check its exit code before parsing the
+report; do not strip arbitrary build-log lines and call the remainder valid JSON.
 
 ### Output schema
 
@@ -236,7 +275,7 @@ stderr; JSON goes to stdout.
    | JS/TS/TSX | path contains `__tests__`, `tests`, `test`, `spec`, `e2e`; or filename contains `.test.`/`.spec.`. |
    | Go | filename ends `_test.go`. |
    | Java | path contains `test`/`tests`; or filename ends `Test.java`/`Tests.java`. |
-   | Rust | path contains `tests/`/`benches/`. |
+   | Rust | path contains `tests/`/`benches/`, or a source file contains a test-only region such as `#[cfg(test)] mod tests`; mixed files retain their production declarations. |
    | C# | path contains `tests/`; or project segment ends `.Tests`/`.Test`/`.UnitTests`/`.IntegrationTests`; or filename ends `Tests`/`Test`. |
    | Ruby | path contains `spec/`/`test/`; or filename ends `_spec.rb`/`_test.rb`. |
    | Kotlin | path contains `test/`/`tests/`/`spec/`; or filename ends `Test.kt`/`Tests.kt`/`Spec.kt`. |
@@ -250,13 +289,15 @@ stderr; JSON goes to stdout.
 5. **Pairing** — for each test file, union **import resolution** (per language,
    e.g. Python `from pkg.mod import x` → `pkg/mod.py`; Java `import a.b.C;` →
    `a/b/C.java`; C# `using` is namespace-not-file, so a no-op) with **identifier
-   overlap** (word-like tokens, length ≥ 4, matched against declared names).
+   overlap** from parsed code identifiers, excluding comments and string
+   contents. TS/TSX import references and Rust inline test regions contribute
+   evidence; neither implies a test asserts a particular behavior.
 6. **JSON emit** — `untested_sources` ordered by declaration count descending.
 
 ## Limitations (be honest with the agent)
 
-Both engines are static, parse-only heuristics that trade a little accuracy for
-orders-of-magnitude lower cost than coverage. Known gaps:
+Both engines are static, parse-only heuristics, not semantic compilation or
+behavioral coverage. Known gaps:
 
 - **Reflection / DI-resolved types** referenced only via a string name or
   container resolution won't be detected — the type's short name never appears
@@ -271,8 +312,9 @@ orders-of-magnitude lower cost than coverage. Known gaps:
   resolved; a suffix-match fallback may pick the wrong source if two files share
   a trailing path segment.
 
-For these cases, run actual coverage (`coverage-analysis`) on the unpaired
-candidates the agent has already triaged.
+Report these limitations in a static-only request. Actual coverage requires a
+separately authorized execution workflow (`coverage-analysis` for .NET, native
+tooling elsewhere); do not start it merely to repair a pairing limitation.
 
 Always label the final result as a static pairing heuristic, not evidence of
 line or branch coverage. Include that caveat even when every requested source

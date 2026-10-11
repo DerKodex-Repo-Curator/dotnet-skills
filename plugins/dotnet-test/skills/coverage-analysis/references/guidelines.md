@@ -24,7 +24,61 @@ Resolve the scripts relative to this skill's `SKILL.md`:
 
 `Compute-CrapScores.ps1` emits aggregate line/branch coverage, method counts,
 flagged counts, and sorted hotspots. `Extract-MethodCoverage.ps1` emits every
-below-threshold method. Use both for explicit project-wide risk work.
+representable below-threshold method. Use both for explicit project-wide risk
+work. The commands above retain legacy output; do not switch consumers to a
+new schema implicitly.
+
+### Uncertainty and opt-in JSON v1
+
+When the caller explicitly selects structured uncertainty-aware output, append
+`-OutputFormat json-v1` to either command. Consume one stdout JSON object with
+`schema_version: "1"`, `tool`, `tool_version`, `status`, `scope`,
+`inputs` (paths and SHA-256 hashes), `diagnostics` and `data`. Validate the
+version/status before interpreting `data.summary` or `data.methods`.
+Do not reuse an unrelated eval recorder's JSON as this shipping contract.
+
+`data.summary` separates `overall_line_coverage` /
+`overall_line_coverage_status`, `overall_branch_coverage` /
+`overall_branch_coverage_status`, `method_line_coverage` and `total_methods`.
+Its `coverage_scope` is `class-lines`, `report` or `method-lines-only`; the last
+does not establish whole-project coverage. CRAP adds `flagged_methods` and
+`unknown_crap_methods`. `data.hotspots` contains only known-score methods;
+`data.methods` retains unknown rows with `CrapScore: null`.
+
+- Exit `0` / `complete` means the requested analysis completed, not that every
+  metric is exact. Exit `3` / `partial` requires surfacing the diagnostics and
+  missing evidence; exit `2` / `error` is an input, dependency or tool failure.
+- Legacy output is retained only when it can represent the result safely.
+  Unrepresentable unknown/incomplete results fail explicitly with exit `3`,
+  not a success-shaped payload. Do not silently retry another format and report
+  success, or treat an empty payload as no risky methods.
+- Methods retain their existing PascalCase metrics and add
+  `LineCoverageStatus`, `BranchCoverageStatus` and `ComplexityStatus`:
+  `exact`, `bounded`, `unknown` or `not-applicable`. Unavailable numeric values
+  and `CrapScore` are `null`, never invented zero coverage or complexity one.
+  A known method with no branches may have total branches zero and
+  `not-applicable`; this differs from missing branch evidence.
+- Bounded branch results expose `CoveredBranchesLower`/`CoveredBranchesUpper`
+  and `BranchCoverageLower`/`BranchCoverageUpper`. Do not report the upper
+  bound as measured coverage. Without stable branch identities, counter totals
+  from separate runs do not prove which branches overlap.
+- Keep aggregate and method denominators separate. Fully covered reported
+  methods do not prove the entire module is fully covered. Respect input
+  identities, scope and explicit truncation metadata before comparing reports.
+- `scope.source_revision` is null: input hashes bind the supplied report bytes,
+  not a verified source revision or proof that those reports describe the
+  current checkout. Establish that association separately before reusing results.
+
+Preserve analyzer exit codes through launchers. When invoking these scripts
+through `pwsh -Command`, explicitly propagate `$LASTEXITCODE` (for example,
+append `; exit $LASTEXITCODE`) rather than allowing the outer host to collapse
+all nonzero outcomes to exit `1`.
+
+Rank only supported numeric risk evidence. Keep unknown/partial methods visible
+as unresolved work, not low-risk results; exclude them from exact numeric
+denominators and state the excluded count. A threshold inside a reported range
+is unresolved. Do not cast null to zero or claim a threshold passed when
+required evidence is missing.
 
 CRAP is:
 

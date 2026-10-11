@@ -206,6 +206,9 @@ Most `Should` operators are self-explanatory. These are the ones agents get wron
 - Windows ships Pester 3.4.0 — if v5 is needed: `Install-Module Pester -Force -SkipPublisherCheck`
 - Check `$PSVersionTable.PSEdition` to detect Core vs Desktop
 
-## Skip Coverage Tools
+## Coverage when requested
 
-Do not configure or run coverage tools (Pester CodeCoverage, JaCoCo export). Coverage is measured separately by the evaluation harness.
+Follow the [shared coverage policy](../../code-testing/unit-test-generation.prompt.md#test-scope-guidelines).
+Reuse the repository's Pester CodeCoverage configuration when measurement is
+required, preserving its selected paths and report format. Do not assume a
+harness collects the requested artifact.
