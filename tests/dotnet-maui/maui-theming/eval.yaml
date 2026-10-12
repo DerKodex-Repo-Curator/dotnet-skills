@@ -343,6 +343,7 @@ stimuli:
       - diff
   rubric:
   - Repairs the stated defect without changing protected files or weakening checks.
+  - Allows correcting the erroneous static Apply modifier to match the supplied instance-owned tracking field and existing instance callers; preserves the method parameters and theme-swapping behavior.
   - Reports only validation actually performed and distinguishes object-model checks from native/device
     behavior.
   golden_patch:
@@ -358,8 +359,10 @@ stimuli:
       steps:
       - step_id: 1
         source: agent
-        message: 'Expected result: the supplied defect is corrected in Program.cs without changing the
-          public contract. The executable checks verify platform-neutral code against real MAUI 10.0.0
+        message: 'Expected result: Apply is an instance method matching the supplied instance-owned
+          tracking field and callers; its parameters and theme-swapping behavior are preserved.
+          This explicitly permitted ownership/API correction changes Program.cs only.
+          The executable checks verify platform-neutral code against real MAUI 10.0.0
           assemblies; they are not device, native layout, navigation or lifecycle execution evidence.'
 - name: Preserve working supplied implementation
   prompt: Review the supplied implementation for the behavior checked by Checks.cs. Run the checks; if

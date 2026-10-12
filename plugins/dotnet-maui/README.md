@@ -53,6 +53,10 @@ prospective corrections, not a rescore or transfer of the comparisons below:
   `.scope-snapshot.json`, capture script or hidden-state preservation hint is
   supplied to either role. Three-role replay accepts intact inputs and rejects
   changed/deleted pins and grader bypasses.
+- The theming repair rubric/reference response now explicitly permit correcting
+  the erroneous static `Apply` modifier to match the supplied instance field
+  and callers. The golden already made that API correction; its old promise
+  of an unchanged public contract contradicted the executable fixture.
 
 The native provider also publishes `writeFile` by rooted atomic replacement
 after writing, syncing and closing a temporary file. Injected partial/short
