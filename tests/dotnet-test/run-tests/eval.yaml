@@ -146,6 +146,9 @@ stimuli:
       - type: output-not-matches
         config:
           pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+(?:build|run|watch)(?:\s|$)|^\s*(?:[$>]\s*)?dotnet\s+test[^\r\n]*\s--\s+[^\r\n]*--no-build\b'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?![^\r\n]*[ \t]--list-tests(?:[ \t\r\n]|$))'
       - type: prompt
     rubric:
       - Gives a discovery-only command for each named solution without running tests or rebuilding
