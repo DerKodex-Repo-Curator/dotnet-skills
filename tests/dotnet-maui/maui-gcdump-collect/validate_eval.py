@@ -35,9 +35,28 @@ BROKEN_ADVICE = {
     "production-permission-boundary": "Open a public listener to collect the production heap.",
 }
 FALSE_VERIFICATION = "Physical-device capture verified. I successfully collected the device heap."
+# Unsafe public-listener advice phrased as a command rather than a sentence
+# leading with Bind/Listen/Start/Open/Expose/Enable; the rejection pattern
+# must catch this independent of which verb (if any) introduces it.
+COMMAND_SHAPED_LISTENER_ADVICE = {
+    "android-transport-diagnosis": "Use dotnet-dsrouter server-server -tcps 0.0.0.0:9001 to fix the timeout.",
+    "production-permission-boundary": "Run dotnet-dsrouter server-server -tcps 0.0.0.0:9001 to collect the production heap.",
+}
 
 
 def run(command, workspace, *, shell=False):
+    if shell and os.name != "posix":
+        # subprocess.run(shell=True) invokes cmd.exe on Windows, which neither
+        # understands the single-quoted `python3 -c '...'` bodies the run-command
+        # graders use (cmd.exe treats ' as a literal character, not a quote) nor
+        # reliably exposes a `python3` executable on PATH. Rather than silently
+        # mis-parsing those commands, fail fast with the actual requirement: this
+        # script needs a POSIX shell (bash/sh), e.g. via WSL or Git Bash on Windows.
+        raise SystemExit(
+            "validate_eval.py's run-command graders require a POSIX shell "
+            "(bash/sh) and are not reproducible under Windows' cmd.exe. "
+            "Run this script from WSL, Git Bash, or another POSIX environment."
+        )
     return subprocess.run(
         command, cwd=workspace, shell=shell, text=True,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False,
@@ -83,6 +102,8 @@ def main():
         print(f"Scoped structural checks: no content defects; {len(untracked)} tracking blockers")
 
         workspace_count = 0
+        workspace_mutation_count = 0
+        response_defect_count = 0
         for index, stimulus in enumerate(doc["stimuli"]):
             workspace = scratch / f"golden-{index}"
             workspace.mkdir()
@@ -108,6 +129,16 @@ def main():
                 original = plan_path.read_text()
                 plan = json.loads(original)
                 mutations = []
+                if (stimulus["tags"]["capability"] == "android-usb-route"
+                        and len(plan["commands"]["route"]) > 1):
+                    # A plan that runs the device-side adb reverse/setprop steps
+                    # before starting the host dotnet-dsrouter still contains every
+                    # required command, so only an index-ordering check (not plain
+                    # substring containment) can reject it.
+                    reordered_route = copy.deepcopy(plan)
+                    reordered_route["commands"]["route"] = list(
+                        reversed(plan["commands"]["route"]))
+                    mutations.append(reordered_route)
                 bad_route = copy.deepcopy(plan)
                 bad_route["commands"]["route"] = ["dotnet-dsrouter ios-sim"]
                 mutations.append(bad_route)
@@ -157,6 +188,15 @@ def main():
                     '[ ! -e "$PWD/after-navigation.gcdump" ] || { exit 0; }; ' + capture
                 ]
                 mutations.append(masked_form_c_exit0)
+                # Form C with "exit 256": POSIX shells reduce the exit status modulo
+                # 256, so this is indistinguishable from "exit 0" (success) at runtime
+                # even though the literal digits are nonzero -- the same false-success
+                # defect as exit 0, just disguised by an out-of-range exit code.
+                masked_form_c_exit256 = copy.deepcopy(plan)
+                masked_form_c_exit256["commands"]["collect"] = [
+                    '[ ! -e "$PWD/after-navigation.gcdump" ] || { exit 256; }; ' + capture
+                ]
+                mutations.append(masked_form_c_exit256)
                 # A "|| true" (or "|| :") suffix on the report validation would mask a
                 # genuine report/parse failure while still satisfying every substring
                 # check on the command text.
@@ -169,6 +209,7 @@ def main():
                     plan_path.write_text(json.dumps(mutant))
                     assert any(run(c, workspace, shell=True).returncode != 0
                                for c in commands), stimulus["name"]
+                workspace_mutation_count += len(mutations)
                 for guarded_capture in (
                     '[ ! -e "./after-navigation.gcdump" ] && ' + capture,
                     '! test -e "$PWD/after-navigation.gcdump" && ' + capture,
@@ -206,7 +247,12 @@ def main():
                        and not quality.vally_regex_found(g["config"]["pattern"], "")]
             assert matched, f"empty response mutation survived: {stimulus['name']}"
             reference = stimulus["golden_trajectory"]["inline"]["steps"][-1]["message"]
-            for defect in (BROKEN_ADVICE[stimulus["tags"]["capability"]], FALSE_VERIFICATION):
+            response_defects = [BROKEN_ADVICE[stimulus["tags"]["capability"]], FALSE_VERIFICATION]
+            command_shaped = COMMAND_SHAPED_LISTENER_ADVICE.get(stimulus["tags"]["capability"])
+            if command_shaped:
+                response_defects.append(command_shaped)
+            for defect in response_defects:
+                response_defect_count += 1
                 broken = reference + "\n" + defect
                 assert any(g["type"] == "output-not-matches"
                            and quality.vally_regex_found(g["config"]["pattern"], broken)
@@ -222,8 +268,8 @@ def main():
                     )
         print(f"Golden acceptance: {len(doc['stimuli'])} responses, {workspace_count} workspaces")
         print(f"Mutation rejection: {len(doc['stimuli'])} empty responses; "
-              f"{len(doc['stimuli']) * 2} realistic response defects; "
-              f"{workspace_count * 11} workspace defects")
+              f"{response_defect_count} realistic response defects; "
+              f"{workspace_mutation_count} workspace defects")
         print(f"No-overwrite equivalents accepted: {workspace_count * 5}")
 
         if args.oracle:
