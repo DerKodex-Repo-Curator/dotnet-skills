@@ -109,9 +109,9 @@ A new `.csproj` is **invisible** to `dotnet test <solution>`, to `dotnet test` r
 
 Before reporting success, run the **harness-equivalent** discovery command from the repo root against the exact researched entry point and confirm it enumerates the new tests. Passing a project directly does not prove that the solution/filter command used by CI discovers it.
 
-Use the `run-tests` discovery command for the actual runner/mode, preserving
-configuration, target framework and filters. Do not repeat its command table
-here or infer native MTP from an SDK 10+ installation.
+Use the **Discovery-only commands** table in `run-tests` for the actual
+runner/mode, preserving configuration, target framework and filters. Do not
+repeat its command table here or infer native MTP from an SDK 10+ installation.
 
 Run discovery directly and require exit code zero before inspecting its output
 or runner-owned discovery artifact. Do not pipe it into `grep -c`, `wc`, or a

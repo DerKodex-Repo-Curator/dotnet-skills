@@ -96,6 +96,71 @@ stimuli:
         - edit
         - create
 
+  - name: List existing solution tests across VSTest and both MTP modes
+    prompt: |
+      I need discovery-only commands for three CI lanes, without running test
+      bodies or rebuilding. All three solutions already have current Debug
+      outputs and use SDK 10.0.100. Give one command for each lane; do not
+      execute anything or modify files.
+
+      - VSTest.slnx uses VSTest with MSTest.
+      - Bridge.slnx explicitly selects VSTest in global.json, but its projects
+        run MTP 1.9 with TestingPlatformDotnetTestSupport=true and OutputType=Exe.
+      - Native.slnx selects Microsoft.Testing.Platform in global.json and its
+        test applications use MTP 2.0.
+    tags:
+      capability: discovery-command-mode-selection
+      risk: executing-tests-or-misrouting-discovery
+      journey: list-built-ci-test-inventory
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: run-tests-discovery-command-modes
+        agent:
+          name: reference
+          version: 1.0.0
+          model_name: curated
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              ```shell
+              dotnet test VSTest.slnx --no-build --list-tests
+              dotnet test Bridge.slnx --no-build -- --list-tests
+              dotnet test --solution Native.slnx --no-build --list-tests
+              ```
+
+              These list the built tests without running their bodies. The
+              bridge forwards the discovery flag after `--`; native MTP uses
+              an explicit solution selector. I have not executed the commands.
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test\s+["'']?VSTest\.slnx["'']?(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--list-tests(?:\s|$))(?![^\r\n]*\s--\s)[^\r\n]*$'
+      - type: output-matches
+        config:
+          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test\s+["'']?Bridge\.slnx["'']?(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--\s+[^\r\n]*--list-tests(?:\s|$))[^\r\n]*$'
+      - type: output-matches
+        config:
+          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test(?=[^\r\n]*\s--solution\s+["'']?Native\.slnx["'']?(?:\s|$))(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--list-tests(?:\s|$))[^\r\n]*$'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+(?:build|run|watch)(?:\s|$)|^\s*(?:[$>]\s*)?dotnet\s+test[^\r\n]*\s--\s+[^\r\n]*--no-build\b'
+      - type: prompt
+    rubric:
+      - Gives a discovery-only command for each named solution without running tests or rebuilding
+      - Preserves the legacy bridge on the compatible MTP version despite SDK 10, and keeps SDK build options before forwarded application arguments
+      - Uses the native solution selector only for the native MTP lane
+      - Does not claim that listing tests proves they passed or that the commands were executed
+    constraints:
+      reject_tools:
+        - bash
+        - powershell
+        - edit
+        - create
+        - apply_patch
+        - task
+
   - name: Exclude slow integration tests on VSTest MSTest
     tags:
       capability: filter-vstest-select-exclude
