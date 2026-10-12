@@ -130,6 +130,13 @@ harness revision; verify that revision before attributing the fix to an official
 run. Read actual `session.start.data.copilotVersion`, not just the installed
 package manifest or a shell CLI's version, when comparing runtime provenance.
 
+The trusted CI install stages `vally.mjs`, `sdk-startup.mjs`, and the sibling
+`workspace-session-fs.mjs` guard together. It runs the staged launcher with
+`--version` before token selection; a missing module fails installation rather
+than starting paid trials. Staging tests execute the workflow's copy commands
+and verify local import closure. This deployment check does not restore native
+workspace I/O or certify a default-branch revision.
+
 ### Investigation steps
 
 1. **Download the results artifacts:** `gh run download <run-id> --repo dotnet/skills --pattern "vally-results-*" --dir ./eval-results`
