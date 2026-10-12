@@ -91,6 +91,16 @@ Before generating tests, analyze the codebase to understand existing conventions
 
 If you identify a strong pattern, follow it unless the user explicitly requests otherwise. If no pattern exists and there's no user guidance, use your best judgment.
 
+When establishing source-to-test pairs or suggesting test locations, use
+`find-untested-sources` before manual matching whenever it is available for the
+language. This applies to focused and tiny scopes too; a short target list does
+not remove namespace ambiguity. Reuse a completed helper result only when it
+covers the requested scope and its relevant source, tests and project metadata
+are unchanged. For C#-only work, prefer its namespace-aware Roslyn engine.
+Keep manual pairing as an explicitly limited fallback only when the skill is
+unavailable or the language unsupported, not after an analyzer failure or
+policy denial. Pairing remains reference evidence, not behavioral coverage.
+
 ## Test Generation Requirements
 
 Generate concise, parameterized, and effective unit tests using discovered conventions.

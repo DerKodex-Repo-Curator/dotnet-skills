@@ -44,9 +44,11 @@ Batch independent manifest, target and representative-test reads. Record in
 - exact scoped build/test/discovery commands and required final entry point;
 - requested coverage/report artifacts and observed capability blockers.
 
-Use available deterministic pairing helpers only when useful, once. Pairing
-is heuristic reference evidence, not behavioral coverage. Inspect relevant
-test bodies before treating a contract as tested.
+Apply the shared contract's mandatory `find-untested-sources` pairing policy at
+every scope, including tiny or explicit target lists. Reuse an existing
+completed, current helper result rather than rerunning the same inventory.
+Pairing is heuristic reference evidence, not behavioral coverage; inspect
+relevant test bodies before treating a contract as tested.
 
 For .NET runner/mode/filter selection use `run-tests`; preserve classic project
 commands, `packages.config`, explicit compile registration and pinned API versions.

@@ -70,7 +70,8 @@ Based on files found:
 ### 4. Use the cheapest discovery path
 
 - Prefer project manifests, language-server references, and deterministic pairing tools over whole-tree text searches.
-- For multi-file scopes in C#, Python, TypeScript/JavaScript, Go, Java, Rust, Ruby, Kotlin, Swift, PowerShell, or C++, invoke `find-untested-sources` once and consume its JSON instead of manually walking source and test trees.
+- For source-to-test pairing, follow Step 7 at every scope, not only multi-file
+  requests. Consume the helper's JSON instead of manually matching names.
 - Batch independent glob, manifest, source, and representative-test reads where
   the available tools support it.
 - Keep a single evidence set for discovered paths, commands, and conventions;
@@ -134,14 +135,18 @@ Locate tests paired to the bounded target inventory:
   Do not infer percentages, substantial coverage or a clean result from a
   pairing map, partial parser output or missing metrics.
 
-For substantial source-to-test pairing, use `find-untested-sources` when
-available and reuse its heuristic references and suggested paths. Preserve
-engine/schema differences, completeness and diagnostics; a failed or partial
-analysis is not an empty or wholly unpaired inventory. Rust inline test regions
-may share a file with runtime code. Prioritize requested behavioral gaps by risk,
-not declaration or test counts alone. A small explicit target list does not need
-another inventory pass. Use bounded manual discovery only when the helper is
-unavailable or the language is unsupported, and label that limitation.
+For source-to-test pairing or suggested test locations, invoke
+`find-untested-sources` before manual matching when it is available for the
+language, even for a tiny package or small explicit target list. Prefer its
+namespace-aware Roslyn engine for C#-only work; matching short names is not
+sufficient. Reuse an existing completed helper result only when it covers this
+scope and the relevant source, tests and project metadata are unchanged.
+Preserve engine/schema differences and diagnostics; failed or partial analysis
+is not an empty or wholly unpaired inventory. Rust inline test regions may
+share a file with runtime code. Prioritize behavioral gaps by risk, not counts.
+Use bounded manual discovery only when the skill is unavailable or the language
+unsupported, and label the limitation. An analyzer failure or policy denial is
+a blocker, not permission to bypass the helper.
 
 ### 8. Generate Research Document
 
