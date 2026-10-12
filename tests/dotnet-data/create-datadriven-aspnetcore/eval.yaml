@@ -17,13 +17,39 @@ stimuli:
     environment:
       files:
         - { src: fixtures/razor-pages-crud, dest: fixtures/razor-pages-crud }
+        - { src: validators/validate-generated.mjs, dest: validators/validate-generated.mjs }
+    golden_patch:
+      path: references/add-razor-pages-crud.patch
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
         session_id: "data-scaffold-razor-crud"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "Expected result: complete Product and Category Razor Pages CRUD, one AppDbContext with SQLite, a migration, validation-aware forms, category selection, navigation, and a clean build without command-line scaffolding, EnsureCreated, or startup seeding." }
+          - step_id: 1
+            source: agent
+            message: "I will inspect the models and layout, add the EF data layer and complete parent-child page flows, then build the project."
+            tool_calls:
+              - tool_call_id: inspect-razor-fixture
+                function_name: read_files
+                arguments:
+                  paths: [MyApp.csproj, Program.cs, Models/Product.cs, Models/Category.cs, Pages/Shared/_Layout.cshtml]
+              - tool_call_id: implement-razor-crud
+                function_name: apply_patch
+                arguments:
+                  patch: "Added AppDbContext, SQLite/Design packages and registration, migration, Product and Category Index/Details/Create/Edit/Delete pages with PageModel handlers, validation and CategoryId selection, and layout navigation."
+              - tool_call_id: build-razor-crud
+                function_name: run_command
+                arguments:
+                  command: dotnet build fixtures/razor-pages-crud/MyApp.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-razor-fixture, content: "Product requires CategoryId; both models use DataAnnotations; the app uses Razor Pages and Bootstrap layout navigation." }
+                - { source_call_id: implement-razor-crud, content: "Added 29 files/edits covering context, migration, ten page pairs, category selection, validation, and navigation." }
+                - { source_call_id: build-razor-crud, content: "Build succeeded. 0 Warning(s), 0 Error(s)." }
+          - step_id: 2
+            source: agent
+            message: "Implemented and built complete Product and Category Razor Pages CRUD with one SQLite AppDbContext, a migration, validation-aware forms, CategoryId selection, and navigation. I did not use command-line scaffolding, EnsureCreated, or startup seeding."
     graders:
       - { type: file-exists, config: { path: "fixtures/razor-pages-crud/**/*AppDbContext*.cs" } }
       - { type: file-exists, config: { path: "fixtures/razor-pages-crud/**/Migrations/*.cs" } }
@@ -38,6 +64,11 @@ stimuli:
       - { type: file-exists, config: { path: fixtures/razor-pages-crud/Pages/Categories/Edit.cshtml } }
       - { type: file-exists, config: { path: fixtures/razor-pages-crud/Pages/Categories/Delete.cshtml } }
       - { type: file-not-contains, config: { path: fixtures/razor-pages-crud/Program.cs, value: EnsureCreated } }
+      - type: run-command
+        config:
+          command: node
+          args: [validators/validate-generated.mjs, razor-pages, fixtures/razor-pages-crud]
+          expected_exit_code: 0
       - &build-razor
         type: run-command
         config:
@@ -47,6 +78,8 @@ stimuli:
           stdout_matches: (Build succeeded|0 Error)
           timeout: 6m
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
     rubric:
       - Added list, details, create, edit, and delete flows for both Product and required parent Category
       - Created and registered one AppDbContext for SQLite and generated a migration
@@ -63,13 +96,39 @@ stimuli:
     environment:
       files:
         - { src: fixtures/minimal-api, dest: fixtures/minimal-api }
+        - { src: validators/validate-generated.mjs, dest: validators/validate-generated.mjs }
+    golden_patch:
+      path: references/add-todo-minimal-api-crud.patch
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
         session_id: "data-scaffold-minimal-api"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "Expected result: all TodoItem CRUD routes, TodoDbContext with SQLite, a migration, ordered HTTP requests, unique OpenAPI names, tags, descriptions, and responses, and a clean build." }
+          - step_id: 1
+            source: agent
+            message: "I will inspect the Todo model and host, add the data layer and endpoint group, then validate the request workflow and build."
+            tool_calls:
+              - tool_call_id: inspect-todo-api
+                function_name: read_files
+                arguments:
+                  paths: [TodoApi.csproj, Program.cs, Models/TodoItem.cs]
+              - tool_call_id: implement-todo-api
+                function_name: apply_patch
+                arguments:
+                  patch: "Added TodoDbContext, SQLite/Design packages and registration, migration, TodoEndpoints list/by-id/create/update/delete routes with validation and OpenAPI metadata, endpoint mapping, and TodoItem.http."
+              - tool_call_id: build-todo-api
+                function_name: run_command
+                arguments:
+                  command: dotnet build fixtures/minimal-api/TodoApi.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-todo-api, content: "TodoItem requires a non-empty Title and the host already provides ASP.NET Core OpenAPI." }
+                - { source_call_id: implement-todo-api, content: "Added context, migration, five CRUD routes with distinct names/status metadata, and executable GET/POST/PUT/DELETE requests." }
+                - { source_call_id: build-todo-api, content: "Build succeeded. 0 Warning(s), 0 Error(s)." }
+          - step_id: 2
+            source: agent
+            message: "Implemented and built complete TodoItem Minimal API CRUD with SQLite, validation, a migration, descriptive OpenAPI metadata, and an executable request workflow. I did not use command-line scaffolding or EnsureCreated."
     graders:
       - { type: file-exists, config: { path: "fixtures/minimal-api/**/*TodoEndpoints*.cs" } }
       - { type: file-exists, config: { path: "fixtures/minimal-api/**/*TodoDbContext*.cs" } }
@@ -80,12 +139,19 @@ stimuli:
       - { type: file-not-contains, config: { path: fixtures/minimal-api/Program.cs, value: EnsureCreated } }
       - type: run-command
         config:
+          command: node
+          args: [validators/validate-generated.mjs, todo-api, fixtures/minimal-api]
+          expected_exit_code: 0
+      - type: run-command
+        config:
           command: dotnet
           args: [build, fixtures/minimal-api/TodoApi.csproj, --nologo]
           expected_exit_code: 0
           stdout_matches: (Build succeeded|0 Error)
           timeout: 6m
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
     rubric:
       - Added complete TodoItem CRUD routes with stable operation names and accurate response metadata
       - Created and registered TodoDbContext with SQLite and generated a migration
@@ -103,13 +169,45 @@ stimuli:
     environment:
       files:
         - { src: fixtures/mvc-existing-dbcontext, dest: fixtures/mvc-existing-dbcontext }
+        - { src: validators/validate-generated.mjs, dest: validators/validate-generated.mjs }
+    golden_patch:
+      path: references/add-mvc-book-author-crud.patch
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
         session_id: "data-scaffold-mvc-existing-context"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "Expected result: CatalogDbContext remains the only context; complete Book and Author controllers, Bootstrap-compatible views, author selection, navigation, a migration, and a clean build are present without startup database shortcuts." }
+          - step_id: 1
+            source: agent
+            message: "I will reuse the supplied CatalogDbContext, add complete controllers and views for both entities, then build and verify the migration."
+            tool_calls:
+              - tool_call_id: inspect-mvc-fixture
+                function_name: read_files
+                arguments:
+                  paths: [CatalogMvc.csproj, Program.cs, Data/CatalogDbContext.cs, Models/Book.cs, Models/Author.cs]
+              - tool_call_id: implement-mvc-crud
+                function_name: apply_patch
+                arguments:
+                  patch: |-
+                    Representative applied changes:
+                    - BooksController Create POST checks ModelState, adds Book, awaits SaveChangesAsync, and reloads `ViewData["AuthorId"] = new SelectList(...)` on validation failure.
+                    - BooksController Edit loads by id, validates the bound model, updates the existing Book, awaits SaveChangesAsync, and handles not-found/concurrency paths.
+                    - Both controllers implement async Index, Details, Create, Edit, Delete GET, and confirmed Delete POST actions using CatalogDbContext.
+                    - Views/Books/Create.cshtml and Edit.cshtml use `<select asp-for="AuthorId" asp-items="ViewBag.AuthorId">`, validation summary, and per-field validation.
+                    - Ten Bootstrap views, navigation links, the migration, and the Design package were added without creating another DbContext.
+              - tool_call_id: build-mvc-crud
+                function_name: run_command
+                arguments:
+                  command: dotnet build fixtures/mvc-existing-dbcontext/CatalogMvc.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-mvc-fixture, content: "CatalogDbContext already exposes Authors and Books; Book has required AuthorId and validation attributes." }
+                - { source_call_id: implement-mvc-crud, content: "Added two complete controllers, ten views, migration, author SelectList binding, anti-forgery mutation actions, and resource navigation without adding another context." }
+                - { source_call_id: build-mvc-crud, content: "Determining projects to restore... CatalogMvc -> bin/Debug/net10.0/CatalogMvc.dll. Build succeeded. 0 Warning(s), 0 Error(s)." }
+          - step_id: 2
+            source: agent
+            message: "Reused CatalogDbContext and built complete Book and Author MVC CRUD with validation, AuthorId selection, navigation, and a migration. I did not add a second context, command-line scaffolding, EnsureCreated, or startup seeding."
     graders:
       - { type: file-exists, config: { path: "fixtures/mvc-existing-dbcontext/**/Controllers/*Book*Controller*.cs" } }
       - { type: file-exists, config: { path: "fixtures/mvc-existing-dbcontext/**/Controllers/*Author*Controller*.cs" } }
@@ -119,12 +217,19 @@ stimuli:
       - { type: file-not-contains, config: { path: fixtures/mvc-existing-dbcontext/Program.cs, value: EnsureCreated } }
       - type: run-command
         config:
+          command: node
+          args: [validators/validate-generated.mjs, mvc, fixtures/mvc-existing-dbcontext]
+          expected_exit_code: 0
+      - type: run-command
+        config:
           command: dotnet
           args: [build, fixtures/mvc-existing-dbcontext/CatalogMvc.csproj, --nologo]
           expected_exit_code: 0
           stdout_matches: (Build succeeded|0 Error)
           timeout: 6m
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
     rubric:
       - Reused CatalogDbContext rather than creating a competing data context
       - Added complete Book and Author MVC flows with correct binding, validation, and Author selection
@@ -142,13 +247,39 @@ stimuli:
     environment:
       files:
         - { src: fixtures/minimal-api-parent-fk, dest: fixtures/minimal-api-parent-fk }
+        - { src: validators/validate-generated.mjs, dest: validators/validate-generated.mjs }
+    golden_patch:
+      path: references/add-parent-child-minimal-api-crud.patch
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
         session_id: "data-scaffold-parent-child-api"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "Expected result: complete Category and Product route groups reuse StoreDbContext, include a migration and OpenAPI metadata, and provide an HTTP workflow that creates Category first and uses its returned id." }
+          - step_id: 1
+            source: agent
+            message: "I will reuse StoreDbContext, add complete Category and Product route groups, then verify that the HTTP workflow carries the created parent ID into Product creation."
+            tool_calls:
+              - tool_call_id: inspect-parent-api
+                function_name: read_files
+                arguments:
+                  paths: [ParentChildApi.csproj, Program.cs, Data/StoreDbContext.cs, Models/Product.cs, Models/Category.cs]
+              - tool_call_id: implement-parent-api
+                function_name: apply_patch
+                arguments:
+                  patch: "Added migration, ProductEndpoints with Category and Product list/by-id/create/update/delete routes, validation and OpenAPI metadata, endpoint mapping, and a named Category POST whose response id is reused in Product.http."
+              - tool_call_id: build-parent-api
+                function_name: run_command
+                arguments:
+                  command: dotnet build fixtures/minimal-api-parent-fk/ParentChildApi.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-parent-api, content: "StoreDbContext already exposes both DbSets; Product requires CategoryId and both models use validation attributes." }
+                - { source_call_id: implement-parent-api, content: "Added ten CRUD routes, migration and metadata; the HTTP file creates Category first and uses createCategory.response.body.$.id for Product.CategoryId." }
+                - { source_call_id: build-parent-api, content: "Build succeeded. 0 Error(s)." }
+          - step_id: 2
+            source: agent
+            message: "Implemented and built complete Category and Product Minimal API CRUD using StoreDbContext, a migration, validation and OpenAPI metadata. The executable request workflow creates Category first and reuses its returned ID; no EnsureCreated or command-line scaffolding was used."
     graders:
       - { type: file-contains, config: { path: fixtures/minimal-api-parent-fk/Program.cs, value: StoreDbContext } }
       - { type: file-exists, config: { path: "fixtures/minimal-api-parent-fk/**/*Product*Endpoints*.cs" } }
@@ -224,12 +355,19 @@ stimuli:
       - { type: file-not-contains, config: { path: fixtures/minimal-api-parent-fk/Program.cs, value: EnsureCreated } }
       - type: run-command
         config:
+          command: node
+          args: [validators/validate-generated.mjs, parent-api, fixtures/minimal-api-parent-fk]
+          expected_exit_code: 0
+      - type: run-command
+        config:
           command: dotnet
           args: [build, fixtures/minimal-api-parent-fk/ParentChildApi.csproj, --nologo]
           expected_exit_code: 0
           stdout_matches: (Build succeeded|0 Error)
           timeout: 6m
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
     rubric:
       - Reused StoreDbContext and added complete Category and Product CRUD route groups
       - Added accurate names, tags, descriptions, success responses, and error responses
@@ -246,57 +384,46 @@ stimuli:
     environment:
       files:
         - { src: fixtures/blazor-crud, dest: fixtures/blazor-crud }
+        - { src: validators/validate-generated.mjs, dest: validators/validate-generated.mjs }
+    golden_patch:
+      path: references/add-blazor-employee-department-crud.patch
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
         session_id: "data-scaffold-blazor-crud"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "Expected result: Employee and Department CRUD, AppDbContext with SQLite, a migration, navigation, preserved interactive server chains, safely initialized form models, and a clean build." }
+          - step_id: 1
+            source: agent
+            message: "I will preserve the interactive host, add the EF data layer, and implement combined CRUD components for Employee and Department before building."
+            tool_calls:
+              - tool_call_id: inspect-blazor-fixture
+                function_name: read_files
+                arguments:
+                  paths: [BlazorApp.csproj, Program.cs, Models/Employee.cs, Models/Department.cs, Components/Layout/NavMenu.razor]
+              - tool_call_id: implement-blazor-crud
+                function_name: apply_patch
+                arguments:
+                  patch: "Added AppDbContext, SQLite/Design packages and registration, migration, combined routable Employees and Departments components with list/details/create/edit/delete handlers, validation, DepartmentId selection and safely initialized form models, plus navigation."
+              - tool_call_id: build-blazor-crud
+                function_name: run_command
+                arguments:
+                  command: dotnet build fixtures/blazor-crud/BlazorApp.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-blazor-fixture, content: "The host already uses AddInteractiveServerComponents and AddInteractiveServerRenderMode; Employee requires DepartmentId." }
+                - { source_call_id: implement-blazor-crud, content: "Added combined per-entity CRUD components, context, migration and navigation while preserving both interactive server chains." }
+                - { source_call_id: build-blazor-crud, content: "Build succeeded. 0 Error(s)." }
+          - step_id: 2
+            source: agent
+            message: "Implemented and built complete Employee and Department Blazor CRUD with SQLite, a migration, validation, DepartmentId selection, safe form initialization, and navigation. The existing interactive server configuration remains intact, with no EnsureCreated or command-line scaffolding."
     graders:
       - { type: file-exists, config: { path: "fixtures/blazor-crud/**/*AppDbContext*.cs" } }
       - { type: file-exists, config: { path: "fixtures/blazor-crud/**/Migrations/*.cs" } }
       - type: run-command
         config:
           command: node
-          args:
-            - -e
-            - |
-              const fs = require("fs");
-              const path = require("path");
-              const root = "fixtures/blazor-crud/Components";
-              function razorFiles(directory) {
-                return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
-                  const full = path.join(directory, entry.name);
-                  return entry.isDirectory()
-                    ? razorFiles(full)
-                    : entry.name.endsWith(".razor") ? [full] : [];
-                });
-              }
-              const files = razorFiles(root).map(file => ({
-                path: file.replaceAll("\\", "/").toLowerCase(),
-                text: fs.readFileSync(file, "utf8").toLowerCase()
-              }));
-              function completeSurface(entity) {
-                const plural = entity + "s";
-                const surfaces = files.filter(
-                  file => file.path.includes(entity) || file.text.includes(plural));
-                if (surfaces.length === 0) return false;
-                const combined = surfaces.map(file => file.path + "\n" + file.text).join("\n");
-                return [
-                  new RegExp("@page\\s+[\"']/?" + entity + "s?(?:/|[\"'])"),
-                  /(?:foreach\s*\(|<table\b)/,
-                  /<editform\b/,
-                  /\.(?:add|addasync)\s*\(/,
-                  /savechanges(?:async)?\s*\(/,
-                  /\.(?:remove|removeasync|executedelete|executedeleteasync)\s*\(/,
-                  /(?:findasync|firstordefaultasync|singleordefaultasync)\s*\(/,
-                  /(?:details?|selected\w*|view\w*)/,
-                  new RegExp("(?:href=|navigateto\\()[\\s\\S]{0,80}" + plural)
-                ].every(pattern => pattern.test(combined));
-              }
-              process.exit(
-                completeSurface("employee") && completeSurface("department") ? 0 : 1);
+          args: [validators/validate-generated.mjs, blazor, fixtures/blazor-crud]
           expected_exit_code: 0
       - { type: file-contains, config: { path: fixtures/blazor-crud/Program.cs, value: AddInteractiveServerRenderMode } }
       - { type: file-not-contains, config: { path: "fixtures/blazor-crud/**/*.razor", value: " = null!" } }
@@ -309,6 +436,8 @@ stimuli:
           stdout_matches: (Build succeeded|0 Error)
           timeout: 6m
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
     rubric:
       - Added complete Employee and required Department flows with reachable navigation
       - Created and registered AppDbContext with SQLite and generated a migration
@@ -471,7 +600,25 @@ stimuli:
         session_id: "data-scaffold-complete-api-noop"
         agent: { name: reference, version: "1.0.0", model_name: curated }
         steps:
-          - { step_id: 1, source: agent, message: "All five CRUD operations, server-assigned IDs, title validation, async EF Core calls, status paths, and OpenAPI names, tags, descriptions, and responses already exist. No edit is needed." }
+          - step_id: 1
+            source: agent
+            message: "I will inspect the endpoint source and project, verify each requested contract, and build without editing."
+            tool_calls:
+              - tool_call_id: inspect-complete-api
+                function_name: read_files
+                arguments:
+                  paths: [CompleteTodoEndpoints.cs, CompleteTodoApi.csproj]
+              - tool_call_id: build-complete-api
+                function_name: run_command
+                arguments:
+                  command: dotnet build CompleteTodoApi.csproj --nologo
+            observation:
+              results:
+                - { source_call_id: inspect-complete-api, content: "Found list/by-id/create/update/delete routes, server-assigned IDs, whitespace Title validation, async EF calls, Created/NoContent/NotFound paths, and unique OpenAPI names/descriptions/responses." }
+                - { source_call_id: build-complete-api, content: "Build succeeded. 0 Warning(s), 0 Error(s). No files changed." }
+          - step_id: 2
+            source: agent
+            message: "All five CRUD operations, server-assigned IDs, title validation, async EF Core calls, status paths, and OpenAPI names, tags, descriptions, and responses already exist. The project builds cleanly, so I left both files unchanged."
     graders:
       - type: run-command
         config:
@@ -482,7 +629,7 @@ stimuli:
               const crypto = require("crypto");
               const fs = require("fs");
               function digest(path) {
-                const data = fs.readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+                const data = fs.readFileSync(path);
                 return crypto.createHash("sha256").update(data).digest("hex");
               }
               const source = digest("CompleteTodoEndpoints.cs");
@@ -499,7 +646,6 @@ stimuli:
           expected_exit_code: 0
           stdout_matches: (Build succeeded|0 Error)
           timeout: 4m
-      - { type: output-matches, config: { pattern: "(already|complete|no (gap|change|edit)|nothing to fix)" } }
       - type: prompt
     rubric:
       - Recognized that all five CRUD operations, server-assigned IDs, and title validation already exist
@@ -564,7 +710,7 @@ stimuli:
             source: agent
             message: "Added only the plain CsvReportWriter and verified escaping and invariant formatting. The existing ReportWriter is unchanged, and no ASP.NET Core, Entity Framework, controller, page, endpoint, or database artifact was added."
     graders:
-      - { type: file-contains, config: { path: "fixtures/non-web/**/*.cs", value: CsvReportWriter } }
+      - { type: file-exists, config: { path: fixtures/non-web/CsvReportWriter.cs } }
       - { type: file-not-contains, config: { path: fixtures/non-web/Utility.csproj, value: Microsoft.AspNetCore } }
       - { type: file-not-contains, config: { path: fixtures/non-web/Utility.csproj, value: EntityFrameworkCore } }
       - type: run-command
@@ -583,7 +729,7 @@ stimuli:
               const crypto = require("crypto");
               const fs = require("fs");
               function digest(path) {
-                const data = fs.readFileSync(path, "utf8").replace(/\r\n/g, "\n");
+                const data = fs.readFileSync(path);
                 return crypto.createHash("sha256").update(data).digest("hex");
               }
               const program = digest("fixtures/non-web/Program.cs");
