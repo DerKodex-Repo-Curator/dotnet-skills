@@ -96,6 +96,39 @@ func TestReplacementPreservesModeAndRejectsSymlinks(t *testing.T) {
 	}
 }
 
+func TestReplacementRequiresExistingTargetWriteAccess(t *testing.T) {
+	directory := t.TempDir()
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := root.WriteFile("protected", []byte("original"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	access, err := root.OpenFile("protected", os.O_WRONLY, 0)
+	if err == nil {
+		access.Close()
+		t.Skip("host credentials permit writing the read-only target")
+	}
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("expected kernel permission denial: %v", err)
+	}
+	_, err = execute(root, request{Protocol: protocol, Operation: "writeFile",
+		Path: "protected", Content: "blocked"})
+	if !errors.Is(err, fs.ErrPermission) {
+		t.Fatalf("replacement bypassed target write access: %v", err)
+	}
+	data, err := root.ReadFile("protected")
+	if err != nil || string(data) != "original" {
+		t.Fatalf("rejected replacement changed target: %q, %v", data, err)
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("rejected replacement leaked output: %v, %v", entries, err)
+	}
+}
+
 func TestOutsideSymlinkRejectedForEveryOperation(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {

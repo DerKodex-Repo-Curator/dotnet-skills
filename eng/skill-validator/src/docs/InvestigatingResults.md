@@ -50,7 +50,8 @@
 > remain explicit. No historical matrix transfers to this native implementation.
 > Native `writeFile` now prepares/syncs/closes a temporary file before rooted
 > rename, preventing partial-write/disk-error truncation before publication.
-> Replacement preserves permission bits but changes inode identity and rejects
+> Replacement requires kernel-enforced write access to existing targets,
+> preserves permission bits but changes inode identity and rejects
 > symlink/special-file targets. Append failures and lost responses can still
 > leave state changed or indeterminate; SDK 1.0.11 has no changed-target error
 > classification. Inspect the target before retrying.

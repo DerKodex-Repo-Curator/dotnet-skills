@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSessionFsAdapter } from '@github/copilot-sdk';
@@ -46,6 +46,12 @@ if (supported) {
       const adapter = createSessionFsAdapter(provider);
       assert.equal(await adapter.writeFile({ path: file, content: 'replacement' }), undefined);
       assert.equal((await stat(file)).mode & 0o777, 0o640);
+      await chmod(file, 0o444);
+      const denied = await adapter.writeFile({ path: file, content: 'blocked' });
+      assert.equal(denied.code, 'UNKNOWN');
+      assert.match(denied.message, /permission denied/i);
+      assert.equal(await readFile(file, 'utf8'), 'replacement');
+      assert.equal((await stat(file)).mode & 0o777, 0o444);
       const rejected = await adapter.writeFile({ path: link, content: 'blocked' });
       assert.equal(rejected.code, 'UNKNOWN');
       assert.match(rejected.message, /regular target, not a symlink or special file/);

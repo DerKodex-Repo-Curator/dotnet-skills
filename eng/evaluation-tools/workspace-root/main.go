@@ -78,6 +78,17 @@ func replaceFile(root *os.Root, req request, write func(io.Writer, string) (int,
 	if err == nil && !info.Mode().IsRegular() {
 		return errors.New("atomic workspace writes require a regular target, not a symlink or special file")
 	}
+	if info != nil {
+		access, openErr := parent.OpenFile(name, os.O_WRONLY, 0)
+		if openErr != nil {
+			return openErr
+		}
+		info, err = access.Stat()
+		err = errors.Join(err, access.Close())
+		if err != nil {
+			return err
+		}
+	}
 	temporary := ".workspace-write-" + rand.Text()
 	file, err := parent.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode(req, 0o666))
 	if err != nil {

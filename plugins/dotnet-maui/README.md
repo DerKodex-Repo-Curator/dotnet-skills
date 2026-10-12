@@ -56,7 +56,9 @@ prospective corrections, not a rescore or transfer of the comparisons below:
 
 The native provider also publishes `writeFile` by rooted atomic replacement
 after writing, syncing and closing a temporary file. Injected partial/short
-write failures preserve existing targets or leave new ones absent. Symlink and
+write failures preserve existing targets or leave new ones absent. A rooted
+non-truncating writable open enforces existing-target write access before
+replacement; directory permissions alone cannot bypass a read-only file. Symlink and
 special-file write targets explicitly reject; replacement changes inode
 identity. Append and lost-response limitations remain documented. This is not
 whole-host confinement or new measured skill/default evidence.

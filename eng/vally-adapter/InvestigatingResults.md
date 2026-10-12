@@ -99,7 +99,9 @@ Workspace `writeFile` writes, syncs and closes an exclusively created temporary
 file in a captured parent-directory capability before rooted rename publishes
 it. Partial writes, short writes and disk errors before publication leave an
 existing target intact (or a new target absent). Existing permission bits are
-retained. Replacement changes inode identity: existing hard links continue to
+retained. Existing targets must first pass a rooted, non-truncating
+writable open; a writable directory alone cannot bypass a read-only target.
+Replacement changes inode identity: existing hard links continue to
 refer to the old file. Symlink/special-file write targets reject explicitly;
 read and append retain their existing rooted semantics. This is not an atomic
 read-modify-write transaction with other writers. Append can still partially
