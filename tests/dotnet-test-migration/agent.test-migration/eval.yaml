@@ -1,10 +1,11 @@
 name: agent.test-migration
-description: Evaluates the dotnet-test/agent.test-migration orchestrator agent
+description: Evaluates the dotnet-test-migration/agent.test-migration orchestrator agent
 type: capability
 defaults:
   timeout: 5m
 stimuli:
   - name: Detect MSTest v2 on VSTest and recommend migration path
+    tags: {capability: mstest-detection, risk: wrong-upgrade-path, journey: assess-migrations}
     prompt: |
       I have a test project that I think might be outdated. Can you check what
       framework and version it uses and tell me what migrations are available?
@@ -41,6 +42,7 @@ stimuli:
       - Mentioned the availability of further upgrades (v3 to v4, VSTest to MTP)
 
   - name: Detect xUnit v2 and route to xUnit v3 migration
+    tags: {capability: xunit-detection, risk: wrong-framework-route, journey: assess-migrations}
     prompt: |
       I want to upgrade my test project to the latest xUnit version. What do I
       need to do?
@@ -71,6 +73,7 @@ stimuli:
       - Mentioned key migration changes (package rename from xunit to xunit.v3, OutputType to Exe, or API changes)
 
   - name: Execute targeted MSTest v2 to v3 migration
+    tags: {capability: targeted-mstest-upgrade, risk: unwanted-platform-change, journey: deliver-version-upgrade}
     prompt: |
       Please upgrade my MSTest project from v2 to v3. I know I'm on MSTest
       2.2.10 and I want to get to v3. Apply the changes to my project.
@@ -99,6 +102,7 @@ stimuli:
       - Did not attempt additional migrations (v3 to v4, VSTest to MTP) that were not requested
 
   - name: Execute targeted xUnit v2 to v3 migration
+    tags: {capability: targeted-xunit-upgrade, risk: broken-project, journey: deliver-version-upgrade}
     prompt: |
       Upgrade this xUnit.net v2 test project to xUnit.net v3. Apply only the
       framework-version migration, preserve the current test platform, and make
@@ -133,6 +137,21 @@ stimuli:
       - Updated project settings required by xUnit.net v3 and left the project buildable
 
   - name: Plan a staged MSTest v2 to v4 and MTP migration
+    tags: {capability: staged-plan, risk: edits-without-authorization, journey: plan-migration}
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: migration-plan-preserves-all-files
+        agent: {name: reference, version: "1.0", model_name: curated}
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              The project is MSTest 2.2.10 on VSTest. Plan MSTest v2 to v3,
+              validate build and test discovery, then MSTest v3 to v4 and
+              validate the same cases again. Finally adopt native MTP with
+              compatible packages and verify fresh reports and outcomes.
+              No project or test files were changed and no migration was executed.
     prompt: |
       I want this MSTest 2.2.10 project to end up on MSTest v4 and
       Microsoft.Testing.Platform, but I need a safe staged plan before any
@@ -144,6 +163,8 @@ stimuli:
           dest: OrderTests/OrderTests.csproj
         - src: fixtures/mstest-v2-vstest/OrderServiceTests.cs
           dest: OrderTests/OrderServiceTests.cs
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
       skills:
         - ../../plugins/dotnet-test/skills/platform-detection
         - ../../plugins/dotnet-test-migration/skills/migrate-mstest-v1v2-to-v3
@@ -164,7 +185,10 @@ stimuli:
           pattern: (build|test|verify|validation)
       - type: run-command
         config:
-          command: sh -c "grep -Rqs '2.2.10' OrderTests"
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
+            --file 5dedff259cd3951d7944eb07f4a70ea0152d7e051e8d2a4def183426adc4059d:OrderTests.csproj
+            --file f2660905616f9ef20ae1f6f56b334c01d17cc1d4bc1d23cd33ff5d958670f43e:OrderServiceTests.cs
           expected_exit_code: 0
           timeout: 1m
       - type: prompt
@@ -173,7 +197,46 @@ stimuli:
       - Included a build and test validation gate between migration stages
       - Kept the request plan-only and did not modify the supplied project
 
+  - name: Deliver staged MSTest v2 to v4 and native MTP migration
+    tags: {capability: composed-migration-delivery, risk: green-build-with-missing-cases, journey: deliver-multi-step-migration}
+    prompt: |
+      Upgrade OrderTests from MSTest 2.2.10 to MSTest 4 and switch it to the
+      native .NET 10 Microsoft.Testing.Platform runner. Apply the migration
+      in safe stages, validating between stages, and finish by running the
+      tests with a TRX report. Preserve all behavior and parameterized cases.
+    environment:
+      files:
+        - src: fixtures/mstest-v2-vstest
+          dest: OrderTests
+        - src: ../graders/global-vstest.json
+          dest: global.json
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+      skills:
+        - ../../plugins/dotnet-test/skills/platform-detection
+        - ../../plugins/dotnet-test/skills/run-tests
+        - ../../plugins/dotnet-test-migration/skills/migrate-mstest-v1v2-to-v3
+        - ../../plugins/dotnet-test-migration/skills/migrate-mstest-v3-to-v4
+        - ../../plugins/dotnet-test-migration/skills/migrate-vstest-to-mtp
+    golden_patch:
+      path: goldens/staged.patch
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project OrderTests/OrderTests.csproj
+            --runner native --mstest-major 4 --expect CreateOrder_ValidInput_ReturnsOrder=Passed
+            --expect invalid-zero=Passed --expect invalid-negative=Passed
+          expected_exit_code: 0
+          timeout: 4m
+      - type: prompt
+    rubric:
+      - Completes the requested framework and runner migration rather than returning a plan or stopping after a package update.
+      - Validates the intermediate stages and records actual execution, not inferred build or test success.
+      - All original test behaviors and both parameterized rows remain, with a fresh parseable native-MTP TRX.
+
   - name: Decline request to write new tests
+    tags: {capability: generation-boundary, risk: unrelated-migration, journey: redirect-generation}
     prompt: |
       I need to add unit tests for my Calculator class. Can you generate
       comprehensive tests with good coverage?

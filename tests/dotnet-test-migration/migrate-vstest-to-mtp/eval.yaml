@@ -1,10 +1,11 @@
 name: migrate-vstest-to-mtp
-description: Evaluates the dotnet-test/migrate-vstest-to-mtp skill
+description: Evaluates the dotnet-test-migration/migrate-vstest-to-mtp skill
 type: capability
-config:
+defaults:
   timeout: 8m
 stimuli:
   - name: Migrate MSTest project from VSTest to Microsoft.Testing.Platform
+    tags: {capability: mstest-runner, risk: partial-enablement, journey: plan-platform-migration}
     prompt: |
       I have a solution with 3 MSTest 3.8.0 test projects that currently run on VSTest.
       I want to switch all of them to Microsoft.Testing.Platform. We're on .NET 8 SDK
@@ -37,6 +38,7 @@ stimuli:
       - Mentions the -- separator requirement on .NET 8 for MTP arguments
       - Does not suggest upgrading MSTest version (3.2.0+ is sufficient, 3.8.0 qualifies)
   - name: Migrate NUnit project from VSTest to Microsoft.Testing.Platform
+    tags: {capability: nunit-runner, risk: incompatible-adapter, journey: plan-platform-migration}
     prompt: |
       My NUnit test project uses NUnit3TestAdapter 4.6.0 and Microsoft.NET.Test.Sdk
       on VSTest. I want to migrate to Microsoft.Testing.Platform. What do I need to change?
@@ -64,6 +66,7 @@ stimuli:
       - Mentions configuring dotnet test integration
       - Recommends using Directory.Build.props for MTP properties
   - name: Migrate xUnit.net v2 project from VSTest to Microsoft.Testing.Platform
+    tags: {capability: xunit-v2-runner, risk: unrequested-framework-upgrade, journey: plan-platform-migration}
     prompt: |
       My xUnit.net project uses xunit 2.9.3 with xunit.runner.visualstudio on VSTest.
       I want to switch to Microsoft.Testing.Platform. What should I do?
@@ -89,6 +92,7 @@ stimuli:
       - Optionally mentions that xunit.runner.visualstudio and Microsoft.NET.Test.Sdk can be removed once VSTest compat
         is no longer needed
   - name: Update Azure DevOps pipeline from VSTest task to MTP
+    tags: {capability: pipeline-migration, risk: missing-ci-artifacts, journey: update-ci}
     prompt: |
       Our CI pipeline uses the VSTest@3 task to run MSTest tests. We're migrating
       to Microsoft.Testing.Platform. We also produce TRX reports and collect code
@@ -119,6 +123,7 @@ stimuli:
       - Translates code coverage collection to --coverage and mentions CodeCoverage extension package
       - Explains the -- separator needed for MTP arguments on .NET 9 and earlier
   - name: Migrate MSTest.Sdk project that explicitly uses VSTest
+    tags: {capability: sdk-runner-opt-in, risk: redundant-configuration, journey: plan-platform-migration}
     prompt: |
       My project uses MSTest.Sdk/3.8.0 with <UseVSTest>true</UseVSTest>. I want
       to switch to Microsoft.Testing.Platform. What do I need to change?
@@ -142,6 +147,7 @@ stimuli:
       - Notes that MSTest.Sdk automatically sets EnableMSTestRunner and OutputType Exe — no additional properties needed
       - Mentions configuring dotnet test integration (TestingPlatformDotnetTestSupport or global.json)
   - name: Translate dotnet test VSTest arguments to MTP equivalents
+    tags: {capability: command-translation, risk: missing-reporting-extensions, journey: update-ci-command}
     prompt: >
       Our CI runs `dotnet test --filter "Category=Integration" --logger trx --collect "Code Coverage;Format=cobertura"
       --blame-crash --blame-hang --blame-hang-timeout 5m`.
@@ -178,6 +184,7 @@ stimuli:
       - Mentions the -- separator needed on .NET 8 (pre-.NET 10)
       - Lists the required NuGet extension packages (TrxReport, CrashDump, HangDump, CodeCoverage)
   - name: Handle exit code 8 when migrating from VSTest to MTP
+    tags: {capability: intentional-empty-run, risk: false-ci-failure, journey: diagnose-empty-configuration}
     prompt: |
       We're migrating our test projects from VSTest to Microsoft.Testing.Platform.
       After enabling MTP, our CI pipeline fails with exit code 8 even though no
@@ -201,6 +208,7 @@ stimuli:
       - Shows how to set it via TestingPlatformCommandLineArguments MSBuild property
       - Mentions TESTINGPLATFORM_EXITCODE_IGNORE environment variable as an alternative
   - name: Configure dotnet test MTP mode on .NET 10 SDK
+    tags: {capability: native-sdk-mode, risk: wrong-argument-routing, journey: configure-sdk-runner}
     prompt: |
       We're on .NET 10 SDK and migrating to Microsoft.Testing.Platform. I read
       that .NET 10 has native MTP support in dotnet test. How do I set it up?
@@ -225,6 +233,7 @@ stimuli:
       - Explains that the -- separator is no longer needed in .NET 10 native MTP mode
       - Recommends using the native MTP mode for .NET 10+ instead of the VSTest bridge
   - name: Migrate xUnit.net VSTest filter syntax to MTP
+    tags: {capability: xunit-filter, risk: wrong-test-selection, journey: translate-filter}
     prompt: |
       My CI uses `dotnet test --filter "FullyQualifiedName~IntegrationTests&Category=Smoke"` 
       with xUnit.net v2. I'm upgrading to xunit.v3 with MTP. The --filter no longer
@@ -248,6 +257,7 @@ stimuli:
       - Mentions --filter-query uses path-segment syntax (/<assembly>/<namespace>/<class>/<method>[trait=value])
       - References xUnit.net query filter language documentation or provides the link
   - name: Set OutputType=Exe only for test projects in Directory.Build.props
+    tags: {capability: effective-properties, risk: production-runner-pollution, journey: centralize-configuration}
     prompt: |
       I'm migrating my MSTest projects from VSTest to Microsoft.Testing.Platform.
       My repo has a single Directory.Build.props at the root that is imported by
@@ -279,6 +289,7 @@ stimuli:
       - Explains why an IsTestProject-based condition does not work in Directory.Build.props (the property is not yet
         defined at that point in evaluation)
   - name: Full VSTest to MTP migration plan for MSTest solution
+    tags: {capability: solution-plan, risk: incomplete-rollout, journey: plan-platform-migration}
     prompt: |
       I have a solution with 5 MSTest test projects all using VSTest (MSTest.TestFramework 3.8.0,
       MSTest.TestAdapter 3.8.0, Microsoft.NET.Test.Sdk 17.13.0). We use Azure DevOps
@@ -317,3 +328,81 @@ stimuli:
       - Mentions the -- separator requirement on .NET 8
       - Includes verification steps (build, test, compare counts, check CI artifacts)
       - Mentions possibility of exit code 8 for zero-test assemblies
+
+  - name: Deliver native MTP migration with fresh reports from both projects
+    tags: {capability: native-solution-execution, risk: dropped-module-or-report, journey: deliver-platform-migration}
+    prompt: |
+      Migrate both test projects in Suite.slnx to Microsoft.Testing.Platform
+      using the native .NET 10 test runner. Apply the changes and run the
+      solution with TRX reporting. Keep the framework versions, production
+      library, all test cases and skip reasons unchanged.
+    environment:
+      files: &solution_files
+        - src: fixtures/executable-solution
+          dest: .
+        - src: ../graders/global-vstest.json
+          dest: global.json
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+    golden_patch:
+      path: goldens/native.patch
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            --runner native --mstest-major 4 --report-count 2 --expect alpha-positive=Passed
+            --mstest-version 4.4.1 --production-project Library/Library.csproj
+            --expect alpha-negative=Passed --expect BetaZero=Passed --expect BetaDeferred=NotExecuted
+            --skip-reason "BetaDeferred=Requires tracked service TEST-84"
+            --unchanged-file 2f8a08e82b141477af710f08bab1ee8d87231aaff9a78a151e67074be50d0c78:Library/Arithmetic.cs
+            --unchanged-file 8d654c44b7bebb6b31a9f2f606927f45b5072193adc4eef8cce3f3cf3b278df3:Library/Library.csproj
+          expected_exit_code: 0
+          timeout: 5m
+      - type: prompt
+    rubric:
+      - Both test projects execute on native MTP and produce independently parseable fresh TRX reports.
+      - Parameterized identities, skipped cases and reasons are preserved without changing production behavior.
+      - Effective MTP configuration applies only to test projects and the original package versions are preserved.
+
+  - name: Keep the explicit SDK 10 compatibility bridge while enabling MTP
+    tags: {capability: sdk10-bridge-execution, risk: silently-changing-runner-mode, journey: preserve-ci-contract}
+    prompt: |
+      Enable Microsoft.Testing.Platform in both test projects in Suite.slnx.
+      These projects use MSTest 3.8.0. Our .NET 10 CI must keep dotnet test in VSTest compatibility mode for now;
+      do not select the native runner in global.json. Apply the changes and
+      run both projects with TRX reports through that bridge. Keep the library,
+      framework versions, test cases and skip reasons unchanged.
+    environment:
+      files:
+        - src: fixtures/executable-solution
+          dest: .
+        - src: fixtures/bridge-project.csproj
+          dest: Alpha.Tests/Alpha.Tests.csproj
+        - src: fixtures/bridge-project.csproj
+          dest: Beta.Tests/Beta.Tests.csproj
+        - src: ../graders/global-vstest.json
+          dest: global.json
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+    golden_patch:
+      path: goldens/bridge.patch
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            --runner bridge --mstest-major 3 --report-count 2 --expect alpha-positive=Passed
+            --mstest-version 3.8.0 --production-project Library/Library.csproj
+            --expect alpha-negative=Passed --expect BetaZero=Passed --expect BetaDeferred=NotExecuted
+            --unchanged-file 2e2de8b4bda10afae6b01e15e8dd5e6d98c9871c6a71d10a6dc647190d55a108:Beta.Tests/BoundaryTests.cs
+            --unchanged-file 2f8a08e82b141477af710f08bab1ee8d87231aaff9a78a151e67074be50d0c78:Library/Arithmetic.cs
+            --unchanged-file 8d654c44b7bebb6b31a9f2f606927f45b5072193adc4eef8cce3f3cf3b278df3:Library/Library.csproj
+          expected_exit_code: 0
+          timeout: 5m
+      - type: prompt
+    rubric:
+      - Uses the SDK 10 VSTest compatibility bridge rather than silently choosing native MTP.
+      - Both modules execute with complete case-set parity and fresh TRX artifacts using the required reporting extension.
+      - Production projects are not opted into a test runner.
+      - Distinguishes preserved skip metadata from the legacy reporter's missing exported skip reason rather than claiming complete report parity.
