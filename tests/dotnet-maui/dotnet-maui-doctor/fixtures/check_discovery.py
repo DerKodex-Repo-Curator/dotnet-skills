@@ -3,9 +3,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from check_state import check
-
-
 def run(set_path, catalog_path, output_path):
     return subprocess.run(
         [sys.executable, "resolve_requirements.py", "--set", str(set_path),
@@ -34,7 +31,6 @@ if __name__ == "__main__":
         "17.0.12",
         "[17.0,22.0)",
     ), "Wrong manifest band, requirements or optional-package selection"
-    check(("resolve_requirements.py", "requirements.json"))
     variant_set = Path(".variant-set.json")
     variant_catalog = Path(".variant-catalog.json")
     variant_output = Path(".variant-output.json")

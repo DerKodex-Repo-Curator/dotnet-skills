@@ -48,6 +48,12 @@
 > not sandbox original log operations, shell tools or grader-host I/O. Trusted
 > initial setup, mount/device/hard-link limitations and readable-target metadata
 > remain explicit. No historical matrix transfers to this native implementation.
+> Native `writeFile` now prepares/syncs/closes a temporary file before rooted
+> rename, preventing partial-write/disk-error truncation before publication.
+> Replacement preserves permission bits but changes inode identity and rejects
+> symlink/special-file targets. Append failures and lost responses can still
+> leave state changed or indeterminate; SDK 1.0.11 has no changed-target error
+> classification. Inspect the target before retrying.
 > See the current Vally guide for build instructions and the full scope.
 
 > **Vally schema:** Vally adapter results use an independently owned and

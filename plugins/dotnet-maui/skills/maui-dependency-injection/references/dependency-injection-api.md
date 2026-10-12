@@ -32,7 +32,7 @@ public static MauiApp CreateMauiApp()
 |-----------|----------|----------|
 | `AddSingleton<T>` | Thread-safe app-wide state or configuration | Thread-safe shared cache, settings service, `IHttpClientFactory` |
 | `AddTransient<T>` | Stateless, lightweight, or per-request usage | ViewModels, pages, API call wrappers |
-| `AddScoped<T>` | Per explicitly owned scope; ordinary MAUI creates no automatic window/navigation DI scope | Scoped unit-of-work in manually created scopes |
+| `AddScoped<T>` | Per resolving provider's scope; MAUI 10 platform window contexts own scopes, not each navigation or database operation | Window-owned services or units of work in explicitly owned operation scopes |
 
 Root-provider resolution shares a scoped instance until the root is disposed,
 unless `ValidateScopes` is enabled, in which case it throws. Neither `AddScoped`
@@ -53,14 +53,19 @@ This requires `Microsoft.Extensions.Http`:
 ```csharp
 builder.Services.AddHttpClient("products", client =>
     client.BaseAddress = new Uri("https://api.example.com/"));
-builder.Services.AddSingleton<ProductCatalog>();
+builder.Services.AddSingleton<IProductCatalog, ProductCatalog>();
 ```
 
 ```csharp
 using System.Collections.Concurrent;
 using System.Net.Http;
 
-public sealed class ProductCatalog(IHttpClientFactory clients)
+public interface IProductCatalog
+{
+    Task<string> GetNameAsync(int id, CancellationToken token = default);
+}
+
+public sealed class ProductCatalog(IHttpClientFactory clients) : IProductCatalog
 {
     private readonly ConcurrentDictionary<int, string> _names = new();
 
@@ -279,14 +284,21 @@ provider selection, and awaiting worker completion before async scope disposal.
 It distinguishes MAUI's static `Microsoft.Maui.Storage.Preferences` API from
 a concrete application settings service registered as Singleton.
 It does not connect to a database or test database queries.
-This is **not** a device/UI-navigation or window-lifecycle test. The lack of an
-automatic per-window DI scope is grounded in the official scope contract below,
-not inferred from simulating windows.
+This is **not** a device/UI-navigation or window-lifecycle test. Constructing
+`new MauiContext(rootProvider)` does not exercise platform window creation.
+MAUI 10's `MakeWindowScope` creates an `IServiceScope`, supplies its provider to
+the window MAUI context, and retains it for window teardown. Shell content
+uses its parent context's provider. Root-created App/Shell graphs, global
+resolvers and cached factories can instead retain root-resolved services.
+A window scope is not a navigation or database-operation scope.
 
 Source cross-checks (2026-10-07):
 
 - [MAUI 10.0.0 ShellContent.cs](https://github.com/dotnet/maui/blob/10.0.0/src/Controls/src/Core/Shell/ShellContent.cs)
 - [MAUI 10.0.0 Routing.cs](https://github.com/dotnet/maui/blob/10.0.0/src/Controls/src/Core/Routing.cs)
+- [Pinned MAUI 10 window-scope creation](https://github.com/dotnet/maui/blob/9d881e94b1c56692e40a16262897677a3bb46fcb/src/Core/src/MauiContextExtensions.cs):
+  `MakeWindowScope` calls `CreateScope`, constructs the context from that
+  provider and stores the scope for window teardown.
 - [MAUI 9.0.0 ShellContent.cs](https://github.com/dotnet/maui/blob/9.0.0/src/Controls/src/Core/Shell/ShellContent.cs)
   has the same typed-template activation sequence (historical source check, not
   runtime certification for unsupported MAUI 9).
@@ -294,8 +306,10 @@ Source cross-checks (2026-10-07):
   also uses the sequence at inspection time; `main` is not a supported-version
   guarantee. Recheck the installed version when troubleshooting.
 - [Official MAUI 10 DI lifetime contract](https://learn.microsoft.com/dotnet/maui/fundamentals/dependency-injection?view=net-maui-10.0#dependency-lifetime):
-  ordinary non-Blazor MAUI has no natural scope boundary. BlazorWebView services
-  have separate host semantics; do not generalize this guidance to them.
+  does not establish the provider used by a particular object graph. Inspect
+  the version's platform window path and actual resolution context rather than
+  treating broad lifetime advice as proof that window scopes never exist.
+  BlazorWebView services have separate host semantics.
 
 ## Short-lived database work and explicit scope ownership
 

@@ -371,6 +371,18 @@ public sealed class MainViewModel { public int Count { get; set; } }""")
 
 def api_probe():
     """Probe load-bearing snippets against the same real package as the fixtures."""
+    safe_reference = (ROOT / "plugins/dotnet-maui/skills/maui-safe-area/references/"
+                      "safe-area-api.md").read_text()
+    chat_markup = safe_reference.split("### Keyboard-aware chat/messaging layout", 1)[1].split(
+        "```xaml\n", 1)[1].split("\n```", 1)[0]
+    chat = ET.fromstring(chat_markup)
+    composer = chat.find("./Grid/Border/Grid")
+    assert composer is not None and composer.attrib.get("ColumnSpacing") == "10"
+    assert all("Spacing" not in grid.attrib for grid in chat.iter("Grid")), (
+        "The shipping reference must not use unsupported Grid.Spacing")
+    mutated_chat = ET.fromstring(chat_markup.replace('ColumnSpacing="10"', 'Spacing="10"'))
+    assert any("Spacing" in grid.attrib for grid in mutated_chat.iter("Grid")), (
+        "Invalid reference-grid mutation was not reproduced")
     binding_skill = ROOT / "plugins/dotnet-maui/skills/maui-data-binding/SKILL.md"
     binding_markup = binding_skill.read_text().split("### Page and control scopes", 1)[1].split(
         "```xml\n", 1)[1].split("\n```", 1)[0]
@@ -522,6 +534,9 @@ public static class Checks
         var composer = ChatLayout.Create();
         Require(composer.ColumnSpacing == 10 && composer.RowDefinitions.Count == 0 &&
             composer.ColumnDefinitions.Count == 0, "safe-area fixture geometry/column contract changed");
+        Require(typeof(Grid).GetProperty("ColumnSpacing") is not null &&
+            typeof(Grid).GetProperty("Spacing") is null,
+            "shipping reference-grid property contract changed");
         composer.RowSpacing = 10;
         Require(composer.ColumnSpacing == 10, "optional row spacing changed the required column gap");
         Require(typeof(Image).GetProperty("SafeAreaEdges") is null,

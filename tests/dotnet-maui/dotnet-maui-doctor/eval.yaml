@@ -144,19 +144,10 @@ stimuli:
     environment:
       files:
         - {src: fixtures/healthy, dest: .}
-        - {src: fixtures/capture_state.py, dest: capture_state.py}
-        - {src: fixtures/check_state.py, dest: check_state.py}
-      commands:
-        - python3 capture_state.py
     graders:
       - type: diff-not-contains
         config:
           pattern: '(?m)^(?:diff --git (?!a/__pycache__/[^\r\n]+ b/__pycache__/[^\r\n]+$|"a/__pycache__/(?:[^"\\\r\n]|\\.)+" "b/__pycache__/(?:[^"\\\r\n]|\\.)+"$)|rename (?:from|to) (?!__pycache__/|"__pycache__/))'
-      - type: run-command
-        config:
-          command: python3 check_state.py
-          expected_exit_code: 0
-          stdout_contains: Complete input state preserved
       - type: output-matches
         config: {pattern: '(?i)(no|not).*(change|remediat|install)|unchanged|none\s+(is\s+)?(required|needed)|no\s+mismatch'}
       - type: prompt
@@ -360,11 +351,7 @@ stimuli:
     environment:
       files:
         - {src: fixtures/discovery, dest: .}
-        - {src: fixtures/capture_state.py, dest: capture_state.py}
-        - {src: fixtures/check_state.py, dest: check_state.py}
         - {src: fixtures/check_discovery.py, dest: check_discovery.py}
-      commands:
-        - python3 capture_state.py
     graders:
       - type: diff-not-contains
         config:

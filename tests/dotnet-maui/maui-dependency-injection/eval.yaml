@@ -66,13 +66,19 @@ stimuli:
       risk: incorrect-registration-diagnosis
       journey: detail-navigation
     graders:
-      - type: output-not-matches
-        config:
-          pattern: '(?i)(page registration is (mandatory|required)|unregistered pages cannot receive)'
       - type: output-matches
         config:
           pattern: '(?i)(throw|exception|fail)'
       - type: prompt
+        config:
+          prompt: |
+            Grade the answer as a whole, pass or fail. An initialized Shell
+            type route can construct an unregistered page with registered
+            constructor dependencies. Explicit page registration can be
+            required to choose a DI lifetime, not for this activation fallback.
+            Accept qualified and negated statements. Fail any answer that
+            requires page registration for constructor injection or treats
+            missing required dependencies as silently null.
     rubric:
       - Correctly predicts activation of the unregistered page using registered constructor dependencies on the normal initialized Shell path.
       - Identifies missing required dependencies as resolution failures rather than silently null arguments.
@@ -146,7 +152,8 @@ stimuli:
   - name: Explain a retained DbContext across navigation and windows
     prompt: |
       I'm coming from ASP.NET Core. In my ordinary, non-Blazor MAUI app I
-      use AddDbContext<OrdersContext>() and inject it into ViewModels.
+      use AddDbContext<OrdersContext>() and inject it into ViewModels
+      constructed from the app's root service provider.
       Tracked entities linger after navigation, and opening a second window
       doesn't isolate them. Why? Suggest practical fixes with ownership
       and disposal, not just a lifetime label.
@@ -155,9 +162,6 @@ stimuli:
       risk: root-context-contamination
       journey: database-debugging
     graders:
-      - type: output-not-matches
-        config:
-          pattern: '(?im)^\s*(MAUI (does )?creates? (one |an? )?(IServiceScope|DI scope) per window|each window automatically gets (its own |a )?scope)'
       - type: output-matches
         config:
           pattern: '(?i)(root|app.lifetime|application.lifetime)'
@@ -168,8 +172,20 @@ stimuli:
         config:
           pattern: '(?i)(dispos|await using|using var)'
       - type: prompt
+        config:
+          prompt: |
+            Grade the answer as a whole, pass or fail. These ViewModels are
+            resolved from the root provider. MAUI 10 platform window contexts
+            do create scopes, but opening a window cannot retroactively move
+            a root-created graph into them. Accept that distinction; do not
+            require a claim that MAUI lacks window scopes. Fail an answer
+            that promises window creation isolates root-resolved contexts,
+            gives each navigation a fresh context automatically, or retains
+            one context for concurrent operations. Require ownership and
+            disposal in the proposed operation-boundary fix.
     rubric:
-      - Explains the absence of automatic window or navigation DI scopes in ordinary MAUI.
+      - Distinguishes root-provider resolution from MAUI 10 platform window-context scopes; opening a window does not re-resolve a root-created graph.
+      - Does not treat a window scope as a fresh scope for each navigation or database operation.
       - Explains root-provider reuse, with scope-validation failure as a possible alternative to silent reuse.
       - Offers short-lived contexts through a factory or explicitly owned scope, with correct disposal.
       - Does not promise that changing to transient fixes a context retained by a long-lived consumer.
@@ -182,8 +198,10 @@ stimuli:
           - step_id: 1
             source: agent
             message: |
-              AddDbContext defaults to scoped. Ordinary MAUI has no automatic
-              DI scope per navigation or window. Root resolution reuses the
+              AddDbContext defaults to scoped. MAUI 10 platform window contexts
+              create scopes, but these ViewModels resolve from the root, not
+              that window provider. Navigation does not create an operation
+              scope or re-resolve a retained graph. Root resolution reuses the
               context until app teardown, or throws if ValidateScopes is enabled.
               Prefer AddDbContextFactory<OrdersContext>(options => ...) and
               inject IDbContextFactory<OrdersContext>; create and dispose one
@@ -466,11 +484,18 @@ stimuli:
     graders:
       - type: output-matches
         config:
-          pattern: '(?i)(no (necessary|required|change)|leave|keep|already.*correct)'
-      - type: output-not-matches
-        config:
-          pattern: '(?i)(must|should|need to)\s+(change|switch|replace)[^\n.]{0,100}Home'
+          pattern: '(?i)(no (necessary|required|change|reason)|don.t need to (change|switch|replace)|\b(leave|keep)\b|already.*correct)'
       - type: prompt
+        config:
+          prompt: |
+            Grade the answer as a whole, pass or fail. Accept the intentional
+            singleton Home graph in the stated one-window setup and independent
+            transient Details graphs. Fail a recommendation to change the
+            Home lifetime or redesign this working setup as a necessary fix.
+            Correct negations such as "don't need to change HomePage" or
+            "no reason you should switch HomeViewModel" must pass. A conditional
+            warning about a future second window is not an instruction to
+            change the current setup.
     rubric:
       - Accepts the intentionally shared root registrations without mechanically changing every page to transient.
       - Leaves the already working constructor injection and detail lifetimes alone.

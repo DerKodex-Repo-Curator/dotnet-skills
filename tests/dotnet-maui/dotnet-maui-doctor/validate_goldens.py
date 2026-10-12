@@ -41,7 +41,8 @@ def check_immutable_scope(workspace, stimulus):
         shutil.copytree(workspace, trial)
         for skill in skills:
             shutil.copytree(skill, trial / skill.name)
-        run([sys.executable, "capture_state.py"], cwd=trial)
+        assert not (trial / ".scope-snapshot.json").exists()
+        assert not (trial / "capture_state.py").exists()
         baseline.mkdir()
         payload = {"workDir": str(trial), "baselineGitDir": str(baseline)}
         result = run(["node", "tests/dotnet-maui/replay_scope.mjs"],
@@ -53,32 +54,31 @@ def check_immutable_scope(workspace, stimulus):
                          input=json.dumps(dict(payload, action="grade", config=config)))
             return json.loads(result.stdout)["passed"]
 
-        checker = ["check_discovery.py"] if (trial / "check_discovery.py").exists() else ["check_state.py"]
-        run([sys.executable, *checker], cwd=trial)
+        checker = trial / "check_discovery.py"
+        if checker.exists():
+            run([sys.executable, checker.name], cwd=trial)
         assert scope_passes(), (stimulus["name"], role)
         pin = trial / "global.json"
-        state = trial / ".scope-snapshot.json"
-        check = trial / "check_state.py"
-        originals = {path: path.read_bytes() for path in (pin, state, check)}
+        originals = {path: path.read_bytes() for path in (pin, checker) if path.exists()}
         try:
-            for mutation in ("recapture", "deleted-recapture", "checker"):
+            for mutation in ("changed-pin", "deleted-pin", "grader-bypass"):
                 pin.write_text(json.dumps({"sdk": {"version": "99.0.100"}}))
-                if mutation == "deleted-recapture":
+                if mutation == "deleted-pin":
                     pin.unlink()
-                if mutation == "checker":
-                    check.write_text(originals[check].decode().replace(
-                        "def check(allowed=()):", "def check(allowed=()):\n    return"))
-                else:
-                    run([sys.executable, "capture_state.py"], cwd=trial)
-                run([sys.executable, *checker], cwd=trial)
+                if mutation == "grader-bypass":
+                    checker.write_text("print('validation bypassed')\n")
+                if checker.exists():
+                    run([sys.executable, checker.name], cwd=trial)
                 assert not scope_passes(), (stimulus["name"], role, mutation)
                 for path, content in originals.items():
                     path.write_bytes(content)
+                if checker not in originals:
+                    checker.unlink(missing_ok=True)
         finally:
             shutil.rmtree(trial)
             shutil.rmtree(baseline)
     print(f"PASS: {stimulus['name']} accepts all three staged roles and rejects "
-          "recaptured, deleted/recaptured and checker-bypass inputs")
+          "changed/deleted pins and grader-bypass inputs with an external baseline")
 
 
 def assert_bad_discovery(workspace, mutation):
@@ -281,16 +281,6 @@ def main():
             print(result.stdout.strip())
             count += 1
             if stimulus["name"] == "Working Android configuration stays unchanged":
-                project = workspace / "App.csproj"
-                original = project.read_bytes()
-                try:
-                    project.write_bytes(original + b"\n<!-- unintended edit -->\n")
-                    run([sys.executable, "check_state.py"], cwd=workspace, success=False)
-                    project.unlink()
-                    run([sys.executable, "check_state.py"], cwd=workspace, success=False)
-                finally:
-                    project.write_bytes(original)
-                print("Rejected no-op mutations: modified and deleted input")
                 check_immutable_scope(workspace, stimulus)
             if stimulus["name"] == "Offline CI discovery follows each manifest entry":
                 assert_bad_discovery(workspace, lambda text: text.replace(
@@ -301,18 +291,12 @@ def main():
                 assert_bad_discovery(workspace, lambda text: text.replace(
                     '"jdkRange": deps["jdk"]["version"]',
                     '"jdkRange": "[17.0,22.0)"'))
-                pin = workspace / "global.json"
-                original = pin.read_text()
-                try:
-                    pin.write_text(json.dumps({"sdk": {"version": "11.0.100"}}))
-                    run([sys.executable, "check_discovery.py"], cwd=workspace, success=False)
-                finally:
-                    pin.write_text(original)
                 print("Rejected discovery mutations: wrong band, optional packages, "
-                      "hardcoded JDK range and pin rewrite")
+                      "hardcoded JDK range")
                 check_immutable_scope(workspace, stimulus)
         check_output_variants(document)
-        print(f"PASS: {count} deterministic golden trajectories and 6 behavioral mutations")
+        print(f"PASS: {count} deterministic golden trajectories, 3 discovery mutations "
+              "and 18 external preservation mutations")
     finally:
         spec.unlink(missing_ok=True)
         shutil.rmtree(WORK)

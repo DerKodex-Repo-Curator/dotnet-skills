@@ -31,6 +31,32 @@ test('a missing native helper rejects workspace extensions without changing log 
 });
 
 if (supported) {
+  test('SDK replacement preserves target permissions and rejects symlink writes without changing content', async () => {
+    const root = await mkdtemp(path.join(process.cwd(), '.native-workspace-fs-test-'));
+    let provider;
+    try {
+      const workspace = path.join(root, 'workspace');
+      const logs = path.join(root, 'logs');
+      await Promise.all([workspace, logs].map(file => mkdir(file)));
+      const file = path.join(workspace, 'target');
+      const link = path.join(workspace, 'link');
+      await writeFile(file, 'original', { mode: 0o640 });
+      await symlink('target', link);
+      provider = withWorkspaceAccess(new LocalSessionFsHandler(logs), workspace);
+      const adapter = createSessionFsAdapter(provider);
+      assert.equal(await adapter.writeFile({ path: file, content: 'replacement' }), undefined);
+      assert.equal((await stat(file)).mode & 0o777, 0o640);
+      const rejected = await adapter.writeFile({ path: link, content: 'blocked' });
+      assert.equal(rejected.code, 'UNKNOWN');
+      assert.match(rejected.message, /regular target, not a symlink or special file/);
+      assert.equal(await readFile(file, 'utf8'), 'replacement');
+      assert.deepEqual((await readdir(workspace)).sort(), ['link', 'target']);
+    } finally {
+      provider?.[closeWorkspace]?.();
+      await rm(root, { recursive: true });
+    }
+  });
+
   test('five concurrent workers retain independent workspace and log capabilities', async () => {
     const root = await mkdtemp(path.join(process.cwd(), '.native-workspace-fs-test-'));
     const providers = [];

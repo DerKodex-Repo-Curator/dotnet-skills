@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,6 +64,55 @@ func mode(req request, fallback fs.FileMode) fs.FileMode {
 	return result
 }
 
+func replaceFile(root *os.Root, req request, write func(io.Writer, string) (int, error)) (err error) {
+	parent, err := root.OpenRoot(filepath.Dir(req.Path))
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, parent.Close()) }()
+	name := filepath.Base(req.Path)
+	info, err := parent.Lstat(name)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	if err == nil && !info.Mode().IsRegular() {
+		return errors.New("atomic workspace writes require a regular target, not a symlink or special file")
+	}
+	temporary := ".workspace-write-" + rand.Text()
+	file, err := parent.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode(req, 0o666))
+	if err != nil {
+		return err
+	}
+	published := false
+	defer func() {
+		if !published {
+			err = errors.Join(err, parent.Remove(temporary))
+		}
+	}()
+	if info != nil {
+		err = file.Chmod(info.Mode())
+	}
+	if err == nil {
+		var written int
+		written, err = write(file, req.Content)
+		if err == nil && written != len(req.Content) {
+			err = io.ErrShortWrite
+		}
+	}
+	if err == nil {
+		err = file.Sync()
+	}
+	err = errors.Join(err, file.Close())
+	if err != nil {
+		return err
+	}
+	if err = parent.Rename(temporary, name); err != nil {
+		return err
+	}
+	published = true
+	return nil
+}
+
 func execute(root *os.Root, req request) (any, error) {
 	if req.Protocol != protocol || !filepath.IsLocal(req.Path) {
 		return nil, errors.New("invalid rooted filesystem request")
@@ -75,10 +125,10 @@ func execute(root *os.Root, req request) (any, error) {
 		if err := root.MkdirAll(filepath.Dir(req.Path), 0o777); err != nil {
 			return nil, err
 		}
-		flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-		if req.Operation == "appendFile" {
-			flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
+		if req.Operation == "writeFile" {
+			return nil, replaceFile(root, req, io.WriteString)
 		}
+		flags := os.O_WRONLY | os.O_CREATE | os.O_APPEND
 		file, err := root.OpenFile(req.Path, flags, mode(req, 0o666))
 		if err != nil {
 			return nil, err

@@ -35,7 +35,7 @@ paths for facts already covered here; disclose any uncertainty that matters.
 
 - XAML binding/property-path defects with an already-correct ViewModel and BindingContext, data-binding syntax or compiled bindings — use **maui-data-binding**, not a DI investigation
 - Shell route/query design without a DI issue — use the **maui-shell-navigation** skill
-- ASP.NET Core request-scoped DI — ordinary MAUI's missing scope boundary does not apply
+- ASP.NET Core request-scoped DI — MAUI window and operation ownership does not apply
 - Mocking frameworks or test runners — use standard .NET testing tools (xUnit, NUnit, MSTest) and mocking libraries (NSubstitute, Moq)
 
 ## Rules That Change the Answer
@@ -45,7 +45,7 @@ paths for facts already covered here; disclose any uncertainty that matters.
 | Registering a Page or ViewModel | Prefer `AddTransient` for independently created detail pages | Transient means fresh **per resolution**, not per tab selection. Shell can cache a root page. A Singleton is defensible for intentionally shared root state; do not attach the same Page instance to multiple parents/windows |
 | Registering thread-safe app-wide state | `AddSingleton` | Shared settings/cache ownership; database connections and `DbContext` instances are operation-owned, not generic singleton examples |
 | Shared cache also needs HTTP | Keep cache ownership separate from short-lived client creation | Do not register the same intended service as both Singleton and a typed HTTP client; see the named-client example in the API reference |
-| Tempted to use `AddScoped` | Decide who creates, resolves from, and disposes the scope | Ordinary non-Blazor MAUI has **no automatic DI scope per window or navigation**. Scoped instances resolved from the root are shared until root disposal (or resolution throws when scope validation is enabled) |
+| Tempted to use `AddScoped` | Trace the resolving provider and who disposes its scope | MAUI 10 platform window contexts create DI scopes; root-created graphs can bypass them. Neither navigation nor a database operation automatically gets a fresh scope. Root resolution shares scoped instances until root disposal (or throws with scope validation) |
 | App already owns explicit per-window scopes | Preserve the graph; audit root/template/route resolution and teardown | Shell uses its MAUI context's provider, not an arbitrary new scope. Avoid root/static resolvers; cancel and await outstanding work before disposing the window scope |
 | Navigating to a detail page | Register its dependencies and `Routing.RegisterRoute`; optionally register the page to control lifetime | With a service provider, Shell's type route factory uses `ActivatorUtilities.GetServiceOrCreateInstance`: an unregistered page can still receive registered constructor dependencies |
 | Typed Shell `ContentTemplate` | Keep constructor injection; check the MAUI version and available context | MAUI 10's `ShellContent` looks up the page in DI, then falls back to `ActivatorUtilities.CreateInstance`. It does **not** universally bypass DI. Root content is cached; refresh on activation rather than expecting transient registration to recreate it |

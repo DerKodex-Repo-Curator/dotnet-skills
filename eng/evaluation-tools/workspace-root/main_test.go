@@ -2,12 +2,99 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
+
+func TestFailedReplacementPreservesTarget(t *testing.T) {
+	for _, existing := range []bool{false, true} {
+		for _, short := range []bool{false, true} {
+			t.Run(fmt.Sprintf("existing=%t/short=%t", existing, short), func(t *testing.T) {
+				directory := t.TempDir()
+				root, err := os.OpenRoot(directory)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer root.Close()
+				if existing {
+					if err := root.WriteFile("target", []byte("original"), 0o640); err != nil {
+						t.Fatal(err)
+					}
+				}
+				err = replaceFile(root, request{Path: "target", Content: "replacement"},
+					func(writer io.Writer, content string) (int, error) {
+						n, err := io.WriteString(writer, content[:3])
+						if err != nil {
+							return n, err
+						}
+						if short {
+							return n, nil
+						}
+						return n, syscall.ENOSPC
+					})
+				expected := error(syscall.ENOSPC)
+				if short {
+					expected = io.ErrShortWrite
+				}
+				if !errors.Is(err, expected) {
+					t.Fatalf("wrong write failure: %v", err)
+				}
+				data, readErr := root.ReadFile("target")
+				if existing && (readErr != nil || string(data) != "original") {
+					t.Fatalf("failed write changed target: %q, %v", data, readErr)
+				}
+				if !existing && !errors.Is(readErr, fs.ErrNotExist) {
+					t.Fatalf("failed write created target: %q, %v", data, readErr)
+				}
+				entries, err := os.ReadDir(directory)
+				count := 0
+				if existing {
+					count = 1
+				}
+				if err != nil || len(entries) != count {
+					t.Fatalf("temporary output leaked: %v, %v", entries, err)
+				}
+			})
+		}
+	}
+}
+
+func TestReplacementPreservesModeAndRejectsSymlinks(t *testing.T) {
+	directory := t.TempDir()
+	root, err := os.OpenRoot(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := root.WriteFile("target", []byte("original"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execute(root, request{Protocol: protocol, Operation: "writeFile",
+		Path: "target", Content: "replacement"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := root.Stat("target")
+	if err != nil || info.Mode().Perm() != 0o640 {
+		t.Fatalf("replacement changed permissions: %v, %v", info, err)
+	}
+	if err := os.Symlink("target", filepath.Join(directory, "link")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := execute(root, request{Protocol: protocol, Operation: "writeFile",
+		Path: "link", Content: "blocked"}); err == nil {
+		t.Fatal("symlink replacement did not reject")
+	}
+	data, err := root.ReadFile("target")
+	if err != nil || string(data) != "replacement" {
+		t.Fatalf("rejected symlink write changed destination: %q, %v", data, err)
+	}
+}
 
 func TestOutsideSymlinkRejectedForEveryOperation(t *testing.T) {
 	node, err := exec.LookPath("node")

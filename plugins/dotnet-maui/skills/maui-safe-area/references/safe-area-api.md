@@ -56,6 +56,15 @@ SafeAreaEdges="Container, SoftInput"
 SafeAreaEdges="Container, Container, Container, SoftInput"
 ```
 
+In the pinned MAUI 10 Android/iOS calculations, `SoftInput` retains the original
+system-bar safe area while the keyboard is hidden. Android also retains it
+on non-bottom edges while the keyboard is visible. `All` expresses both region
+flags explicitly; do not infer that `SoftInput` always omits bar protection.
+Actual applied padding also depends on the control, parent consumption and
+target platform/patch.
+See the pinned [Android per-edge calculation](https://github.com/dotnet/maui/blob/9d881e94b1c56692e40a16262897677a3bb46fcb/src/Core/src/Platform/Android/SafeAreaExtensions.cs)
+and [iOS MauiView calculation](https://github.com/dotnet/maui/blob/9d881e94b1c56692e40a16262897677a3bb46fcb/src/Core/src/Platform/iOS/MauiView.cs).
+
 ## Controls That Support SafeAreaEdges
 
 | Control | Default value | Notes |
@@ -130,7 +139,7 @@ target platform/version rather than extrapolating either example to all hosts:
         <Border Grid.Row="1"
                 BackgroundColor="LightGray"
                 Padding="20">
-            <Grid ColumnDefinitions="*,Auto" Spacing="10">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
                 <Entry Placeholder="Type a message..." />
                 <Button Grid.Column="1" Text="Send" />
             </Grid>

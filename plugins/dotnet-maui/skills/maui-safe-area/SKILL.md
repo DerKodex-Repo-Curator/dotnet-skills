@@ -104,8 +104,11 @@ SafeAreaEdges="Container, Container, Container, SoftInput"
 ```
 
 The two-value form means **horizontal, vertical**, not "combine these regions."
-The four-value form means left/top/right/bottom. `SoftInput` alone does not
-protect an edge from system bars; use `All` when both keyboard and bars matter.
+The four-value form means left/top/right/bottom. In the pinned MAUI 10
+Android/iOS calculations, `SoftInput` retains system-bar safe area while the
+keyboard is hidden; Android also retains it on non-bottom edges when visible.
+Use `All` to express both region flags explicitly, not because `SoftInput`
+universally discards bar insets. Verify the target platform, patch and state.
 Comma-separated values are valid converter syntax, not C# tuples. The property
 is available on the listed containers, not arbitrary controls such as `Image`.
 

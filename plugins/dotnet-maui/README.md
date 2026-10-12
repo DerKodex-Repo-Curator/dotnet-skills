@@ -29,7 +29,43 @@ alone do not prove cost neutrality. Follow the repository's
 [quality bar](../../CONTRIBUTING.md#quality-bar), including preference significance
 and dormancy requirements.
 
-### Latest corrected safe-area comparison
+### October 12 review corrections
+
+The October 8 review found further content and grading defects. These are
+prospective corrections, not a rescore or transfer of the comparisons below:
+
+- MAUI 10 platform window contexts create DI scopes. Root-created graphs can
+  bypass them; neither window nor navigation lifetime is an operation boundary.
+  DI guidance, the root-provider stimulus, rubric and golden now make that
+  distinction rather than denying window scopes.
+- The exact shipping HTTP sample preserves `IProductCatalog` registration and
+  implementation. Its executable probe resolves the interface twice, checks
+  shared cache identity and HTTP failure propagation, and rejects a transient
+  owner.
+- Qualified page-registration and negated no-op answers are no longer rejected
+  by substring bans. Binary semantic prompt contracts own those correctness
+  distinctions; deterministic replays cover the reported valid wordings, not
+  probabilistic judge reliability.
+- The reference chat Grid now uses `ColumnSpacing`, and its markup/property
+  regression covers the formerly invalid `Spacing`. `SoftInput` guidance now
+  reflects the pinned Android/iOS bar-inset calculations.
+- Doctor preservation uses only the external pre-agent Git baseline. No
+  `.scope-snapshot.json`, capture script or hidden-state preservation hint is
+  supplied to either role. Three-role replay accepts intact inputs and rejects
+  changed/deleted pins and grader bypasses.
+
+The native provider also publishes `writeFile` by rooted atomic replacement
+after writing, syncing and closing a temporary file. Injected partial/short
+write failures preserve existing targets or leave new ones absent. Symlink and
+special-file write targets explicitly reject; replacement changes inode
+identity. Append and lost-response limitations remain documented. This is not
+whole-host confinement or new measured skill/default evidence.
+
+No new executor comparison or paid judge replay was run for these corrections.
+Earlier outcome/cost figures remain revision-scoped; current official evaluation,
+human acceptance, ownership and device/default gates are still separate.
+
+## Latest corrected safe-area comparison
 
 The prospective safe-area-only comparison measured
 `ead0f5011cc05e9340dbac0f6e3adc8794b91d6f` after the platform-aware guidance,
@@ -574,9 +610,10 @@ or attribute either branch's measurements to an integrated payload.
 The useful additional shared-cache/HTTP ownership case is carried forward in
 the DI guidance and its executable replay. Existing runtime-verified Shell
 activation, explicit scope ownership, lifecycle durability, bindings, restraint
-and powered suites remain the integration basis. In particular, do not restore
-universal claims that typed Shell templates bypass DI or that ordinary MAUI
-automatically creates a DI scope per window. Neither PR is merged or closed
+and powered suites remain the integration basis. Do not claim that typed Shell
+templates bypass DI. MAUI 10 platform window contexts create scopes, but
+root-resolved graphs can bypass them; neither path implies a fresh scope per
+navigation or database operation. Neither PR is merged or closed
 by this decision; maintainers still need to select the final proposal.
 
 ## Local validation

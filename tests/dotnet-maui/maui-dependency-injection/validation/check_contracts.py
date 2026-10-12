@@ -40,15 +40,15 @@ mutations = [
     "In CreateMauiApp use AddSingleton<IDataService, DataService>(), "
     "AddSingleton<DetailViewModel>() and AddSingleton<DetailPage>(). "
     "Assign BindingContext = vm; share the same detail edit state everywhere.",
-    "The constructor cannot be injected: page registration is mandatory. "
-    "An unregistered page throws even when its constructor services are registered.",
+    "Page registration is mandatory even when constructor dependencies are "
+    "available; unregistered pages cannot be constructed.",
     "#if ANDROID register AndroidNotificationService; "
     "#elif IOS register AppleNotificationService; "
     "#elif WINDOWS register WindowsNotificationService; "
     "#endif. This covers all four declared targets.",
-    "MAUI creates one IServiceScope per window. Root scopes aren't involved in "
-    "window state. CreateScope and dispose it for each upload if needed, but "
-    "a second window already has its own scope automatically.",
+    "MAUI creates one IServiceScope per window. Every retained ViewModel "
+    "automatically gets a new context when another window opens; no "
+    "operation ownership or cleanup is needed.",
     "ContentTemplate pages bypass DI entirely. There is no constructor "
     "injection on that path; use a parameterless constructor instead of a route.",
     "Transient guarantees a constructor call on every tab return. "
@@ -78,10 +78,18 @@ ownership_alternatives = [
     (0, "singleton-main", stimuli[0]["golden_trajectory"]["inline"]["steps"][-1]["message"]
         .replace("AddTransient<MainViewModel>", "AddSingleton<MainViewModel>")
         .replace("AddTransient<MainPage>", "AddSingleton<MainPage>"), True),
-    (3, "ordinary-root-provider", "Ordinary MAUI has no request scope. A second window "
-        "also resolves from the root unless you explicitly create a separate scope. "
+    (3, "ordinary-root-provider", "MAUI 10 platform window contexts create scopes, "
+        "but these ViewModels resolve from the root. A window scope does not "
+        "retroactively re-resolve them or create a scope per database operation. "
         "Use IDbContextFactory<OrdersContext>; await using var db = "
         "await factory.CreateDbContextAsync(); await UploadAsync(db);", True),
+    (1, "qualified-registration", "Explicit page registration is required only if "
+        "you want to choose DetailsPage's lifetime; it is not required for constructor "
+        "injection. Missing IProductService still causes activation to fail.", True),
+    (10, "negated-change", "You don't need to change HomePage; the intentional "
+        "one-window root state and independent detail graphs are appropriate.", True),
+    (10, "negated-switch", "There is no reason you should switch HomeViewModel "
+        "to transient in this intentionally shared one-window setup.", True),
     (6, "operation-factory", "The singleton constructor resolves OrdersContext once, "
         "so every upload shares that context. Keep the worker shared but inject "
         "IDbContextFactory<OrdersContext>. In each upload: await using var db = "
@@ -119,7 +127,7 @@ alternatives = {
     "and WindowsNotificationService when OperatingSystem.IsWindows(); register "
     "the selected INotificationService as a shared service in startup. "
     "Explicitly reject unsupported targets.",
-    3: 'The assertion "MAUI creates one IServiceScope per window" is false.\n',
+    3: 'MAUI 10 platform window contexts have scopes; root-created graphs can bypass them.\n',
     4: 'The claim "ContentTemplate pages bypass DI entirely" is incorrect.\n',
 }
 for index, text in alternatives.items():

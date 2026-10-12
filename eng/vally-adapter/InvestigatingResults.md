@@ -95,6 +95,19 @@ errors; descriptors close on normal or forced SDK client shutdown. Relative
 session paths and absolute log-root paths (including nested log roots), outside
 delegation and other provider implementations retain their original behavior.
 
+Workspace `writeFile` writes, syncs and closes an exclusively created temporary
+file in a captured parent-directory capability before rooted rename publishes
+it. Partial writes, short writes and disk errors before publication leave an
+existing target intact (or a new target absent). Existing permission bits are
+retained. Replacement changes inode identity: existing hard links continue to
+refer to the old file. Symlink/special-file write targets reject explicitly;
+read and append retain their existing rooted semantics. This is not an atomic
+read-modify-write transaction with other writers. Append can still partially
+mutate a file on failure; SDK 1.0.11 has no exported `SessionFsWriteFailure` or
+changed-target error field, so its generic adapter errors do not establish
+unchanged state. A helper timeout or lost response after publication is also
+indeterminate; inspect the target before retrying.
+
 Without the built helper, or on unsupported hosts, workspace extensions still
 reject with `ERR_EVALUATION_WORKSPACE_ISOLATION_REQUIRED`; there is no trust flag
 or unsafe fallback. SDK 1.0.11 catches all provider `exists` errors and returns

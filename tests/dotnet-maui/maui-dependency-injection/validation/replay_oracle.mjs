@@ -119,7 +119,7 @@ for (const [index, original] of spec.stimuli.entries()) {
   }
   console.log(`PASS: production oracle golden acceptance / mutation rejection: ${original.name}`);
 }
-console.log("PASS: 14 goldens, 19 mutations and 10 alternatives; no agent execution or paid prompt grader");
+console.log("PASS: deterministic goldens, mutations and alternatives; semantic claims still require prompt grading");
 
 const reference = await readFile(resolve(root,
   "plugins/dotnet-maui/skills/maui-dependency-injection/references/dependency-injection-api.md"), "utf8");
@@ -141,8 +141,8 @@ ${examples[0].replaceAll("builder.Services", "services")}
 var handler = new LocalHandler();
 services.AddHttpClient("products").ConfigurePrimaryHttpMessageHandler(() => handler);
 using var provider = services.BuildServiceProvider();
-var first = provider.GetRequiredService<ProductCatalog>();
-var second = provider.GetRequiredService<ProductCatalog>();
+var first = provider.GetRequiredService<IProductCatalog>();
+var second = provider.GetRequiredService<IProductCatalog>();
 if (!ReferenceEquals(first, second))
     throw new InvalidOperationException("Documented cache owner must remain shared");
 if (await first.GetNameAsync(1) != "Product" ||
@@ -222,9 +222,10 @@ sealed class LocalHandler : HttpMessageHandler
   await writeFile(resolve(httpWorkspace, "Program.cs"), program);
   console.log(execFileSync("dotnet", ["run", "--project", "Probe.csproj", "--verbosity", "quiet"],
     { cwd: httpWorkspace, encoding: "utf8" }).trim());
-  assert.ok(program.includes("AddSingleton<ProductCatalog>"));
+  assert.ok(program.includes("AddSingleton<IProductCatalog, ProductCatalog>"));
   await writeFile(resolve(httpWorkspace, "Program.cs"),
-    program.replace("AddSingleton<ProductCatalog>", "AddTransient<ProductCatalog>"));
+    program.replace("AddSingleton<IProductCatalog, ProductCatalog>",
+      "AddTransient<IProductCatalog, ProductCatalog>"));
   const broken = spawnSync("dotnet", ["run", "--project", "Probe.csproj", "--no-restore",
     "--verbosity", "quiet"], { cwd: httpWorkspace, encoding: "utf8" });
   assert.equal(broken.error, undefined);
