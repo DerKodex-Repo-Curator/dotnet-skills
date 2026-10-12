@@ -61,6 +61,14 @@ special-file write targets explicitly reject; replacement changes inode
 identity. Append and lost-response limitations remain documented. This is not
 whole-host confinement or new measured skill/default evidence.
 
+The first October 12 CI run passed on both macOS architectures but failed the
+swap-fixture setup on both Linux architectures: a legitimate in-flight
+`MkdirAll` can recreate a moved parent before the test installs its symlink.
+The fixture now handles only that exact `EEXIST` schedule, awaits the operation,
+verifies the recreated path is a directory, and installs the outside link for
+the subsequent rejection check. Outside sentinels and rooted-operation
+assertions are unchanged; the initial failures remain part of the record.
+
 No new executor comparison or paid judge replay was run for these corrections.
 Earlier outcome/cost figures remain revision-scoped; current official evaluation,
 human acceptance, ownership and device/default gates are still separate.

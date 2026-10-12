@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { copyFile, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSessionFsAdapter } from '@github/copilot-sdk';
@@ -160,7 +160,7 @@ if (supported) {
     }
   });
 
-  test('in-flight and subsequent parent swaps never access outside sentinels for all ten operations', async () => {
+  test('racing and subsequent parent replacements never access outside sentinels for all ten operations', async () => {
     const root = await mkdtemp(path.join(process.cwd(), '.native-workspace-fs-test-'));
     let provider;
     try {
@@ -186,7 +186,17 @@ if (supported) {
         await writeFile(outsideFile, 'outside');
         const pending = provider[operation](...args).then(value => ({ value }), error => ({ error }));
         await rename(parent, saved);
-        await symlink(outside, parent);
+        try {
+          await symlink(outside, parent);
+        } catch (error) {
+          if (error.code !== 'EEXIST') throw error;
+          // MkdirAll may legitimately recreate the missing parent before the
+          // swap. Finish that operation before replacing its owned directory.
+          await pending;
+          assert.equal((await lstat(parent)).isDirectory(), true);
+          await rm(parent, { recursive: true });
+          await symlink(outside, parent);
+        }
         const result = await pending;
         if (operation === 'readFile' && !result.error) assert.equal(result.value, 'inside');
         if (operation === 'stat' && !result.error) assert.equal(result.value.size, 6);
