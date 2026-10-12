@@ -5220,6 +5220,892 @@
         },
         "tool": "customSmallerIsBetter",
         "date": 1791658801116
+      },
+      {
+        "date": 1791826370002,
+        "tool": "customSmallerIsBetter",
+        "model": "claude-sonnet-5",
+        "benches": [
+          {
+            "value": 204.9,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1727091.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 210.7,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1806733.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 123.7,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 858594.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 361.8,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 2428968.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 398.7,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 2195147.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 180.7,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 745862.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 190.4,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1446771.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 181.1,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1070728.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 246.6,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 2014440.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 143.1,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1421223.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 150.7,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 1217560.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 140.8,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 1013602.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 254.2,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 2043600.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 291.8,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 2458685.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 485.3,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 3976947.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 242.1,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 845786.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 235.3,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 753262.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 381.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 598428.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 77.4,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 226409.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 52.3,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 251617.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 113.7,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 221714.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 49.8,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 245964.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 51.7,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 250827.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 58.9,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 220619.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 120.1,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 240214.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 103.3,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 235623.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 81.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 243464.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 35.5,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 242296.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 29.7,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 220026.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 33.3,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 192322.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 57.7,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 246702.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 63.7,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 281408.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 53.2,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 157728.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 66.2,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 190567.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 34.9,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 190086.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 96.7,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 122679.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 147.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 264143.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 167.1,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 294840.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 105.3,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 128838.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Tokens In",
+            "unit": "tokens"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
+      },
+      {
+        "date": 1791826370078,
+        "tool": "customSmallerIsBetter",
+        "model": "gpt-5.6-luna",
+        "benches": [
+          {
+            "value": 166.4,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 689950.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 108.3,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 533756.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 93.4,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 269508.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 139.1,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 397686.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 168.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 488990.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 137.2,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 472714.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 141.5,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 611437.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 128.5,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 659424.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 152.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 635438.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 112.9,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 594477.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 124.8,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 696660.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 80.2,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 271307.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 101.4,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 372861.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 116.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 452706.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 136.9,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 437603.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 207.6,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 468136.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 170.5,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 420414.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 219.1,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 388524.0,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.8,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 166665.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 51.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 141609.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 44.4,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 82246.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 35.8,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 139675.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 34.4,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 179603.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 24.3,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 64119.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.3,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 129069.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 177.5,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 348296.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 43.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 84683.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 24.6,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 151599.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 25.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 153737.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 21.4,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 129793.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 21.1,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 122552.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 30.6,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 103008.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 76578.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 34.7,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 138163.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 43.3,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 159156.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.3,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 79208.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 44.9,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 149020.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 26.6,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 144468.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 47.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 81404.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Tokens In",
+            "unit": "tokens"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
       }
     ],
     "Quality": [
@@ -13421,6 +14307,1256 @@
         ],
         "tool": "customBiggerIsBetter",
         "model": "mai-code-1.1-flash"
+      },
+      {
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 6.25,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 4.166666507720947,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 6.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.25
+          },
+          {
+            "value": 5.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.821428298950195,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.464285850524902,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.285714149475098,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Quality",
+            "unit": "Score (0-10)"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        },
+        "date": 1791826370002,
+        "verdictEvidence": [
+          {
+            "skillName": "create-datadriven-aspnetcore",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_PASS",
+            "stateReason": {
+              "code": "credible_preference_improvement",
+              "phase": "decision"
+            },
+            "passed": true,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +100.0% (5W/0T/0L over 5 preference-eligible stimulus vote(s), sign test p=0.031), mean preference +64.0% across 5 paired run(s) — credibly better",
+            "noChangeDiagnosis": null,
+            "gateEvidence": {
+              "stimulusVoteCount": 5,
+              "wins": 5,
+              "ties": 0,
+              "losses": 0,
+              "discordant": 5,
+              "direction": "better",
+              "pValue": 0.03125,
+              "alpha": 0.05,
+              "netWin": 1,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 0
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 0,
+              "satisfied": 0,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Scaffold Blazor CRUD components",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold MVC CRUD with an existing DbContext",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Minimal API child and required parent CRUD",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Minimal API endpoints with OpenAPI",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Razor Pages CRUD with EF Core and SQLite",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Scaffold Blazor CRUD components",
+                "direction": "better",
+                "rationale": "B fully addresses all requested areas, notably migration-based SQLite setup and Employee–Department foreign-key handling, while also providing complete related-entity UI and stronger verification. A is broadly functional but misses the explicit migrations requirement and provides materially less evidence of FK handling."
+              },
+              {
+                "scenarioName": "Scaffold MVC CRUD with an existing DbContext",
+                "direction": "better",
+                "rationale": "Both appear to satisfy the core scaffolding and migration requirements. B is modestly stronger because it explicitly implements layout-based Author navigation and validates the required-FK workflow end-to-end, while leaving a freshly migration-created database. The gap is not large because A also reports complete scaffolded CRUD, migration application, and successful endpoint verification."
+              },
+              {
+                "scenarioName": "Scaffold Minimal API child and required parent CRUD",
+                "direction": "better",
+                "rationale": "Both runs appear complete, build-verified implementations with migrations, CRUD, FK validation, and executable HTTP flows. B more precisely follows the requested ProductEndpoints placement and more clearly satisfies the requested OpenAPI tags and response metadata."
+              },
+              {
+                "scenarioName": "Scaffold Minimal API endpoints with OpenAPI",
+                "direction": "better",
+                "rationale": "Both implement and verify the core SQLite CRUD API, but B satisfies all additional requested rubric expectations: migration-based schema management, a complete .http request file, and substantially richer OpenAPI metadata. A misses the .http artifact and uses EnsureCreated instead of migrations."
+              },
+              {
+                "scenarioName": "Scaffold Razor Pages CRUD with EF Core and SQLite",
+                "direction": "better",
+                "rationale": "Both satisfy the core Product CRUD, SQLite, AppDbContext, migration, and verification requirements, but B substantially better handles the required Category FK by supplying complete Category CRUD and a context with both entity sets. This makes the delivered application more usable and complete."
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-data/skills/create-datadriven-aspnetcore/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-data/create-datadriven-aspnetcore/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          },
+          {
+            "skillName": "optimizing-ef-core-queries",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_PASS",
+            "stateReason": {
+              "code": "credible_preference_improvement",
+              "phase": "decision"
+            },
+            "passed": true,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +100.0% (8W/0T/0L over 8 preference-eligible stimulus vote(s), sign test p=0.004), mean preference +55.0% across 8 paired run(s) — credibly better",
+            "noChangeDiagnosis": null,
+            "gateEvidence": {
+              "stimulusVoteCount": 8,
+              "wins": 8,
+              "ties": 0,
+              "losses": 0,
+              "discordant": 8,
+              "direction": "better",
+              "pValue": 0.003906250000000001,
+              "alpha": 0.05,
+              "netWin": 1,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 0
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 0,
+              "satisfied": 0,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Audit a back-office operations service riddled with query problems",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review customer directory search",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review order history pagination behavior",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review order operations query boundaries",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review pre-merge data access changes",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review route planning data access",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review saved order search implementation",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review statement export implementation",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Audit a back-office operations service riddled with query problems",
+                "direction": "better",
+                "rationale": "Both runs preserve correctness in their benchmark and cover the core EF anti-patterns, but B additionally handles the sargable date predicate, compiled hot query, and true set-based discount update, plus partial index support. A's claims that GetProductForCard and offset paging are already efficient leave meaningful performance work unaddressed."
+              },
+              {
+                "scenarioName": "Review customer directory search",
+                "direction": "better",
+                "rationale": "Both deliver strong source-grounded reviews and cover the principal email, catalog, context-concurrency, and tracking concerns. B is better overall because it correctly identifies the supplied StringComparison StartsWith overload as untranslatable, whereas A makes a material incorrect claim about its SQL translation and performance behavior."
+              },
+              {
+                "scenarioName": "Review order history pagination behavior",
+                "direction": "better",
+                "rationale": "Both identify and fix the three central defects. B is better because it clearly separates sound existing methods from defective ones, especially correctly validating GetWindowSortedByValue and GetRecentPageAsync, while A contains a misleading implication that the ordered value-window behavior may drift. Both runs also used shell commands despite the source-browsing-only instruction, so neither has an advantage on process compliance."
+              },
+              {
+                "scenarioName": "Review order operations query boundaries",
+                "direction": "better",
+                "rationale": "Both are substantially incomplete against the rubric, notably omitting HasOrdersToShipAsync, unbounded dashboard rows, and durable replay/idempotency. B is marginally better overall for clearer import-ID batching details and explicit source-only qualification, while avoiding A's unsafe claim that restart-from-beginning makes partial chunk commits safe. A is cleaner and less duplicative, so the gap is small."
+              },
+              {
+                "scenarioName": "Review pre-merge data access changes",
+                "direction": "better",
+                "rationale": "Both final reports reach the correct conservative conclusion and are technically sound. B is modestly stronger because it is more methodical about source-only limitations and evidentiary boundaries, though its statement that it traced 'all 6' methods appears to be a minor counting error given the seven methods listed."
+              },
+              {
+                "scenarioName": "Review route planning data access",
+                "direction": "better",
+                "rationale": "B provides the same core diagnosis while correctly accounting for EF's FK index convention and recommending a key order that satisfies the query's full filter/order shape. A's unsupported claim that the shown index is the only one and its ineffective INCLUDE(Id) suggestion materially weaken a rollout-oriented review."
+              },
+              {
+                "scenarioName": "Review saved order search implementation",
+                "direction": "better",
+                "rationale": "Both find the principal dynamic-expression and activity-feed parameterization concerns and preserve the count contract. B is substantially more correct about EF.Constant and the fixed Imported parameter, avoids treating unmeasured behavior as proven, and gives a concrete safe compiler remedy. A's erroneous characterization of EF.Constant and unsupported recommendation to change Imported materially weaken its review. [Magnitude reduced to \"slightly-better\": the position-swapped pass judged this \"slightly-better\", so the more confident \"much-better\" was downgraded.]"
+              },
+              {
+                "scenarioName": "Review statement export implementation",
+                "direction": "better",
+                "rationale": "Both deliver strong reviews and cover the core payment, portfolio, payment-file, totals, and flagging issues. B is better overall because it catches the important reminder correctness bug caused by tracking plus filtered-Include navigation fixup and provides a stronger cards remedy that avoids the blob. A is stronger on payment-file remediation by recommending a value-keyed writer, but that does not outweigh the missed reminder defect."
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-data/skills/optimizing-ef-core-queries/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-data/create-datadriven-aspnetcore/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          }
+        ],
+        "model": "claude-sonnet-5"
+      },
+      {
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 8.125,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 5.625,
+            "name": "create-datadriven-aspnetcore/Scaffold Blazor CRUD components - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold MVC CRUD with an existing DbContext - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API child and required parent CRUD - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 10.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 3.75,
+            "name": "create-datadriven-aspnetcore/Scaffold Minimal API endpoints with OpenAPI - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 6.0,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.38
+          },
+          {
+            "value": 2.5,
+            "name": "create-datadriven-aspnetcore/Scaffold Razor Pages CRUD with EF Core and SQLite - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.821428298950195,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.821428298950195,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.821428298950195,
+            "name": "optimizing-ef-core-queries/Audit a back-office operations service riddled with query problems - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review customer directory search - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "optimizing-ef-core-queries/Review order history pagination behavior - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "optimizing-ef-core-queries/Review order operations query boundaries - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 6.666666507720947,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 5.0,
+            "name": "optimizing-ef-core-queries/Review pre-merge data access changes - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "optimizing-ef-core-queries/Review route planning data access - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "optimizing-ef-core-queries/Review saved order search implementation - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "optimizing-ef-core-queries/Review statement export implementation - Vanilla Quality",
+            "unit": "Score (0-10)"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        },
+        "date": 1791826370078,
+        "verdictEvidence": [
+          {
+            "skillName": "create-datadriven-aspnetcore",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_PASS",
+            "stateReason": {
+              "code": "credible_preference_improvement",
+              "phase": "decision"
+            },
+            "passed": true,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +100.0% (5W/0T/0L over 5 preference-eligible stimulus vote(s), sign test p=0.031), mean preference +64.0% across 5 paired run(s) — credibly better",
+            "noChangeDiagnosis": null,
+            "gateEvidence": {
+              "stimulusVoteCount": 5,
+              "wins": 5,
+              "ties": 0,
+              "losses": 0,
+              "discordant": 5,
+              "direction": "better",
+              "pValue": 0.03125,
+              "alpha": 0.05,
+              "netWin": 1,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 0
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 0,
+              "satisfied": 0,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Scaffold Blazor CRUD components",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold MVC CRUD with an existing DbContext",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Minimal API child and required parent CRUD",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Minimal API endpoints with OpenAPI",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Scaffold Razor Pages CRUD with EF Core and SQLite",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Scaffold Blazor CRUD components",
+                "direction": "better",
+                "rationale": "Response B delivers a significantly more complete and correct scaffolding solution. Most critically, it properly uses EF Core migrations (a hard requirement in criterion 3) instead of seeding, generates separate CRUD pages following standard conventions rather than consolidating operations, and provides full CRUD management for related entities. Response A, while functional and buildable, uses seeding instead of migrations and provides less comprehensive scaffolding.\""
+              },
+              {
+                "scenarioName": "Scaffold MVC CRUD with an existing DbContext",
+                "direction": "better",
+                "rationale": "Both responses successfully completed the task of scaffolding MVC controllers/views for Books and Authors, creating/applying migrations, and avoiding forbidden database initialization patterns. Response B is slightly better overall due to: (1) more efficient execution with 26% fewer tool calls and 30% fewer turns; (2) explicit mention of Bootstrap navigation layout providing better UX infrastructure; (3) cleaner build process without intermediate errors or recovery cycles; (4) use of the specialized create-datadriven-aspnetcore skill. Response A's core deliverables are equivalent but the implementation path was less efficient and encountered build issues that required recovery."
+              },
+              {
+                "scenarioName": "Scaffold Minimal API child and required parent CRUD",
+                "direction": "better",
+                "rationale": "Both responses appear to have successfully implemented all five rubric requirements. The core deliverables are functionally equivalent: both reused the context, created CRUD endpoints, added OpenAPI metadata, created migrations without EnsureCreated, and provided working .http workflows with proper parent-child dependencies. However, Response B demonstrates notably superior execution through: (1) more efficient methodology—29 tool calls vs 41, fewer turns and tokens; (2) activation of a specialized skill (create-datadriven-aspnetcore) designed specifically for this task type; (3) faster completion time (141.5s vs 152s). Both responses show equivalent technical quality in their smoke test results and cleanup practices. The efficiency difference suggests Response B took a more direct, well-planned approach to the implementation.\""
+              },
+              {
+                "scenarioName": "Scaffold Minimal API endpoints with OpenAPI",
+                "direction": "better",
+                "rationale": "Response B addresses more of the rubric criteria, particularly the explicit creation of the .http file (criterion 3) which Response A completely omits, and provides actual verification that OpenAPI is functioning (criterion 5). Response A has stronger evidence of working CRUD endpoints through smoke testing (criteria 1-2), but Response B's comprehensive approach to scaffolding using the dedicated skill and explicit mention of .http file generation makes it the better overall solution. Both fall short on migrations (criterion 4). The gap is not large because Response A does demonstrate core functionality; however, Response B's more complete feature implementation tips the balance in its favor.\""
+              },
+              {
+                "scenarioName": "Scaffold Razor Pages CRUD with EF Core and SQLite",
+                "direction": "better",
+                "rationale": "Response B successfully fulfills all four rubric criteria including the critical requirements for migrations and Category CRUD scaffolding, while Response A fails on two essential criteria (migrations and Category pages). Response B demonstrates a more complete and professional approach to the task by recognizing that scaffolding a Product entity with a required Category FK requires scaffolding both entities, and by properly implementing database migrations. This is a substantial quality gap.\""
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-data/skills/create-datadriven-aspnetcore/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-data/create-datadriven-aspnetcore/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          },
+          {
+            "skillName": "optimizing-ef-core-queries",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_NO_CHANGE",
+            "stateReason": {
+              "code": "no_credible_preference_change",
+              "phase": "decision"
+            },
+            "passed": false,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +37.5% (4W/3T/1L over 8 preference-eligible stimulus vote(s), sign test p=0.188), mean preference +15.0% across 8 paired run(s) — not credible (sign test p=0.188 > 0.05)",
+            "noChangeDiagnosis": "positive_unproven",
+            "gateEvidence": {
+              "stimulusVoteCount": 8,
+              "wins": 4,
+              "ties": 3,
+              "losses": 1,
+              "discordant": 5,
+              "direction": "better",
+              "pValue": 0.18750000000000003,
+              "alpha": 0.05,
+              "netWin": 0.375,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 0
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 0,
+              "satisfied": 0,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Audit a back-office operations service riddled with query problems",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review customer directory search",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review order history pagination behavior",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review order operations query boundaries",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review pre-merge data access changes",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review route planning data access",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review saved order search implementation",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Review statement export implementation",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Audit a back-office operations service riddled with query problems",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: A). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Review customer directory search",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: A). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Review order history pagination behavior",
+                "direction": "better",
+                "rationale": "Both responses correctly identify the three main correctness issues (unordered GetSearchPageAsync, non-lexicographic After predicate, SupportPriority discarding arrival ordering) and provide sound solutions. Response B is more comprehensive and systematic: it explicitly recognizes GetWindowSortedByValue's bounded design (which Response A omits entirely), more clearly separates mobile keyset pagination from the support offset-pagination contract requirement, and is more explicit about runtime validation dependencies. Response A is focused and accurate on core issues but lacks these deeper insights and clearer articulation of architectural constraints.\""
+              },
+              {
+                "scenarioName": "Review order operations query boundaries",
+                "direction": "better",
+                "rationale": "Response B is more complete and methodologically careful. It identifies all traced methods (including HasOrdersToShipAsync, which A misses entirely—criterion 3), includes a \"Sound paths\" section that validates what's already working (criterion 8), explicitly separates the idempotency/replay issue from batching (criterion 7), and includes a methodological caveat about source-only limits (criterion 16). Response A is solid and addresses most findings correctly, but has a material gap (missing HasOrdersToShipAsync) and less careful framing around what's intentional vs. problematic. Both responses are technically sound on the main performance issues, but B demonstrates superior judgment and completeness in analysis."
+              },
+              {
+                "scenarioName": "Review pre-merge data access changes",
+                "direction": "better",
+                "rationale": "Response B provides a methodical, evidence-based review aligned with the rubric's expectations: it concludes no actionable defects exist and systematically validates that observed patterns (keyset pagination, bounded includes, appropriate tracking, parameterized SQL, single SaveChangesAsync) are sound. Response A contradicts the rubric by identifying a pageSize validation defect and fails to recognize that criterion 2 explicitly expects keyset-bounded pagination to be sound. Response B also explicitly acknowledges the source-only limitation and explains why speculative recommendations (indices, compiled queries) are withheld. Overall, Response B correctly interprets the task's \"be conservative\" mandate and the rubric's expectation of recognizing well-designed code, while Response A either misreads the source or invents a defect not supported by the rubric's framing.\" [Magnitude reduced to \"slightly-better\": the position-swapped pass judged this \"slightly-better\", so the more confident \"much-better\" was downgraded.]"
+              },
+              {
+                "scenarioName": "Review route planning data access",
+                "direction": "worse",
+                "rationale": "Response A provides a more complete findings set, explicitly identifying and validating the windows index correctness (addressing criterion 5), which Response B entirely omits. This is a material gap since the rubric explicitly values recognition of the windows index. Response A also addresses all four distinct issues (warehouse index mismatch, tie-breaker omission, carrier ordering nondeterminism, and windows index). Response B offers stronger rigor in requiring validation before recommendations and clearer evidence/assumption boundaries, but these process advantages do not compensate for the missing windows index finding. A's recommendations are appropriately cautious despite being more direct, and the comprehensive issue coverage makes it the stronger submission for a pre-rollout review.\""
+              },
+              {
+                "scenarioName": "Review saved order search implementation",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: A). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Review statement export implementation",
+                "direction": "better",
+                "rationale": "Response B meets all 15 rubric criteria explicitly, while Response A misses the critical navigation fixup explanation in BuildReminderAsync (criterion 9), which is a significant correctness hazard in the reminder path. Response B also articulates the revision check race condition more precisely and is more methodologically disciplined in distinguishing source-visible issues from execution-time unknowns. Both responses identify the high-priority posting atomicity issue and performance problems in portfolio/payment export, but Response B's completeness on the reminder navigation fixup risk and race-condition framing makes it the stronger review for a pre-rollout audit.\""
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-data/skills/optimizing-ef-core-queries/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-data/create-datadriven-aspnetcore/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          }
+        ],
+        "model": "gpt-5.6-luna"
       }
     ],
     "SkillValue": [
@@ -16217,10 +18353,264 @@
         "judgeModel": "gpt-5.6-terra",
         "model": "mai-code-1.1-flash",
         "date": 1791658801116
+      },
+      {
+        "date": 1791826370002,
+        "skills": [
+          {
+            "bothPass": 2,
+            "treatmentFail": 2,
+            "passTotal": 5,
+            "pairedN": 5,
+            "activationFired": 5,
+            "activationExpected": 5,
+            "skill": "create-datadriven-aspnetcore",
+            "bothFail": 2,
+            "treatAvailable": 5,
+            "preference": {
+              "ties": 0,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 0,
+              "practicalPassed": true,
+              "pValue": 0.03125,
+              "alpha": 0.05,
+              "count": 5,
+              "netWin": 1,
+              "wins": 5
+            },
+            "baselineOnlyPass": 0,
+            "baseline": {
+              "n": 5,
+              "cacheWrite": 37043.4,
+              "timeMs": 235402.6,
+              "cacheRead": 1671455.2,
+              "tokensOut": 13302.8,
+              "tokensIn": 1708586.2,
+              "tokens": 1721889.0
+            },
+            "treatmentOnlyPass": 1,
+            "treatment": {
+              "n": 5,
+              "cacheWrite": 45894.8,
+              "timeMs": 230868.6,
+              "cacheRead": 1749547.2,
+              "tokensOut": 17998.2,
+              "tokensIn": 1795532.4,
+              "tokens": 1813530.6
+            },
+            "hasPassData": true,
+            "baseAvailable": 5,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 0,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 3
+          },
+          {
+            "bothPass": 0,
+            "treatmentFail": 7,
+            "passTotal": 8,
+            "pairedN": 8,
+            "activationFired": 8,
+            "activationExpected": 8,
+            "skill": "optimizing-ef-core-queries",
+            "bothFail": 7,
+            "treatAvailable": 8,
+            "preference": {
+              "ties": 0,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 0,
+              "practicalPassed": true,
+              "pValue": 0.003906250000000001,
+              "alpha": 0.05,
+              "count": 8,
+              "netWin": 1,
+              "wins": 8
+            },
+            "baselineOnlyPass": 0,
+            "baseline": {
+              "n": 8,
+              "cacheWrite": 16434.125,
+              "timeMs": 115375.5,
+              "cacheRead": 211905.125,
+              "tokensOut": 7364.25,
+              "tokensIn": 228359.75,
+              "tokens": 235724.0
+            },
+            "treatmentOnlyPass": 1,
+            "treatment": {
+              "n": 8,
+              "cacheWrite": 23633.5,
+              "timeMs": 99491.75,
+              "cacheRead": 280986.375,
+              "tokensOut": 8119.5,
+              "tokensIn": 304640.625,
+              "tokens": 312760.125
+            },
+            "hasPassData": true,
+            "baseAvailable": 8,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 0,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 8
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "judgeModel": "gpt-5.6-terra",
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
+      },
+      {
+        "date": 1791826370078,
+        "skills": [
+          {
+            "bothPass": 2,
+            "treatmentFail": 2,
+            "passTotal": 5,
+            "pairedN": 5,
+            "activationFired": 5,
+            "activationExpected": 5,
+            "skill": "create-datadriven-aspnetcore",
+            "bothFail": 2,
+            "treatAvailable": 5,
+            "preference": {
+              "ties": 0,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 0,
+              "practicalPassed": true,
+              "pValue": 0.03125,
+              "alpha": 0.05,
+              "count": 5,
+              "netWin": 1,
+              "wins": 5
+            },
+            "baselineOnlyPass": 0,
+            "baseline": {
+              "n": 5,
+              "cacheWrite": 28920.0,
+              "timeMs": 119936.6,
+              "cacheRead": 377826.6,
+              "tokensOut": 10508.0,
+              "tokensIn": 406806.0,
+              "tokens": 417314.0
+            },
+            "treatmentOnlyPass": 1,
+            "treatment": {
+              "n": 5,
+              "cacheWrite": 39590.4,
+              "timeMs": 132252.8,
+              "cacheRead": 481080.8,
+              "tokensOut": 12546.8,
+              "tokensIn": 520735.4,
+              "tokens": 533282.2
+            },
+            "hasPassData": true,
+            "baseAvailable": 5,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 0,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 3
+          },
+          {
+            "bothPass": 7,
+            "treatmentFail": 1,
+            "passTotal": 8,
+            "pairedN": 8,
+            "activationFired": 8,
+            "activationExpected": 8,
+            "skill": "optimizing-ef-core-queries",
+            "bothFail": 1,
+            "treatAvailable": 8,
+            "preference": {
+              "ties": 3,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 1,
+              "practicalPassed": true,
+              "pValue": 0.18750000000000003,
+              "alpha": 0.05,
+              "count": 8,
+              "netWin": 0.375,
+              "wins": 4
+            },
+            "baselineOnlyPass": 0,
+            "baseline": {
+              "n": 8,
+              "cacheWrite": 17533.75,
+              "timeMs": 59927.75,
+              "cacheRead": 102419.125,
+              "tokensOut": 3342.5,
+              "tokensIn": 119976.875,
+              "tokens": 123319.375
+            },
+            "treatmentOnlyPass": 0,
+            "treatment": {
+              "n": 8,
+              "cacheWrite": 23502.125,
+              "timeMs": 56233.25,
+              "cacheRead": 156249.5,
+              "tokensOut": 3330.5,
+              "tokensIn": 179779.375,
+              "tokens": 183109.875
+            },
+            "hasPassData": true,
+            "baseAvailable": 8,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 0,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 1
+          }
+        ],
+        "model": "gpt-5.6-luna",
+        "judgeModel": "claude-haiku-4.5",
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
       }
     ]
   },
   "repoUrl": "",
-  "lastUpdate": 1791658801116,
+  "lastUpdate": 1791826370078,
   "schemaVersion": 2
 }

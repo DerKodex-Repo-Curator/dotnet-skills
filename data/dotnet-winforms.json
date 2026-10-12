@@ -1,5 +1,5 @@
 {
-  "lastUpdate": 1791658815943,
+  "lastUpdate": 1791826382191,
   "entries": {
     "Quality": [
       {
@@ -10541,6 +10541,1394 @@
         ],
         "tool": "customBiggerIsBetter",
         "model": "mai-code-1.1-flash"
+      },
+      {
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "value": 8.571428298950195,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 5.833333492279053,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.181818008422852,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 9.090909004211426,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 9.090909004211426,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 6.5,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 8.333333015441895,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Quality",
+            "unit": "Score (0-10)",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Quality",
+            "unit": "Score (0-10)"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        },
+        "date": 1791826382151,
+        "verdictEvidence": [
+          {
+            "skillName": "winforms-expert",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_PASS",
+            "stateReason": {
+              "code": "credible_preference_improvement",
+              "phase": "decision"
+            },
+            "passed": true,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +40.0% (7W/7T/1L over 15 preference-eligible stimulus vote(s), sign test p=0.035), mean preference +22.5% across 16 paired run(s), 1 dormancy stimulus/stimuli excluded from preference — credibly better",
+            "noChangeDiagnosis": null,
+            "gateEvidence": {
+              "stimulusVoteCount": 15,
+              "wins": 7,
+              "ties": 7,
+              "losses": 1,
+              "discordant": 8,
+              "direction": "better",
+              "pValue": 0.035156250000000014,
+              "alpha": 0.05,
+              "netWin": 0.4,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 1
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 1,
+              "satisfied": 1,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [
+                {
+                  "scenarioName": "Stay dormant for a WPF command binding request",
+                  "expected": "dormant",
+                  "observed": "dormant",
+                  "satisfied": true
+                }
+              ],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Add VB application event handling without a new entry point",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add a button with a named event handler",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add designer-compatible object binding",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add safe serialization metadata to a custom control",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Audit and repair SQL injection risks across a WinForms solution",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Await background refresh and restore UI state",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Balance designer initialization for a grid",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Leave an already designer-safe form unchanged",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Localize form and button text through resources",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Make bound list additions visible immediately",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Preserve runtime injection while restoring designer construction",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Rename a designer control and its event handler",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Repair clipping through nested layout containers",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Replace absolute positioning with a responsive layout container",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Restore designer ownership of a form timer",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Stay dormant for a WPF command binding request",
+                "expectation": "dormant",
+                "preferenceGateEligible": false,
+                "isolated": "dormant-as-expected",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-no-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Add VB application event handling without a new entry point",
+                "direction": "better",
+                "rationale": "Both satisfy the core implementation and build requirements, but B's final report and described exception handler are more precise and robust, particularly around safe last-chance logging and explicit preservation details."
+              },
+              {
+                "scenarioName": "Add a button with a named event handler",
+                "direction": "better",
+                "rationale": "The implementations appear equivalently correct and built successfully, but B provides stronger validation evidence through the passed task-specific WinForms add-control/designer-safety validator and more precise final reporting."
+              },
+              {
+                "scenarioName": "Add designer-compatible object binding",
+                "direction": "better",
+                "rationale": "B satisfies the full designer-safe BindingSource architecture specified by the rubric, assigns the existing runtime instance correctly, validates the scenario, and builds cleanly. A's direct binding likely works functionally, but omits the explicit designer-owned typed BindingSource requirement."
+              },
+              {
+                "scenarioName": "Add safe serialization metadata to a custom control",
+                "direction": "worse",
+                "rationale": "Both solutions satisfy the core requirements and validation. A is marginally stronger because it also gives HighlightColor explicit ShouldSerialize/Reset behavior, directly addressing the property-grid reset/serialization concern rather than relying solely on DefaultValue metadata."
+              },
+              {
+                "scenarioName": "Audit and repair SQL injection risks across a WinForms solution",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: A). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Await background refresh and restore UI state",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: tie). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Balance designer initialization for a grid",
+                "direction": "better",
+                "rationale": "The substantive repair and build result are the same in both responses. B is slightly stronger because it validates the precise designer-safety scenario in addition to building, and clearly distinguishes that validation from an unavailable interactive Designer round trip."
+              },
+              {
+                "scenarioName": "Leave an already designer-safe form unchanged",
+                "direction": "better",
+                "rationale": "B reaches the correct no-op conclusion, preserves the source exactly, and verifies the build. A invents a designer-breaking defect and makes an unjustified source change."
+              },
+              {
+                "scenarioName": "Localize form and button text through resources",
+                "direction": "none",
+                "rationale": "The delivered implementations are substantively equivalent and satisfy all requested outcomes. Response B provides marginally more explicit reporting about the exact build/validator commands and unavailable designer round trip, but this does not indicate a better final implementation."
+              },
+              {
+                "scenarioName": "Make bound list additions visible immediately",
+                "direction": "none",
+                "rationale": "The implementations and demonstrated outcomes are substantively identical: each makes the correct minimal BindingList change, preserves requested behavior, and builds successfully. B is marginally more verbose in its report but not meaningfully better in final-result quality."
+              },
+              {
+                "scenarioName": "Preserve runtime injection while restoring designer construction",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: A, reverse: tie). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Rename a designer control and its event handler",
+                "direction": "better",
+                "rationale": "Both runs appear to make the correct minimal designer-safe rename and successfully build. B is modestly better because it ran the provided rename-control validation in addition to the build, giving concrete verification of the task's designer and wiring requirements."
+              },
+              {
+                "scenarioName": "Repair clipping through nested layout containers",
+                "direction": "better",
+                "rationale": "Both address the primary autosizing bottleneck, but B also handles the critical Save-button placement required to avoid overlap as the address section grows, and provides stronger validation evidence."
+              },
+              {
+                "scenarioName": "Replace absolute positioning with a responsive layout container",
+                "direction": "none",
+                "rationale": "The resulting changes appear materially equivalent and fully satisfy the task: both build and pass the same targeted outcome/designer-safety validation. B's final report is more detailed, but that does not establish a meaningful difference in final implementation quality."
+              },
+              {
+                "scenarioName": "Restore designer ownership of a form timer",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: tie). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Stay dormant for a WPF command binding request",
+                "direction": "none",
+                "rationale": "The outputs are substantively equivalent: each gives a correct WPF Ctrl+S KeyBinding bound to the existing SaveCommand and preserves the demonstrated DataContext and button binding. Minor wording and placeholder namespace differences do not create a meaningful quality gap."
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-winforms/skills/winforms-expert/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-winforms/winforms-expert/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          }
+        ],
+        "model": "claude-sonnet-5"
+      },
+      {
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 7.857142925262451,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.0,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.166666984558105,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 4.318181991577148,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 7.045454502105713,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.181818008422852,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 7.083333492279053,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.583333015441895,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 7.916666507720947,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 9.5,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 8.5,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Quality",
+            "unit": "Score (0-10)"
+          },
+          {
+            "value": 10.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Quality",
+            "unit": "Score (0-10)"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        },
+        "date": 1791826382191,
+        "verdictEvidence": [
+          {
+            "skillName": "winforms-expert",
+            "skillKind": "invocable",
+            "evaluationLane": null,
+            "state": "VALID_PASS",
+            "stateReason": {
+              "code": "credible_preference_improvement",
+              "phase": "decision"
+            },
+            "passed": true,
+            "regressed": false,
+            "preferenceRegressed": false,
+            "reason": "Net win +60.0% (10W/4T/1L over 15 preference-eligible stimulus vote(s), sign test p=0.006), mean preference +26.3% across 16 paired run(s), 1 dormancy stimulus/stimuli excluded from preference — credibly better",
+            "noChangeDiagnosis": null,
+            "gateEvidence": {
+              "stimulusVoteCount": 15,
+              "wins": 10,
+              "ties": 4,
+              "losses": 1,
+              "discordant": 11,
+              "direction": "better",
+              "pValue": 0.0058593749999999905,
+              "alpha": 0.05,
+              "netWin": 0.6,
+              "minimumNetWin": 0.2,
+              "minCredibleStimuli": 5,
+              "excludedStimulusCount": 1
+            },
+            "activationContract": {
+              "evaluated": true,
+              "requiredForPass": true,
+              "source": "isolated_target_skill_activation",
+              "reason": "Explicit dormancy expectations are evaluated independently of preference",
+              "count": 1,
+              "satisfied": 1,
+              "violated": 0,
+              "passed": true,
+              "failures": [],
+              "scenarios": [
+                {
+                  "scenarioName": "Stay dormant for a WPF command binding request",
+                  "expected": "dormant",
+                  "observed": "dormant",
+                  "satisfied": true
+                }
+              ],
+              "unmatchedDormancyStimuli": []
+            },
+            "activationScenarios": [
+              {
+                "scenarioName": "Add VB application event handling without a new entry point",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add a button with a named event handler",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add designer-compatible object binding",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Add safe serialization metadata to a custom control",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Audit and repair SQL injection risks across a WinForms solution",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Await background refresh and restore UI state",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Balance designer initialization for a grid",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Leave an already designer-safe form unchanged",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Localize form and button text through resources",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Make bound list additions visible immediately",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Preserve runtime injection while restoring designer construction",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Rename a designer control and its event handler",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Repair clipping through nested layout containers",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Replace absolute positioning with a responsive layout container",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Restore designer ownership of a form timer",
+                "expectation": "active",
+                "preferenceGateEligible": true,
+                "isolated": "activated",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              },
+              {
+                "scenarioName": "Stay dormant for a WPF command binding request",
+                "expectation": "dormant",
+                "preferenceGateEligible": false,
+                "isolated": "dormant-as-expected",
+                "isolatedActivationOnlyFailedRuns": 0,
+                "plugin": "plugin-no-activity-observed",
+                "pluginActivationOnlyFailedRuns": 0,
+                "invokedAgents": [],
+                "delegatedAgents": [],
+                "invokedSkills": [],
+                "isolatedTools": [],
+                "pluginTools": [],
+                "isolatedCompleted": null,
+                "pluginCompleted": null
+              }
+            ],
+            "judgeRationales": [
+              {
+                "scenarioName": "Add VB application event handling without a new entry point",
+                "direction": "better",
+                "rationale": "Response B is superior in meeting the task requirements because it provides concrete validation evidence. While both responses claim to implement the required functionality in ApplicationEvents.vb, Response B actually runs and passes the `validate-winforms.ps1 -Scenario vb-application-events` test, demonstrating that the solution works correctly. Notably, Response B shows an initial validation failure (minimized MainForm not restored) which was then diagnosed and fixed, followed by successful validation. Response A only shows successful compilation, which is necessary but insufficient—a project can compile without meeting the functional requirements. Response B's approach is more methodical: it activates the winforms-expert skill, iterates based on validation feedback, and provides final validation proof. The task explicitly requires working through \"the existing startup model,\" and Response B demonstrates through validation that this was achieved correctly.\""
+              },
+              {
+                "scenarioName": "Add a button with a named event handler",
+                "direction": "better",
+                "rationale": "Response B is slightly better because it provides validator confirmation that the implementation is correct and meets all WinForms requirements, particularly that the form remains designer-safe. The dedicated `add-control` validator passing is strong objective evidence that all rubric criteria were satisfied. Response A also claims completion and successfully builds, but lacks any validator verification of the implementation quality. Both responses handle the build successfully (tie on criterion 4), but Response B's superior verification across the other three criteria makes it the better response overall.\""
+              },
+              {
+                "scenarioName": "Add designer-compatible object binding",
+                "direction": "better",
+                "rationale": "Both responses appear to have implemented similar core fixes (BindingSource in designer, binding TextBox.Text to ViewModel.Name, assigning _viewModel in constructor), and both achieve successful builds. However, Response B is slightly better because it went beyond compilation verification and ran the project's dedicated WinForms validation script (`validate-winforms.ps1 -Scenario data-binding`), which explicitly confirmed that the binding works correctly and preserves change notification. This functional validation directly addresses the core issue (typing does not update the ViewModel) and provides stronger evidence that the repair actually solves the problem. Response A's output lacks this crucial verification, offering only compilation success as proof of correctness."
+              },
+              {
+                "scenarioName": "Add safe serialization metadata to a custom control",
+                "direction": "none",
+                "rationale": "Both responses successfully implement all four task requirements with functionally identical code. The actual StatusBadge.cs modifications (visible in their bash output timelines) show the same property implementations, attributes, and methods. Both pass validation, build successfully, and maintain proper architecture by isolating serialization behavior to the control. Response A was more efficient (fewer tokens and faster execution), while Response B provided a minor transparency note about environment limitations. Since efficiency is explicitly excluded from evaluation and both implementations are technically equivalent, this is a tie."
+              },
+              {
+                "scenarioName": "Audit and repair SQL injection risks across a WinForms solution",
+                "direction": "worse",
+                "rationale": "Both responses successfully complete the SQL injection audit and patching task, identifying the same three vulnerabilities across the three projects and applying appropriate parameterized fixes. Both achieve successful builds and pass validation. The key differentiator is the quality and presentation of the audit report itself. Response A provides a more professional, structured audit report with formatted code blocks clearly showing the exact vulnerable SQL snippets before and after patching—critical for security audit documentation and compliance review. Response B reports the same findings correctly but in a more narrative style that obscures the actual vulnerable code, which is less suitable for formal audit purposes. Since the primary deliverable is \"a structured report, grouped by file, with findings and recommended fixes,\" Response A better meets this requirement with superior documentation clarity and professional presentation."
+              },
+              {
+                "scenarioName": "Await background refresh and restore UI state",
+                "direction": "better",
+                "rationale": "Both responses appear to have made similar structural changes to fix the async event handling in MainForm.cs (converting to async void, extracting async Task method, implementing finally block). However, Response B has a decisive advantage: it ran and passed the project's built-in validation script for the async-ui-refresh scenario, which independently confirms the implementation is correct. Response A did not run this validator. Additionally, Response B executed more efficiently (fewer turns, faster wall time) and demonstrated better methodology by activating the winforms-expert skill. While both claim compliance with all requirements, only Response B provides proof through the passing validator test."
+              },
+              {
+                "scenarioName": "Balance designer initialization for a grid",
+                "direction": "better",
+                "rationale": "Both responses make the same fundamental fix to restore the missing EndInit() call in the designer file, avoiding runtime code changes and producing successful builds. However, Response B demonstrates superior verification by running the provided `validate-winforms.ps1` validator with the `initialization-balance` scenario, confirming that the fix actually addresses the serialization defect issue described in the task. Response B also activates the winforms-expert skill, showing a more methodical, domain-aware approach. While both solutions appear functionally equivalent in code, Response B provides concrete evidence that the fix solves the stated problem, whereas Response A only confirms compilation.\""
+              },
+              {
+                "scenarioName": "Leave an already designer-safe form unchanged",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: tie). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Localize form and button text through resources",
+                "direction": "better",
+                "rationale": "Response B successfully completes the task with stronger evidence of correctness. It demonstrates more precise understanding of WinForms resource naming conventions, provides clearer evidence of the ComponentResourceManager pattern implementation, and critically, runs the repository's localization validator which explicitly passes. The validator confirmation is particularly valuable because it validates the implementation against the specific requirements rather than just confirming a build succeeds. Response A also completes the task successfully, but lacks the explicit validation confirmation and is less specific about implementation details. Both achieve the core objectives, but Response B provides more comprehensive verification and clearer demonstration of correctness.\""
+              },
+              {
+                "scenarioName": "Make bound list additions visible immediately",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: tie, reverse: B). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Preserve runtime injection while restoring designer construction",
+                "direction": "better",
+                "rationale": "Both responses implemented the same correct technical solution: adding a parameterless constructor, making the service nullable, and guarding its usage. The key difference is that Response B went further to explicitly validate the solution using the provided test script (validate-winforms.ps1 -Scenario designer-constructor), confirming the fix satisfies the specification. Response A made the same fix and built successfully but did not run this validation step. Since both produce functionally equivalent working solutions with no technical differences, Response B is slightly better due to the additional validation evidence.\""
+              },
+              {
+                "scenarioName": "Rename a designer control and its event handler",
+                "direction": "better",
+                "rationale": "Both responses successfully applied the rename and achieved a successful build, but Response B meets the critical task requirement more completely. The task explicitly requires making the rename 'safe for the WinForms designer,' and Response B explicitly validated this by running the official validator scenario which confirmed 'designer-safety validation passed.' Response A did not verify designer-safety at all, only that the project builds. Additionally, Response B activated the winforms-expert skill for proper guidance, was more efficient (18 vs 22 tool calls), and faster (31.7s vs 37.5s). The designer-safety validation confirmation is a substantial quality differentiator for a WinForms task.\""
+              },
+              {
+                "scenarioName": "Repair clipping through nested layout containers",
+                "direction": "better",
+                "rationale": "Both responses successfully remove fixed constraints, change dock styles, and achieve builds. The key differentiator is Response B's explicit handling of the Save button placement by adding it to the responsive layout chain (_contentLayout.Controls.Add(_saveButton)), which directly and demonstrably satisfies the critical requirement that the Save button not overlap address field growth during scaling. Response A achieves similar constraint removal but does not explicitly show this essential Save button placement step, relying instead on implicit positioning through dock style changes alone. While both claim validation passed, Response B's more explicit and complete addressing of criterion 3 makes it slightly better aligned with the task requirements."
+              },
+              {
+                "scenarioName": "Replace absolute positioning with a responsive layout container",
+                "direction": "better",
+                "rationale": "Both responses successfully built the project and claim to implement the required TableLayoutPanel layout. However, Response B is better because: (1) It ran and passed the official validator script (`validate-winforms.ps1 -Scenario layout-container`), providing concrete proof the implementation meets requirements; (2) It was transparent about testing limitations on the non-Windows runner rather than implicitly claiming full validation; (3) It used the specialized winforms-expert skill designed for this task. Response A made similar claims but provided no validator confirmation, only a build success. The validator passing is significant evidence that the designer-serializable layout, sizing behavior, and control preservation actually work as required.\""
+              },
+              {
+                "scenarioName": "Restore designer ownership of a form timer",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: B, reverse: tie). Defaulting to tie."
+              },
+              {
+                "scenarioName": "Stay dormant for a WPF command binding request",
+                "direction": "none",
+                "rationale": "Position-swap inconsistent (forward: A, reverse: B). Defaulting to tie."
+              }
+            ],
+            "links": [
+              {
+                "label": "Skill source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/plugins/dotnet-winforms/skills/winforms-expert/SKILL.md"
+              },
+              {
+                "label": "Eval source",
+                "url": "https://github.com/dotnet/skills/blob/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1/tests/dotnet-winforms/winforms-expert/eval.yaml"
+              },
+              {
+                "label": "Commit",
+                "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1"
+              }
+            ]
+          }
+        ],
+        "model": "gpt-5.6-luna"
       }
     ],
     "Efficiency": [
@@ -19238,6 +20626,1128 @@
         },
         "tool": "customSmallerIsBetter",
         "date": 1791658815943
+      },
+      {
+        "date": 1791826382151,
+        "tool": "customSmallerIsBetter",
+        "model": "claude-sonnet-5",
+        "benches": [
+          {
+            "value": 46.6,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 389581.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 91.1,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 903179.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 117.6,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 455541.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 53.5,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 428054.0,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 57.9,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 539025.0,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 152.7,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 435408.0,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 82.7,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 798458.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 81.3,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 691558.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 39.2,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 198478.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 43.3,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 453152.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 48.7,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 450056.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 146.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 505344.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 77.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 682418.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 68.8,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 627202.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 65.8,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 385567.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 49.6,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 459877.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 35.8,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 300939.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 62.7,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 466336.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 38.9,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 386115.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 23.5,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 236477.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 85.3,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 297143.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 61.3,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 447374.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 55.1,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 382587.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 116.2,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 273718.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 90.3,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 626572.0,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 73.9,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 479321.0,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 77.9,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 559215.0,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 25.7,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 267294.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 40.7,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 456734.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 26.7,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 189453.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 63.3,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 497287.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 32.9,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 247244.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 74.1,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 506159.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 25.5,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 242772.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 14.7,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 151262.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 16.7,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 147625.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 141.8,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 988288.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 177.2,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 712882.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 158.2,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 631392.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 68.1,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 485703.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 83.2,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 611094.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 91.1,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 611033.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 43.8,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 389121.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 44.2,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 406382.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 37.7,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 229088.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 11.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 36569.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 13.9,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Time",
+            "unit": "seconds",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 54816.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Tokens In",
+            "unit": "tokens",
+            "overfitting": "moderate",
+            "overfittingScore": 0.45
+          },
+          {
+            "value": 12.7,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 53995.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Tokens In",
+            "unit": "tokens"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
+      },
+      {
+        "date": 1791826382191,
+        "tool": "customSmallerIsBetter",
+        "model": "gpt-5.6-luna",
+        "benches": [
+          {
+            "value": 61.3,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 446915.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 49.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 418432.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 69.1,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 215931.0,
+            "name": "winforms-expert/Add VB application event handling without a new entry point - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 45.0,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 323795.0,
+            "name": "winforms-expert/Add a button with a named event handler - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 36.8,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 351333.0,
+            "name": "winforms-expert/Add a button with a named event handler - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 45.0,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 152781.0,
+            "name": "winforms-expert/Add a button with a named event handler - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 47.2,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 362442.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 46.6,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 382154.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 45.4,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 229663.0,
+            "name": "winforms-expert/Add designer-compatible object binding - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 66.4,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 411321.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 58.1,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 310819.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 53.6,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 241569.0,
+            "name": "winforms-expert/Add safe serialization metadata to a custom control - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 56.8,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 441047.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 43.6,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 391704.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 183.3,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 638407.0,
+            "name": "winforms-expert/Audit and repair SQL injection risks across a WinForms solution - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.5,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 297433.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 59.9,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 373269.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 81.2,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 323083.0,
+            "name": "winforms-expert/Await background refresh and restore UI state - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 31.8,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 291914.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 29.5,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 301621.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 70.6,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 278661.0,
+            "name": "winforms-expert/Balance designer initialization for a grid - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 31.9,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 220114.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 38.1,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 247928.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 25.8,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 147294.0,
+            "name": "winforms-expert/Leave an already designer-safe form unchanged - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 44.0,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 379869.0,
+            "name": "winforms-expert/Localize form and button text through resources - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 44.1,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 308418.0,
+            "name": "winforms-expert/Localize form and button text through resources - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 55.3,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 342142.0,
+            "name": "winforms-expert/Localize form and button text through resources - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 25.2,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 256762.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 23.1,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 259745.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 24.7,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 159342.0,
+            "name": "winforms-expert/Make bound list additions visible immediately - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.2,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 360810.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 34.4,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 290086.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 36.9,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 222814.0,
+            "name": "winforms-expert/Preserve runtime injection while restoring designer construction - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 31.7,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 225967.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 40.4,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 360261.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 37.5,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 212779.0,
+            "name": "winforms-expert/Rename a designer control and its event handler - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 80.4,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 391635.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 66.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 399746.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 57.1,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 336250.0,
+            "name": "winforms-expert/Repair clipping through nested layout containers - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 60.2,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 328632.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 73.1,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 466518.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 50.9,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 231259.0,
+            "name": "winforms-expert/Replace absolute positioning with a responsive layout container - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 35.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 292267.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 33.9,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 369761.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 30.5,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 214668.0,
+            "name": "winforms-expert/Restore designer ownership of a form timer - Vanilla Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 8.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 36102.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Skilled Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 8.3,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 36256.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Plugin Tokens In",
+            "unit": "tokens"
+          },
+          {
+            "value": 8.9,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Time",
+            "unit": "seconds"
+          },
+          {
+            "value": 47195.0,
+            "name": "winforms-expert/Stay dormant for a WPF command binding request - Vanilla Tokens In",
+            "unit": "tokens"
+          }
+        ],
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
       }
     ],
     "SkillValue": [
@@ -20320,6 +22830,150 @@
         "judgeModel": "gpt-5.6-terra",
         "model": "mai-code-1.1-flash",
         "date": 1791658815943
+      },
+      {
+        "date": 1791826382151,
+        "skills": [
+          {
+            "bothPass": 11,
+            "treatmentFail": 2,
+            "passTotal": 16,
+            "pairedN": 16,
+            "activationFired": 15,
+            "activationExpected": 15,
+            "skill": "winforms-expert",
+            "bothFail": 1,
+            "treatAvailable": 16,
+            "preference": {
+              "ties": 7,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 1,
+              "practicalPassed": true,
+              "pValue": 0.035156250000000014,
+              "alpha": 0.05,
+              "count": 15,
+              "netWin": 0.4,
+              "wins": 7
+            },
+            "baselineOnlyPass": 1,
+            "baseline": {
+              "n": 16,
+              "cacheWrite": 19845.25,
+              "timeMs": 80046.3125,
+              "cacheRead": 346628.0625,
+              "tokensOut": 5088.75,
+              "tokensIn": 366504.6875,
+              "tokens": 371593.4375
+            },
+            "treatmentOnlyPass": 3,
+            "treatment": {
+              "n": 16,
+              "cacheWrite": 24600.625,
+              "timeMs": 57649.0625,
+              "cacheRead": 444089.625,
+              "tokensOut": 4943.9375,
+              "tokensIn": 468720.75,
+              "tokens": 473664.6875
+            },
+            "hasPassData": true,
+            "baseAvailable": 16,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 1,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 4
+          }
+        ],
+        "model": "claude-sonnet-5",
+        "judgeModel": "gpt-5.6-terra",
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
+      },
+      {
+        "date": 1791826382191,
+        "skills": [
+          {
+            "bothPass": 11,
+            "treatmentFail": 1,
+            "passTotal": 16,
+            "pairedN": 16,
+            "activationFired": 15,
+            "activationExpected": 15,
+            "skill": "winforms-expert",
+            "bothFail": 1,
+            "treatAvailable": 16,
+            "preference": {
+              "ties": 4,
+              "minCredibleStimuli": 5,
+              "conclusive": true,
+              "underpowered": false,
+              "direction": "better",
+              "losses": 1,
+              "practicalPassed": true,
+              "pValue": 0.0058593749999999905,
+              "alpha": 0.05,
+              "count": 15,
+              "netWin": 0.6,
+              "wins": 10
+            },
+            "baselineOnlyPass": 0,
+            "baseline": {
+              "n": 16,
+              "cacheWrite": 21631.9375,
+              "timeMs": 54744.875,
+              "cacheRead": 224548.9375,
+              "tokensOut": 3389.5625,
+              "tokensIn": 246225.3125,
+              "tokens": 249614.875
+            },
+            "treatmentOnlyPass": 4,
+            "treatment": {
+              "n": 16,
+              "cacheWrite": 26872.3125,
+              "timeMs": 44096.75,
+              "cacheRead": 286313.4375,
+              "tokensOut": 3460.375,
+              "tokensIn": 313228.6875,
+              "tokens": 316689.0625
+            },
+            "hasPassData": true,
+            "baseAvailable": 16,
+            "timedOut": false,
+            "activationContract": {
+              "evaluated": true,
+              "count": 1,
+              "passed": true,
+              "violated": 0
+            },
+            "baselineFail": 5
+          }
+        ],
+        "model": "gpt-5.6-luna",
+        "judgeModel": "claude-haiku-4.5",
+        "commit": {
+          "timestamp": "2026-10-12T06:51:39+00:00",
+          "id": "7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "url": "https://github.com/dotnet/skills/commit/7ce04b13cb1f1b44663fcfe271f3b4a347a719f1",
+          "author": {
+            "name": "Andriy Svyryd",
+            "username": "AbhitejJohn"
+          },
+          "message": "Update EF Core optimization skill (#1285)"
+        }
       }
     ]
   },
