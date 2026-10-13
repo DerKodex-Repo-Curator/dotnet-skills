@@ -89,9 +89,11 @@ def validate_report(policy, response):
             "may overlap each other, but cannot overlap these deferred members"
         )
     else:
-        assert claims and not any(permitted for _, permitted in claims), (
+        assert claims & {("peers", False), ("unspecified", False)} and not any(
+            permitted for _, permitted in claims
+        ), (
             f"Scheduling disclosure contradicts {policy}: "
-            "unrelated tests cannot freely overlap these serialized members"
+            "unrelated classes must be disclosed as serialized with each other too"
         )
 
 
@@ -104,7 +106,7 @@ def main():
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c",
+        "4f13a150f0cb37f397f71d7099db61ade66c58f3f155423b9361f4aad6a4cbac",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
     runs = []

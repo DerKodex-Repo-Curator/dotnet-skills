@@ -186,7 +186,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='4f13a150f0cb37f397f71d7099db61ade66c58f3f155423b9361f4aad6a4cbac','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
             --file 5dedff259cd3951d7944eb07f4a70ea0152d7e051e8d2a4def183426adc4059d:OrderTests.csproj
             --file f2660905616f9ef20ae1f6f56b334c01d17cc1d4bc1d23cd33ff5d958670f43e:OrderServiceTests.cs
           expected_exit_code: 0
@@ -230,7 +230,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" stages --project OrderTests/OrderTests.csproj
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='4f13a150f0cb37f397f71d7099db61ade66c58f3f155423b9361f4aad6a4cbac','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" stages --project OrderTests/OrderTests.csproj
             --runner native --mstest-major 4 --expect CreateOrder_ValidInput_ReturnsOrder=Passed
             --expect invalid-zero=Passed --expect invalid-negative=Passed
             --source-contract staged-orders:ce046d85855206011a53400f227b69d7922b06ddcf69e4e0d0863d39a4b5b2eb:OrderTests/OrderServiceTests.cs

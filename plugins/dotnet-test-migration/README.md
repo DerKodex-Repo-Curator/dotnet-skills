@@ -88,7 +88,7 @@ Platform-only solution migrations also verify both test projects' resolved
 package versions and preserve every supplied test source byte.
 
 Checkpoint replays copy each checkpoint alone outside the delivered workspace,
-reject symlinks and external compile/project/import references, and authenticate
+reject symlinks, Windows junctions and external compile/project/import references, and authenticate
 production/test tokens after normalizing only the required framework rewrites.
 Collection conversion checks similarly preserve the original test bodies and
 run both full and one-member filters. Its lazy run-end cleanup example is

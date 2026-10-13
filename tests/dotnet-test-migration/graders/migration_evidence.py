@@ -125,10 +125,14 @@ def verify_sources(root, contracts):
     return verified
 
 
+def is_linked_path(path):
+    return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+
 def validate_checkpoint(root):
-    assert root.is_dir() and not root.is_symlink(), f"Invalid checkpoint root: {root}"
+    assert root.is_dir() and not is_linked_path(root), f"Invalid checkpoint root: {root}"
     for path in root.rglob("*"):
-        assert not path.is_symlink(), f"Checkpoint symlink: {path}"
+        assert not is_linked_path(path), f"Checkpoint symlink or junction: {path}"
         if not path.is_file() or path.suffix not in {".csproj", ".props", ".targets"}:
             continue
         if {"obj", "bin", ".eval", ".git"}.intersection(path.relative_to(root).parts):
@@ -330,7 +334,7 @@ def run(args, root=None):
 
 def run_checkpoints(args):
     root = Path.cwd()
-    assert not (root / "checkpoints").is_symlink(), "Checkpoint parent must not be a symlink"
+    assert not is_linked_path(root / "checkpoints"), "Checkpoint parent must not be a symlink or junction"
     (root / ".eval" / "results").mkdir(parents=True, exist_ok=True)
     checkpoints = (
         ("v3-vstest", root / "checkpoints" / "v3", "vstest", "3"),

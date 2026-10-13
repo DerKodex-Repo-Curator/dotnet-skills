@@ -42,6 +42,19 @@ DEFERRED_REPORT = (
 
 
 class DefaultCollectionTests(unittest.TestCase):
+    def test_assembly_serial_disclosure_must_cover_unrelated_peers(self):
+        for text in (
+            "Unrelated classes cannot overlap these members.",
+            "Unrelated classes may run in parallel with each other, but cannot overlap these members.",
+        ):
+            with self.subTest(report=text), self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                report.validate_report("assembly-serial", text)
+        for text in (
+            "MSTest serializes unrelated classes under this assembly policy.",
+            "Unrelated classes cannot overlap each other or these members.",
+        ):
+            report.validate_report("assembly-serial", text)
+
     def test_unlike_prefix_preserves_mstest_claim(self):
         statements = {
             "assembly-serial": "Unlike xUnit, MSTest serializes unrelated classes under this assembly policy.",
@@ -129,7 +142,8 @@ class DefaultCollectionTests(unittest.TestCase):
                 "[assembly: Parallelize(Workers = 2, Scope = ExecutionScope.ClassLevel)]",
             )
             source.write_text(parallel, encoding="utf-8")
-            replay.run_graders(CASE, root)
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                replay.run_graders(CASE, root)
             replay.run_graders(CASE, root, DEFERRED_REPORT)
             for invalid in (
                 "Unrelated classes cannot overlap each other, but may overlap "
@@ -143,14 +157,14 @@ class DefaultCollectionTests(unittest.TestCase):
                         replay.run_graders(CASE, root, invalid)
 
             source.write_text(parallel.replace("[DoNotParallelize]\n", "", 1), encoding="utf-8")
-            replay.run_graders(CASE, root)
+            replay.run_graders(CASE, root, DEFERRED_REPORT)
 
             source.write_text(parallel.replace("Workers = 2", "Workers = 1").replace(
                 "[DoNotParallelize]\n", ""
             ), encoding="utf-8")
             replay.run_graders(
                 CASE, root,
-                "One assembly worker serializes unrelated classes as well as these members; "
+                "With one assembly worker, unrelated classes cannot overlap each other or these members; "
                 "this is conservative scheduling." + LIFETIME_REPORT,
             )
 
@@ -319,7 +333,7 @@ public class UnrelatedTests
         )
         reversed_report = "Unrelated classes remain parallel and can overlap exactly as in xUnit."
         for policy, positives in (
-            ("assembly-serial", (serial_report, deferred_report)),
+            ("assembly-serial", (serial_report,)),
             ("deferred-members", (deferred_report, DEFERRED_REPORT)),
         ):
             for valid in positives:

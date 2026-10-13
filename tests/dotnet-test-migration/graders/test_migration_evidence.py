@@ -1,5 +1,7 @@
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 
@@ -64,6 +66,39 @@ class EvidenceTests(unittest.TestCase):
             (root / "Linked.cs").symlink_to(external)
             with self.assertRaisesRegex(AssertionError, "Checkpoint symlink"):
                 evidence.validate_checkpoint(root)
+
+    def test_checkpoint_rejects_linked_directories(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "checkpoint"
+            root.mkdir()
+            external = Path(temporary) / "final-project"
+            external.mkdir()
+            (external / "Test.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk" />')
+            link = root / "OrderTests"
+            if os.name == "nt":
+                subprocess.run(
+                    ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
+                     "New-Item -ItemType Junction -Path $env:CHECKPOINT_LINK "
+                     "-Target $env:CHECKPOINT_TARGET | Out-Null"],
+                    env=dict(os.environ, CHECKPOINT_LINK=str(link), CHECKPOINT_TARGET=str(external)),
+                    check=True, capture_output=True, text=True, timeout=30,
+                )
+                self.assertFalse(link.is_symlink())
+                self.assertTrue(link.is_junction())
+            else:
+                link.symlink_to(external, target_is_directory=True)
+            try:
+                for checkpoint in (root, link):
+                    with self.subTest(root=checkpoint), self.assertRaisesRegex(
+                        AssertionError, "Checkpoint symlink|Invalid checkpoint root"
+                    ):
+                        evidence.validate_checkpoint(checkpoint)
+            finally:
+                if os.name == "nt":
+                    link.rmdir()
+                else:
+                    link.unlink()
+            self.assertTrue((external / "Test.csproj").is_file())
 
     def test_framework_and_adapter_are_checked_for_each_project(self):
         assets = {"MSTest.TestFramework/4.4.1": {}, "MSTest.TestAdapter/4.4.1": {}}

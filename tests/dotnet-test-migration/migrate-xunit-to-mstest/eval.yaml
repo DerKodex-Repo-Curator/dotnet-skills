@@ -55,7 +55,7 @@ stimuli:
               and one disposal after its selected cases.
 
               This is conservative scheduling, not exact collection equivalence:
-              unrelated classes cannot overlap with these members. Lazy creation
+              unrelated classes cannot overlap each other or these members. Lazy creation
               and assembly cleanup are a scoped fallback for the sole collection,
               not a general lifetime mapping for assemblies with other collections.
     graders:
@@ -67,7 +67,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3080da6855955e0db50e76b193f1f03423d3f689e87134d924721b135b080236','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e1c26f05b60f1635f09f229896fa8eef040a954898fe2f50a70a1a5816dccc4f','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

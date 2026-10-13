@@ -30,7 +30,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root work
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='4f13a150f0cb37f397f71d7099db61ade66c58f3f155423b9361f4aad6a4cbac','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root work
             --file cbf50da5ba591ca235846a791d8218a617f1f7c6bfcaad835b78be17c0d02891:TestProject.csproj
             --file c58be5fc9fb5fc2f65701bc29e70b74cd96dcc5a5fd4a080d49e3c6eed682429:ExistingTests.cs
           expected_exit_code: 0
@@ -364,7 +364,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest --mstest-major 4 --lifecycle
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='4f13a150f0cb37f397f71d7099db61ade66c58f3f155423b9361f4aad6a4cbac','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest --mstest-major 4 --lifecycle
             --expect CreateOrder_ValidInput_ReturnsOrder=Passed --expect ProcessOrder_LargePayload_Completes=Passed
             --expect GetOrder_ReturnsExpectedType=Passed --expect sum-two-three=Passed --expect sum-negative=Passed
             --expect DeferredService=NotExecuted --skip-reason "DeferredService=Requires tracked service TEST-42"
