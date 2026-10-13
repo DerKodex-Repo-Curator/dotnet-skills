@@ -152,6 +152,9 @@ stimuli:
       - type: output-not-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)[^\r\n]*[;&|]'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?(?:(?:env|command|exec|nohup|time|timeout|sudo|sh|bash|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)[ \t]+|[&.][ \t]+|[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+)[^\r\n]*\bdotnet(?:\.exe)?[ \t]+(?:test|build|run|watch)\b|^[ \t]*(?:[$>][ \t]*)?dotnet\.exe[ \t]+(?:test|build|run|watch)\b'
       - type: prompt
     rubric:
       - Gives a discovery-only command for each named solution without running tests or rebuilding

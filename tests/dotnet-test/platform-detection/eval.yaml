@@ -73,6 +73,12 @@ stimuli:
       - type: output-matches
         config:
           pattern: '(?is)(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2(?:\.\d+)*.*?(?:SDK|\.NET)[\s`*]*10|(?:SDK|\.NET)[\s`*]*10.*?(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2'
+      - type: output-matches
+        config:
+          pattern: '(?i)(?:cannot|can''t|does not|doesn''t|no longer|removes?|removed|unsupported|incompatible|not supported|unavailable)[^.!?\r\n]{0,100}(?:bridg(?:e|ing)|VSTest)|(?:bridg(?:e|ing)|VSTest)[^.!?\r\n]{0,100}(?:cannot|can''t|does not|doesn''t|no longer|removed|unsupported|incompatible|not supported|unavailable)'
+      - type: output-not-matches
+        config:
+          pattern: '(?i)(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[ \t`*]*(?:version[ \t`*]+|v)?2(?:\.\d+)*[ \t`*+]*(?:supports|allows|enables|can (?:use|run|execute|bridge))[^.!?\r\n]{0,100}(?:bridge|VSTest)|(?:VSTest[ -]mode[ \t]+)?bridge[ \t]+(?:is|remains)[ \t]+(?:supported|available|compatible)[^.!?\r\n]{0,100}(?:SDK|\.NET)[ \t`*]*10|(?:SDK|\.NET)[ \t`*]*10[^.!?\r\n]{0,100}bridge[ \t]+(?:is|remains)[ \t]+(?:supported|available|compatible)'
       - type: run-command
         config:
           command: >-

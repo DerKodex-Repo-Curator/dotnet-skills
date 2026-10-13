@@ -90,6 +90,30 @@ class PlatformContractTests(unittest.TestCase):
                     GOLDEN + f"\nPlatform: {platform}\n"
                 ))
 
+    def test_reversed_compatibility_explanations_fail_with_correct_labels(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for claim in (
+            "MTP 2 supports the VSTest bridge on SDK 10.",
+            "MTP 2 allows the VSTest bridge on SDK 10.",
+            "MTP 2 can use the VSTest bridge on SDK 10.",
+            "On SDK 10 the VSTest bridge is supported with MTP 2.",
+            "MTP 2 is installed on SDK 10. The bridge is supported on SDK 10.",
+        ):
+            with self.subTest(claim=claim):
+                self.assertTrue(self.failures(labels + "\n\n" + claim))
+                self.assertIn("output-not-matches", self.failures(GOLDEN + "\n" + claim))
+
+    def test_incompatibility_polarity_accepts_natural_variants(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for explanation in (
+            "MTP 2 cannot use the VSTest bridge on SDK 10.",
+            "SDK 10 with MTP 2 has an unsupported VSTest bridge.",
+            "MTP 2 removed VSTest-mode bridging on .NET 10.",
+            "The bridge is no longer supported on SDK 10 with MTP 2.",
+        ):
+            with self.subTest(explanation=explanation):
+                self.assertEqual([], self.failures(labels + "\n\n" + explanation))
+
     def test_wrong_mode_framework_and_missing_version_evidence_fail(self):
         for original, replacement in (
             ("dotnet test mode: VSTest", "dotnet test mode: native MTP"),

@@ -132,11 +132,34 @@ class DiscoveryContractTests(unittest.TestCase):
                     "output-matches", self.failed_graders(GOLDEN.replace(command, ""))
                 )
 
+    def test_wrapped_execution_is_rejected_beside_correct_discovery(self):
+        for wrapper, prefix in product(
+            (
+                "env {command}", "env CI=true {command}", "command {command}",
+                "exec {command}", "nohup {command}", "time {command}",
+                "timeout 30 {command}", "sudo -- {command}",
+                "sh -c '{command}'", 'bash -lc "{command}"',
+                'cmd.exe /c "{command}"', 'pwsh -Command "{command}"',
+                'powershell.exe -Command "{command}"', "& {command}",
+                ". {command}", "CI=true {command}",
+            ),
+            ("", "  ", "$ ", "> ", "\t"),
+        ):
+            with self.subTest(wrapper=wrapper, prefix=prefix):
+                command = wrapper.format(command="dotnet test Native.slnx --no-build")
+                failures = self.failed_graders(GOLDEN + "\n" + prefix + command)
+                self.assertNotIn("output-matches", failures)
+                self.assertIn("output-not-matches", failures)
+        self.assertIn("output-not-matches", self.failed_graders(
+            GOLDEN + "\ndotnet.exe test Native.slnx --no-build"
+        ))
+
     def test_inline_command_mention_is_not_execution(self):
         for mention in (
             "Do not use `dotnet test Native.slnx --no-build` to discover tests.",
             "Do not chain `dotnet test Native.slnx --no-build; "
             "dotnet test --solution Native.slnx --no-build --list-tests`.",
+            "Avoid `env dotnet test Native.slnx --no-build`; it executes tests.",
         ):
             with self.subTest(mention=mention):
                 self.assertEqual([], self.failed_graders(GOLDEN + "\n" + mention))
