@@ -133,12 +133,11 @@ stimuli:
       - Uses the user-theme override for explicit light and dark choices
       - Restores system following with the unspecified value
 
-  - name: Diagnose frozen colors and Android restarts
+  - name: Diagnose two runtime theme-change symptoms
     prompt: |
       Runtime dictionary switching leaves page colors unchanged, and changing
-      Android dark mode restarts the activity and loses navigation state. The
-      pages use static resource lookups and MainActivity does not declare the
-      UI-mode configuration change. Diagnose both symptoms with focused fixes.
+      Android dark mode restarts the activity and loses navigation state.
+      Diagnose both symptoms with focused fixes.
     tags:
       capability: runtime-theme-diagnosis
       risk: stale-ui-and-state-loss
@@ -325,7 +324,7 @@ stimuli:
       - Explains why both system changes and runtime dictionary swaps remain observable
       - Rejects StaticResource for values supplied by a replaceable dictionary
 
-  - name: Reject CSS for a runtime theme picker
+  - name: Evaluate CSS for a runtime theme picker
     prompt: |
       A MAUI app has separate light.css and dark.css files. Product wants a
       settings switch that changes the complete theme immediately without
@@ -461,7 +460,7 @@ stimuli:
       - Confirms that runtime values use dynamic resource lookup
       - Leaves every fixture file unchanged
 
-  - name: Keep language switching out of visual theming
+  - name: Plan runtime language switching
     prompt: |
       Users can change the app language at runtime, including translated text,
       plural rules, and right-to-left layout. Colors and visual themes already

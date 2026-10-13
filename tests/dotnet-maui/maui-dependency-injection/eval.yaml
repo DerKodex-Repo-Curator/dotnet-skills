@@ -530,7 +530,7 @@ stimuli:
       - Preferred routed container activation for the injected page
       - Offered a composition-root template factory rather than a page-level service locator
 
-  - name: Register a stateless typed API client once
+  - name: Configure a stateless HTTP-backed service
     tags:
       capability: choose-single-typed-client-registration
       risk: conflicting-http-lifetimes

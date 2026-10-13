@@ -247,11 +247,11 @@ stimuli:
       - Enables full viewport coverage in the web host
       - Uses CSS environment inset values for the web content
 
-  - name: Move keyboard avoidance off a ScrollView
+  - name: Fix keyboard overlap in a scrollable form
     prompt: |
       A net10 form sets SafeAreaEdges="SoftInput" directly on its ScrollView,
-      but the last Entry is still covered by the keyboard. Explain why that
-      value has no effect there and show the smallest wrapper-based correction.
+      but the last Entry is still covered by the keyboard. Diagnose the layout
+      behavior and show the smallest cross-platform XAML correction.
     tags:
       capability: scrollview-softinput-boundary
       risk: hidden-form-input

@@ -100,9 +100,8 @@ stimuli:
   - name: Diagnose blank labels on a page
     prompt: |
       A ContentPage contains Label bindings for Title and Description, and the
-      ViewModel properties contain values, but both labels render blank. The
-      page never assigns a context and has no declared binding type. Explain
-      both defects and show focused fixes.
+      ViewModel properties contain values, but both labels render blank. Explain
+      the likely causes and show focused fixes for this page.
     tags:
       capability: binding-context-diagnosis
       risk: blank-ui

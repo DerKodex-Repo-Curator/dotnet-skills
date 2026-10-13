@@ -281,7 +281,7 @@ stimuli:
       - Proposed discovering and reinstalling a version pinned to the active SDK
       - Included Android package revalidation and rejected broad update or repair commands
 
-  - name: Diagnose a captured non-Microsoft JDK
+  - name: Investigate an Android Java toolchain failure
     tags:
       capability: diagnose-jdk-vendor-mismatch
       risk: persistent-java-toolchain-failure

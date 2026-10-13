@@ -373,7 +373,7 @@ stimuli:
       - Leaves the complete fixture unchanged instead of inventing a refactor
       - Explains the per-window isolation and absence of deactivation or teardown persistence writes
 
-  - name: Keep page navigation handling out of app lifecycle
+  - name: Choose a refresh hook for a returning Shell page
     prompt: |
       A Shell page should reload its list whenever users navigate back to it,
       including when the app itself never left the foreground. Which page or
