@@ -15,7 +15,7 @@ environment:
     - src: fixtures/global.json
       dest: global.json
 stimuli:
-  - name: Replace a custom PascalCase policy with the .NET 11 API
+  - name: Simplify PascalCase property serialization
     tags:
       capability: pascal-case-property-names
       risk: unnecessary-custom-serialization-code
@@ -68,7 +68,7 @@ stimuli:
       - Preserved the requested serialized property names and produced working code
       - Reported the validation result without claiming behavior that was not observed
 
-  - name: Remove per-member casing attributes during deserialization
+  - name: Simplify PascalCase deserialization mapping
     tags:
       capability: pascal-case-deserialization
       risk: repetitive-member-annotations
@@ -122,7 +122,7 @@ stimuli:
       - Preserved successful deserialization of both values
       - Kept the change focused on the JSON contract instead of renaming the record members
 
-  - name: Configure PascalCase dictionary keys without pre-transforming data
+  - name: Preserve dictionary key casing without copying data
     tags:
       capability: pascal-case-dictionary-keys
       risk: data-copy-and-key-rewrite
@@ -229,7 +229,7 @@ stimuli:
       - Corrected the nested dictionary key without pre-transforming data
       - Demonstrated both casing levels through successful execution
 
-  - name: Retrieve typed metadata without a non-generic cast
+  - name: Keep serialization metadata strongly typed
     tags:
       capability: typed-json-metadata
       risk: invalid-runtime-metadata-cast
@@ -284,16 +284,16 @@ stimuli:
       - Retained a resolver that makes metadata available at runtime
       - Used the typed metadata in successful serialization
 
-  - name: Probe source-generated metadata without exception control flow
+  - name: Handle covered and uncovered source-generated types
     tags:
       capability: no-throw-metadata-probe
       risk: exceptions-used-for-expected-control-flow
       journey: branch-on-metadata-availability
     prompt: |
-      This source-generated `app` checks one covered message type and one
-      uncovered type, but it uses exceptions to detect missing metadata. On
-      .NET 11, replace exception control flow with a direct availability check,
-      handle both results explicitly, and run the project.
+      This source-generated .NET 11 `app` checks one covered message type and
+      one uncovered type. The covered case should print `Known=True`, and the
+      uncovered case should print `Unknown=False` instead of throwing. Fix the
+      app, handle both outcomes explicitly, and run the project.
     environment:
       files:
         - src: fixtures/metadata-probe
@@ -393,7 +393,7 @@ stimuli:
       - Produced the requested JSON through a successful file-based execution
       - Did not reward redundant verifier commands over the required successful dotnet run
 
-  - name: Replace a custom enum naming policy
+  - name: Simplify PascalCase string-enum output
     tags:
       capability: pascal-case-enum-values
       risk: duplicate-enum-naming-code
@@ -446,7 +446,7 @@ stimuli:
       - Removed the custom naming-policy implementation
       - Preserved the exact enum JSON through successful execution
 
-  - name: Deserialize with typed metadata without a cast
+  - name: Keep deserialization metadata strongly typed
     tags:
       capability: typed-json-deserialization-metadata
       risk: invalid-deserialization-metadata-cast
@@ -499,16 +499,16 @@ stimuli:
       - Preserved the configured resolver and used the typed metadata for deserialization
       - Demonstrated the deserialized values through successful execution
 
-  - name: Probe empty options without catching metadata exceptions
+  - name: Report unavailable metadata from unconfigured options
     tags:
       capability: empty-resolver-metadata-probe
       risk: expected-metadata-miss-throws
       journey: test-unconfigured-metadata-availability
     prompt: |
       This .NET 11 `app` intentionally leaves `JsonSerializerOptions`
-      unconfigured and needs to report whether metadata is available. It
-      currently catches an exception for the expected miss. Replace that control
-      flow with a direct check and run the project.
+      unconfigured. It should print `Available=False` when metadata cannot be
+      resolved, but it currently throws on that expected result. Fix the app so
+      it reports the result normally, and run the project.
     environment:
       files:
         - src: fixtures/empty-options-probe
@@ -554,7 +554,7 @@ stimuli:
       - Removed exception handling for the expected unavailable-metadata result
       - Demonstrated the false result through successful execution
 
-  - name: Serialize optional payloads only when metadata is available
+  - name: Handle supported and unsupported plugin payloads
     tags:
       capability: conditional-serialization-metadata
       risk: optional-payload-probe-throws
@@ -562,9 +562,8 @@ stimuli:
     prompt: |
       This .NET 11 `app` receives optional plugin payloads. It should serialize
       types covered by its source-generated context and print `SKIPPED` for
-      unsupported types, but the expected miss currently uses exception control
-      flow. Replace that pattern with a direct availability check and run both
-      payloads.
+      unsupported types. The unsupported payload currently throws instead.
+      Fix the behavior and run both payloads.
     environment:
       files:
         - src: fixtures/conditional-serialization
@@ -616,10 +615,9 @@ stimuli:
       risk: unnecessary-code-churn
       journey: verify-existing-json-implementation
     prompt: |
-      Review the `app` project for its use of the new .NET 11 System.Text.Json
-      APIs. If it already uses the right property policy, dictionary-key policy,
-      typed metadata API, and resolver, do not change any file. Run it and report
-      whether a change was needed.
+      Review whether the .NET 11 `app` already meets its stated JSON behavior
+      without unnecessary workarounds. If it is already correct, do not change
+      any file. Run it and report whether a change was needed.
     environment:
       files:
         - src: fixtures/already-correct
@@ -744,7 +742,7 @@ stimuli:
       - Clearly identified the SDK as a preview rather than implying a GA release
       - Left the correct project unchanged and reported the observed JSON output
 
-  - name: "Non-activation: use the established camelCase policy on .NET 8"
+  - name: "Non-activation: configure camelCase output on .NET 8"
     expect_activation: false
     tags:
       capability: dormancy-established-policy
