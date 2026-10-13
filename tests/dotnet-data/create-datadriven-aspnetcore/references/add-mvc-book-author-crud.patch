@@ -147,7 +147,7 @@ new file mode 100644
 index 0000000..dc3ecb1
 --- /dev/null
 +++ b/fixtures/mvc-existing-dbcontext/Controllers/BooksController.cs
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,159 @@
 +using CatalogMvc.Data;
 +using CatalogMvc.Models;
 +using Microsoft.AspNetCore.Mvc;
@@ -194,6 +194,12 @@ index 0000000..dc3ecb1
 +    [ValidateAntiForgeryToken]
 +    public async Task<IActionResult> Create([Bind("Title,PublicationYear,AuthorId")] Book book)
 +    {
++        var authorExists = await context.Authors.AnyAsync(author => author.Id == book.AuthorId);
++        if (!authorExists)
++        {
++            ModelState.AddModelError(nameof(book.AuthorId), "Select a valid author.");
++        }
++
 +        if (ModelState.IsValid)
 +        {
 +            context.Add(book);
@@ -229,6 +235,12 @@ index 0000000..dc3ecb1
 +        if (id != book.Id)
 +        {
 +            return NotFound();
++        }
++
++        var authorExists = await context.Authors.AnyAsync(author => author.Id == book.AuthorId);
++        if (!authorExists)
++        {
++            ModelState.AddModelError(nameof(book.AuthorId), "Select a valid author.");
 +        }
 +
 +        if (ModelState.IsValid)

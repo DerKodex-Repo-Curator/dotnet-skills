@@ -161,6 +161,88 @@ function activeSource(text) {
   return result;
 }
 
+function sourceWithoutComments(text) {
+  const mask = (value) => value.replace(/[^\n]/g, " ");
+  let result = "";
+  let index = 0;
+
+  while (index < text.length) {
+    if (text.startsWith("//", index)) {
+      const end = text.indexOf("\n", index + 2);
+      const next = end < 0 ? text.length : end;
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+    if (text.startsWith("/*", index)) {
+      const end = text.indexOf("*/", index + 2);
+      const next = end < 0 ? text.length : end + 2;
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+
+    const character = text[index];
+    if (character === '"') {
+      let quoteCount = 1;
+      while (text[index + quoteCount] === '"') quoteCount += 1;
+      if (quoteCount >= 3) {
+        const delimiter = '"'.repeat(quoteCount);
+        const end = text.indexOf(delimiter, index + quoteCount);
+        const next = end < 0 ? text.length : end + quoteCount;
+        result += text.slice(index, next);
+        index = next;
+        continue;
+      }
+
+      const verbatim =
+        text[index - 1] === "@" ||
+        (text[index - 1] === "$" && text[index - 2] === "@");
+      let next = index + 1;
+      while (next < text.length) {
+        if (verbatim && text[next] === '"' && text[next + 1] === '"') {
+          next += 2;
+          continue;
+        }
+        if (!verbatim && text[next] === "\\") {
+          next += 2;
+          continue;
+        }
+        if (text[next] === '"') {
+          next += 1;
+          break;
+        }
+        next += 1;
+      }
+      result += text.slice(index, next);
+      index = next;
+      continue;
+    }
+    if (character === "'") {
+      let next = index + 1;
+      while (next < text.length) {
+        if (text[next] === "\\") {
+          next += 2;
+          continue;
+        }
+        if (text[next] === "'") {
+          next += 1;
+          break;
+        }
+        next += 1;
+      }
+      result += text.slice(index, next);
+      index = next;
+      continue;
+    }
+
+    result += character;
+    index += 1;
+  }
+
+  return result;
+}
+
 function hasActiveHostExtensionCall(name) {
   const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const invocation = new RegExp(
@@ -177,6 +259,37 @@ function validateNoEnsureCreated() {
   fail(
     !/\.\s*EnsureCreated(?:Async)?\s*\(/.test(activeGeneratedSource),
     "Generated sources must not call EnsureCreated or EnsureCreatedAsync.",
+  );
+}
+
+function validateNoStartupSeeding() {
+  const startupFiles = matching(/(?:^|\/)(?:Program|Startup)\.cs$/i);
+  const startupExecution = startupFiles.map((file) => {
+    const active = activeSource(file.text);
+    const run = active.search(/\bapp\s*\.\s*Run(?:Async)?\s*\(/);
+    let execution = run < 0 ? active : active.slice(0, statementAt(active, run).length + run);
+    const endpointMappings = [...execution.matchAll(
+      /\.\s*Map(?:Get|Post|Put|Patch|Delete)\s*\(/g,
+    )].reverse();
+    for (const mapping of endpointMappings) {
+      const start = statementStart(execution, mapping.index);
+      const end = start + statementAt(execution, start).length;
+      execution =
+        execution.slice(0, start) +
+        execution.slice(start, end).replace(/[^\n]/g, " ") +
+        execution.slice(end);
+    }
+    return execution;
+  }).join("\n");
+  const obviousSeedCall =
+    /\b(?:[A-Za-z_]\w*\s*\.\s*Seed\w*|(?:Seed\w*|DbInitializer|DataInitializer|DatabaseInitializer)\s*\.\s*Initialize(?:Async)?)\s*\(/i;
+  const entityAdd =
+    /\b(?!services\b)[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*\.\s*(?:Add|AddAsync|AddRange|AddRangeAsync)\s*\(/i;
+  const savesChanges = /\.\s*SaveChanges(?:Async)?\s*\(/i;
+  fail(
+    !obviousSeedCall.test(startupExecution) &&
+      !(entityAdd.test(startupExecution) && savesChanges.test(startupExecution)),
+    "Generated host startup must not seed or insert database entities.",
   );
 }
 
@@ -350,18 +463,47 @@ function endpointRecords(text, supportingText = text) {
   return records;
 }
 
+function migrationTableNames() {
+  const tableNames = new Set();
+  for (const file of matching(/(?:^|\/)Migrations\/.*\.cs$/i)
+    .filter((candidate) => !/Designer|ModelSnapshot/i.test(candidate.rel))) {
+    const migration = sourceWithoutComments(file.text);
+    if (!/:\s*Migration\b/.test(migration)) continue;
+    for (const up of methodsNamed(migration, "Up")) {
+      for (const match of up.body.matchAll(/\.\s*CreateTable\s*\(/g)) {
+        const openParen = up.body.indexOf("(", match.index);
+        const closeParen = balancedEnd(up.body, openParen, "(", ")");
+        if (closeParen < 0) continue;
+        const argumentsList = splitTopLevelArguments(up.body.slice(openParen + 1, closeParen));
+        const nameArgument =
+          argumentsList.find((argument) => /^\s*name\s*:/i.test(argument)) ??
+          argumentsList[0] ??
+          "";
+        const value = argumentValue(nameArgument).match(/^"((?:\\.|[^"\\])*)"$/s);
+        if (!value) continue;
+        try {
+          tableNames.add(JSON.parse(`"${value[1]}"`));
+        } catch {
+        }
+      }
+    }
+  }
+  return tableNames;
+}
+
 function hasMigration(...entities) {
-  const migrations = matching(/(?:^|\/)Migrations\/.*\.cs$/i)
-    .filter((file) => !/Designer|ModelSnapshot/i.test(file.rel))
-    .map((file) => file.text)
-    .join("\n");
-  return test(migrations, /:\s*Migration\b/, /CreateTable\s*\(/) &&
-    entities.every((entity) => {
-      const forms = entity.endsWith("y")
-        ? `${entity.slice(0, -1)}(?:y|ies)`
-        : `${entity}(?:s)?`;
-      return new RegExp(`\\b${forms}\\b`, "i").test(migrations);
-    });
+  const tables = migrationTableNames();
+  const names = {
+    Product: ["Product", "Products"],
+    Category: ["Category", "Categories"],
+    TodoItem: ["TodoItem", "TodoItems", "Todo", "Todos"],
+    Book: ["Book", "Books"],
+    Author: ["Author", "Authors"],
+    Employee: ["Employee", "Employees"],
+    Department: ["Department", "Departments"],
+  };
+  return entities.every((entity) =>
+    (names[entity] ?? [entity, `${entity}s`]).some((name) => tables.has(name)));
 }
 
 function argumentValue(argument) {
@@ -1137,6 +1279,17 @@ function validateMvc() {
     const post = postMethod(methods);
     fail(Boolean(get) && /PopulateAuthors|Authors\b/.test(get.body), `Book ${action} GET does not load author choices.`);
     fail(Boolean(post) && /PopulateAuthors|Authors\b/.test(post.body), `Book ${action} invalid POST does not reload author choices.`);
+    const submitted = post ? parameterNameForType(post.signature, "Book") : "";
+    fail(
+      Boolean(post) &&
+        hasSubmittedRelatedEntityLookup(
+          post.body,
+          submitted,
+          "Authors",
+          "AuthorId",
+        ),
+      `Book ${action} POST does not reject a submitted AuthorId that is missing from the database.`,
+    );
   }
   const navigation = joined(/(?:Layout|Nav|Menu).*\.cshtml$/i);
   fail(
@@ -1594,7 +1747,7 @@ function invalidBranchRejects(text, node, branch) {
         const conditionWhenValid = conditionResultForModelStateValidity(later.condition);
         if (conditionWhenValid === null) return false;
         const invalidBranch = conditionWhenValid ? later.elseText : later.thenText;
-        const fallthrough = later.elseText || /\breturn\b/.test(later.thenText)
+        const fallthrough = /\breturn\b/.test(invalidBranch)
           ? ""
           : text.slice(later.end);
         return /\breturn\s+(?:Page|View)\s*\(/.test(`${invalidBranch}\n${fallthrough}`) ||
@@ -1804,28 +1957,35 @@ function nonEmptyValidationErrorsReachResponse(text, requiredField, requestParam
   return false;
 }
 
-function hasSubmittedCategoryLookup(text, requestParameter) {
+function hasSubmittedRelatedEntityLookup(
+  text,
+  requestParameter,
+  collectionName,
+  foreignKey,
+) {
   if (!requestParameter) return false;
   const escapedParameter = requestParameter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const submittedCategory = new RegExp(
-    `(?:^|[^A-Za-z0-9_@])${escapedParameter}\\s*\\.\\s*CategoryId\\b`,
+  const escapedCollection = collectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedForeignKey = foreignKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const submittedForeignKey = new RegExp(
+    `(?:^|[^A-Za-z0-9_@])${escapedParameter}\\s*\\.\\s*${escapedForeignKey}\\b`,
   );
   const ifStatements = parsedIfStatements(text);
   const persistenceIndex = text.search(
     /\.(?:Add|AddAsync|Update|Attach)\s*\(|SaveChangesAsync\s*\(/,
   );
-  for (const categories of text.matchAll(/\.Categories\b/g)) {
-    const start = statementStart(text, categories.index);
+  for (const collection of text.matchAll(new RegExp(`\\.${escapedCollection}\\b`, "g"))) {
+    const start = statementStart(text, collection.index);
     const statement = statementAt(text, start);
-    const categoryIndex = categories.index - start;
+    const collectionIndex = collection.index - start;
     for (const lookup of statement.matchAll(/\.(Find|Any|FirstOrDefault|SingleOrDefault)Async\s*\(/g)) {
-      if (lookup.index < categoryIndex) continue;
+      if (lookup.index < collectionIndex) continue;
       const openParen = statement.indexOf("(", lookup.index);
       const closeParen = balancedEnd(statement, openParen, "(", ")");
       if (closeParen < 0) continue;
       const argumentsText = statement.slice(openParen + 1, closeParen);
       const awaitIndex = statement.lastIndexOf("await", lookup.index);
-      if (awaitIndex < 0 || !submittedCategory.test(argumentsText)) continue;
+      if (awaitIndex < 0 || !submittedForeignKey.test(argumentsText)) continue;
       const absoluteLookup = start + lookup.index;
       if (persistenceIndex >= 0 && absoluteLookup >= persistenceIndex) continue;
 
@@ -1854,6 +2014,15 @@ function hasSubmittedCategoryLookup(text, requestParameter) {
     }
   }
   return false;
+}
+
+function hasSubmittedCategoryLookup(text, requestParameter) {
+  return hasSubmittedRelatedEntityLookup(
+    text,
+    requestParameter,
+    "Categories",
+    "CategoryId",
+  );
 }
 
 function blazorComponentGroups(entity) {
@@ -2391,6 +2560,7 @@ function validateBlazor() {
 }
 
 validateNoEnsureCreated();
+validateNoStartupSeeding();
 
 switch (contract) {
   case "razor-pages": validateRazorPages(); break;

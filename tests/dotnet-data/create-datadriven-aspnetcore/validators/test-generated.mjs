@@ -529,6 +529,27 @@ function replace(relativeRoot, relativeFile, search, replacement, count = Infini
   write(relativeRoot, relativeFile, updated);
 }
 
+function insertBeforeAppRun(root, source) {
+  replace(root, "Program.cs", "app.Run();", `${source}\n\napp.Run();`, 1);
+}
+
+function removeMigrationCreateTable(root, relativeFile, tableName) {
+  const source = read(root, relativeFile);
+  for (const match of source.matchAll(/migrationBuilder\.CreateTable\s*\(/g)) {
+    const openParen = source.indexOf("(", match.index);
+    const closeParen = balancedEnd(source, openParen, "(", ")");
+    if (closeParen < 0) continue;
+    const call = source.slice(openParen + 1, closeParen);
+    if (!new RegExp(`\\bname\\s*:\\s*"${tableName}"`).test(call)) continue;
+    const lineStart = source.lastIndexOf("\n", match.index) + 1;
+    const semicolon = source.indexOf(";", closeParen);
+    if (semicolon < 0) break;
+    write(root, relativeFile, source.slice(0, lineStart) + source.slice(semicolon + 1));
+    return;
+  }
+  throw new Error(`Could not find CreateTable for ${tableName} in ${relativeFile}`);
+}
+
 function replaceEndpointMetadata(
   root,
   relativeFile,
@@ -681,6 +702,77 @@ internal static class GeneratedDatabaseStartup
 }
 `,
     ));
+}
+
+function testAllowedStartupInitializationLayouts() {
+  const source = `// SeedData.Initialize(app.Services);
+/* DbInitializer.Seed(app.Services); */
+const string seedExample = "SeedData.Initialize(app.Services);";
+builder.Services.AddSingleton(TimeProvider.System);`;
+  for (const { contract } of cases) {
+    const root = cloneForMutation(contract, "allowed-startup-initialization-layout");
+    insertBeforeAppRun(root, source);
+    expectPass(contract, root, "startup seeding text in comments and strings with ordinary DI");
+  }
+
+  const inlineEndpointRoot = cloneForMutation("todo-api", "inline-endpoint-data-write-layout");
+  insertBeforeAppRun(
+    inlineEndpointRoot,
+    `app.MapPost("/api/import-preview", async (
+    TodoApi.Models.TodoItem item,
+    TodoDbContext context) =>
+{
+    context.TodoItems.Add(item);
+    await context.SaveChangesAsync();
+    return Results.Ok(item);
+});`,
+  );
+  expectPass("todo-api", inlineEndpointRoot, "inline endpoint data write is not startup seeding");
+
+  const migrationRoot = cloneForMutation("mvc", "migration-insert-data-layout");
+  replace(
+    migrationRoot,
+    "Migrations/20261012220000_InitialCreate.cs",
+    "        migrationBuilder.CreateTable(",
+    `        migrationBuilder.InsertData(
+            table: "Authors",
+            columns: new[] { "Id", "Name" },
+            values: new object[] { 1, "Existing author" });
+
+        migrationBuilder.CreateTable(`,
+    1,
+  );
+  expectPass("mvc", migrationRoot, "EF migration InsertData");
+}
+
+function startupSeedingMutations() {
+  mutation("razor-pages", "SeedData Initialize from startup", (root) =>
+    insertBeforeAppRun(root, "SeedData.Initialize(app.Services);"));
+  mutation("mvc", "DbInitializer Seed from startup", (root) =>
+    insertBeforeAppRun(root, "DbInitializer.Seed(app.Services);"));
+  mutation("todo-api", "direct startup Add and SaveChanges", (root) =>
+    insertBeforeAppRun(
+      root,
+      `using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<TodoDbContext>();
+    context.TodoItems.Add(new TodoApi.Models.TodoItem { Title = "Seeded", IsComplete = false });
+    context.SaveChanges();
+}`,
+    ));
+}
+
+function migrationCompletenessMutations() {
+  for (const [contract, relativeFile, tableName, label] of [
+    ["razor-pages", "Migrations/20261012220533_InitialCreate.cs", "Categories", "Razor Category"],
+    ["todo-api", "Migrations/20261012220222_InitialCreate.cs", "TodoItems", "Todo"],
+    ["mvc", "Migrations/20261012220000_InitialCreate.cs", "Authors", "MVC Author"],
+    ["parent-api", "Migrations/20261012220500_InitialCreate.cs", "Categories", "Parent API Category"],
+    ["blazor", "Migrations/20261012220222_InitialCreate.cs", "Departments", "Blazor Department"],
+  ]) {
+    mutation(contract, `${label} migration table removed`, (root) =>
+      removeMigrationCreateTable(root, relativeFile, tableName));
+  }
 }
 
 function testContextRegistrationLayouts() {
@@ -2035,6 +2127,29 @@ function mvcMutations() {
     replace(root, books, "context.Books.Remove(book)", "_ = book"));
   mutation("mvc", "remove validation", (root) =>
     replace(root, books, /ModelState\.IsValid/g, "true"));
+  for (const action of ["Create", "Edit"]) {
+    mutation("mvc", `Book ${action} removes submitted AuthorId validation`, (root) =>
+      replace(
+        root,
+        books,
+        new RegExp(
+          `(public async Task<IActionResult> ${action}\\b[\\s\\S]*?)\\s*var authorExists = await context\\.Authors\\.AnyAsync\\(author => author\\.Id == book\\.AuthorId\\);\\s*if \\(!authorExists\\)\\s*\\{\\s*ModelState\\.AddModelError\\(nameof\\(book\\.AuthorId\\), "Select a valid author\\."\\);\\s*\\}`,
+        ),
+        (match, prefix) => prefix,
+        1,
+      ));
+    mutation("mvc", `Book ${action} ignores submitted AuthorId lookup`, (root) =>
+      replace(
+        root,
+        books,
+        new RegExp(
+          `(public async Task<IActionResult> ${action}\\b[\\s\\S]*?)var authorExists = await context\\.Authors\\.AnyAsync\\(author => author\\.Id == book\\.AuthorId\\);\\s*if \\(!authorExists\\)\\s*\\{\\s*ModelState\\.AddModelError\\(nameof\\(book\\.AuthorId\\), "Select a valid author\\."\\);\\s*\\}`,
+        ),
+        (match, prefix) =>
+          `${prefix}_ = await context.Authors.AnyAsync(author => author.Id == book.AuthorId);`,
+        1,
+      ));
+  }
   mutation("mvc", "remove parent selection", (root) => {
     replace(root, "Views/Books/Create.cshtml", /AuthorId/g, "WriterId");
     replace(root, "Views/Books/Edit.cshtml", /AuthorId/g, "WriterId");
@@ -2946,6 +3061,9 @@ try {
   scopeMutations();
   testInactiveEnsureCreatedLayouts();
   ensureCreatedMutations();
+  testAllowedStartupInitializationLayouts();
+  startupSeedingMutations();
+  migrationCompletenessMutations();
   testContextRegistrationLayouts();
   contextRegistrationMutations();
   testEndpointHostMappingLayouts();
