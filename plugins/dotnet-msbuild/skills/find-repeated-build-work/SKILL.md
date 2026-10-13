@@ -28,7 +28,11 @@ MSBuild runs targets once per project instance. Work that does not depend on the
 
 ### Step 1: Count executions
 
-Replay the binlog with a performance summary (or use the binlog MCP tools if available) and read the `N calls` column of the Target and Task Performance Summaries and the Project Performance Summary:
+If no binlog is supplied, use the `binlog-generation` skill to capture one: add `/bl:{}` to the original MSBuild invocation, preserving its configuration, global properties, parallelism and restore behavior. In PowerShell, quote the complete switch as `'-bl:{}'`. If a script drives the build, instrument its underlying MSBuild invocation rather than replace it with a different build command. Confirm the binlog exists and record its path.
+
+For analysis, prefer the bundled **binlog MCP server** (`Microsoft.AITools.BinlogMcp`, exposed under the `binlog` MCP namespace). Discover its available tools and query project, target and task execution counts and timings from the captured binlog. Do not read the binary file as text.
+
+If MCP is unavailable or its tools do not expose execution counts, replay the captured binlog to a text performance summary and read the `N calls` column of the Target and Task Performance Summaries and the Project Performance Summary:
 
 ```bash
 dotnet msbuild build.binlog -noconlog "-flp:v=diag;logfile=full.log;performancesummary"
