@@ -140,6 +140,10 @@ stimuli:
     graders:
       # Scan shell quotes/backslash escapes as data; stop at unquoted whitespace + #.
       # Required options must be in the executable segment, not quoted values.
+      - type: tool-calls
+        config:
+          disallowed:
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|edit|create|apply_patch|write_file|replace|task)$'
       - type: output-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t](?:--list-tests|-t)(?=[ \t\r\n]|$))(?!(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--[ \t])[^\r\n]*$'
@@ -157,8 +161,17 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/discovery_commands.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='7f79850d8b89286dda697ebe098df2155be7745df6febdda6bbe358c3c026c72','Command verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='1360eb495cd06b2b7a7cf798bbbdb78f453032720893a24b03962db626da903f','Command verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
+          timeout: 1m
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib;
+            expected={'.eval/discovery_commands.py':'1360eb495cd06b2b7a7cf798bbbdb78f453032720893a24b03962db626da903f'};
+            actual={p.as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in pathlib.Path('.').rglob('*') if p.is_file() and p.parts[0] not in {'.git','.agents','.copilot','.claude'}};
+            assert actual==expected, 'Read-only discovery workspace changed'"
+          expected_exit_code: 0
           timeout: 1m
       - type: prompt
     rubric:
@@ -170,9 +183,13 @@ stimuli:
       reject_tools:
         - bash
         - powershell
+        - execute
+        - run_shell_command
         - edit
         - create
         - apply_patch
+        - write_file
+        - replace
         - task
 
   - name: Exclude slow integration tests on VSTest MSTest

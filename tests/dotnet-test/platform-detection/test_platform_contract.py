@@ -121,6 +121,9 @@ class PlatformContractTests(unittest.TestCase):
             "SDK 10 with MTP 2 has an unsupported VSTest bridge.",
             "MTP 2 removed VSTest-mode bridging on .NET 10.",
             "The bridge is no longer supported on SDK 10 with MTP 2.",
+            "Microsoft.Testing.Platform version 2 cannot bridge on SDK version 10.",
+            "On SDK v10, MTP v2 cannot use the VSTest bridge.",
+            "MTP version 2 cannot bridge on .NET version 10.",
         ):
             with self.subTest(explanation=explanation):
                 self.assertEqual([], self.failures(labels + "\n\n" + explanation))
@@ -150,6 +153,8 @@ class PlatformContractTests(unittest.TestCase):
             "MTP 2 is not unsupported by the VSTest bridge on SDK 10.",
             "This project has MTP 2 installed on SDK 10.",
             "MTP 2 supports native mode on SDK 10.",
+            "MTP version 1 cannot bridge on SDK version 10; this project uses MTP 2.",
+            "MTP 2 cannot bridge on SDK version 9; this project uses SDK version 10.",
         ):
             with self.subTest(explanation=explanation):
                 self.assertIn("program", self.failures(labels + "\n\n" + explanation))
@@ -160,6 +165,12 @@ class PlatformContractTests(unittest.TestCase):
         ):
             with self.subTest(explanation=explanation):
                 self.assertEqual([], self.failures(labels + "\n\n" + explanation))
+        self.assertIn("output-not-matches", self.failures(
+            GOLDEN + "\nThe bridge is supported on SDK version 10 with MTP 2."
+        ))
+        self.assertIn("output-not-matches", self.failures(
+            GOLDEN + "\nOn SDK version 10.0.100 the VSTest bridge is supported with MTP 2."
+        ))
 
     def test_production_report_grader_rejects_wrong_version_relationship(self):
         script = """

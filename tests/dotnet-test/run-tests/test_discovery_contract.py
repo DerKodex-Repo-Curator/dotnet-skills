@@ -4,7 +4,9 @@ import importlib.util
 import json
 from itertools import product
 from pathlib import Path
+import shlex
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -33,7 +35,7 @@ class DiscoveryContractTests(unittest.TestCase):
         failed = []
         for grader in STIMULUS["graders"]:
             kind = grader["type"]
-            if kind == "prompt":
+            if kind in ("prompt", "tool-calls", "run-command"):
                 continue
             if kind == "program":
                 try:
@@ -371,6 +373,91 @@ assert.equal(result.passed, false, JSON.stringify(result));
         ):
             with self.subTest(mention=mention):
                 self.assertEqual([], self.failed_graders(GOLDEN + "\n" + mention))
+
+    def test_plain_prose_cautions_do_not_mask_command_chains(self):
+        for mention in (
+            "Avoid running dotnet test without --list-tests.",
+            "Do not run dotnet test without the discovery option.",
+            "Never use dotnet test to claim tests passed when only listing them.",
+        ):
+            with self.subTest(mention=mention):
+                self.assertEqual([], self.failed_graders(GOLDEN + "\n" + mention))
+        for extra in (
+            "Avoid running dotnet test without --list-tests; dotnet test",
+            "```shell\nAvoid running dotnet test without --list-tests.\n```",
+        ):
+            with self.subTest(extra=extra):
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
+
+    def test_readonly_workspace_guard_rejects_every_mutation(self):
+        command = shlex.split(next(
+            grader["config"]["command"] for grader in STIMULUS["graders"]
+            if grader["type"] == "run-command"
+        ))
+        command[0] = sys.executable
+        with tempfile.TemporaryDirectory(prefix="discovery-readonly-") as directory:
+            root = Path(directory)
+            for item in STIMULUS["environment"]["files"]:
+                target = root / item["dest"]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((EVAL.parent / item["src"]).read_bytes())
+
+            def run_guard():
+                return subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=30)
+
+            self.assertEqual(0, run_guard().returncode)
+            for item in STIMULUS["environment"]["files"]:
+                target = root / item["dest"]
+                original = target.read_bytes()
+                for remove in (False, True):
+                    with self.subTest(file=item["dest"], remove=remove):
+                        if remove:
+                            target.unlink()
+                        else:
+                            target.write_bytes(original + b"\n# changed\n")
+                        self.assertNotEqual(0, run_guard().returncode)
+                        target.write_bytes(original)
+            for name in ("unrelated.txt", ".eval/extra.py", "obj/generated.cs", "bin/test.dll"):
+                with self.subTest(addition=name):
+                    target = root / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text("unexpected", encoding="utf-8")
+                    self.assertNotEqual(0, run_guard().returncode)
+                    target.unlink()
+
+    def test_production_tool_grader_rejects_execution_write_and_delegation_aliases(self):
+        config = next(
+            grader["config"] for grader in STIMULUS["graders"] if grader["type"] == "tool-calls"
+        )
+        self.assertTrue({"execute", "run_shell_command", "write_file", "replace"} <= set(
+            STIMULUS["constraints"]["reject_tools"]
+        ))
+        script = """
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { ToolCallGrader } from "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/tool-call-grader.js";
+const config = JSON.parse(readFileSync(0, "utf8"));
+const grader = new ToolCallGrader();
+for (const name of ["view", "glob", "read_file", "functions.view", "skill",
+                   "bash", "powershell", "execute", "run_shell_command",
+                   "edit", "create", "apply_patch", "write_file", "replace", "task",
+                   "functions.execute", "functions.write_file", "functions.task"]) {
+  const allowed = ["view", "glob", "read_file", "functions.view", "skill"].includes(name);
+  for (const success of [true, false]) {
+    const data = { toolName: name, toolCallId: "one", arguments: { command: "dotnet test --list-tests" } };
+    const result = await grader.grade({ config, trajectory: { events: [
+      { type: "tool_call", data }, { type: "tool_result", data: { ...data, success, result: "done" } }
+    ] } });
+    assert.equal(result.passed, allowed, name);
+  }
+}
+assert.equal((await grader.grade({ config, trajectory: { events: [] } })).passed, true);
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script], cwd=ROOT,
+            input=json.dumps(config), capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

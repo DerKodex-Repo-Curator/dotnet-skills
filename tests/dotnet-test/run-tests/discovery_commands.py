@@ -124,6 +124,15 @@ def validate_output(response):
                 line = re.sub(r"`[^`]+`", "", line)
         if line.startswith(("$ ", "> ")):
             line = line[2:].lstrip()
+        caution = re.match(
+            r"^(?:avoid\s+(?:running|using|executing|invoking|chaining)|"
+            r"(?:do not|don't|never)\s+(?:run|use|execute|invoke|chain))\b",
+            line, re.I,
+        )
+        if not fenced and caution and not any(
+            operator for _, operator in tokens(line[caution.end():])
+        ):
+            continue
         if not re.search(r"\bdotnet(?:\.exe)?\b", line, re.I):
             assert not fenced or not line or line.startswith("#"), (
                 "Unrecognized command in a discovery-only code block"

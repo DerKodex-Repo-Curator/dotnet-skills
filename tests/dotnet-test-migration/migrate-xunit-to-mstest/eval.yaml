@@ -101,7 +101,7 @@ stimuli:
                           described = True
                       enforcing = re.search(r"\b(?:timeouts?|deadlines?|fail(?:s|ures?|ing)?|enforc(?:es?|ed|ing)|aborts?|terminates?)\b", clause, re.I)
                       if enforcing:
-                          assert re.search(negative + r"|\bnon[- ]", clause[:enforcing.start()], re.I), "Source warning was described as an enforced deadline"
+                          assert re.search(negative + r"|\bnon[- ]|\b(?:rather than|instead of)\b", clause[:enforcing.start()], re.I), "Source warning was described as an enforced deadline"
                   assert described, "Missing diagnostic warning relationship for longRunningTestSeconds"
 
               if __name__ == "__main__":

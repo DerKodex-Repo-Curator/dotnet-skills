@@ -37,6 +37,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds is a non-enforcing diagnostic warning.",
             "longRunningTestSeconds warns without failing or aborting tests.",
             "longRunningTestSeconds was not a timeout; it warns.",
+            "longRunningTestSeconds is a diagnostic warning rather than an enforced timeout.",
+            "longRunningTestSeconds emits a warning instead of failing the test.",
         ):
             with self.subTest(valid=response):
                 REPORT["validate_diagnostic_report"](response)
@@ -47,6 +49,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds only warns. Its timeout is enforced.",
             "longRunningTestSeconds produces warnings and failures.",
             "longRunningTestSeconds warns, but also enforces a timeout.",
+            "longRunningTestSeconds is an enforced timeout rather than a diagnostic warning.",
+            "longRunningTestSeconds fails tests instead of warning.",
             "longRunningTestSeconds is non-diagnostic.",
             "longRunningTestSeconds was migrated. diagnosticMessages emits warnings.",
             "The project contains diagnostics and timeouts.",
