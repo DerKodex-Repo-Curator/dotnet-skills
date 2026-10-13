@@ -77,7 +77,7 @@ stimuli:
                   bin_dir = pathlib.Path(tmp)
                   mocks = {
                       'git': '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$MOCK_BIN/git-calls"\nprintf "%s\\n" "$EXPECTED_COMMIT"\n',
-                      'dotnet': '#!/usr/bin/env bash\nprintf "%s\\n" "$@" >> "$MOCK_BIN/dotnet-args"\n',
+                      'dotnet': '#!/usr/bin/env bash\nrecord="$(mktemp "$MOCK_BIN/dotnet-call.XXXXXX")"\nprintf "%s\\0" "$@" > "$record"\n',
                   }
                   for name, text in mocks.items():
                       path = bin_dir / name
@@ -85,16 +85,19 @@ stimuli:
                       path.chmod(0o755)
                   for _ in range(2):
                       commit = uuid.uuid4().hex[:7]
-                      for name in ['git-calls', 'dotnet-args']:
-                          (bin_dir / name).unlink(missing_ok=True)
+                      for path in [bin_dir / 'git-calls', *bin_dir.glob('dotnet-call.*')]:
+                          path.unlink(missing_ok=True)
                       env = dict(os.environ, MOCK_BIN=tmp, EXPECTED_COMMIT=commit)
                       subprocess.run(
                           [bash, '-c', 'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"; export PATH="$MOCK_BIN:$PATH"; bash build.sh'],
                           cwd='git-stamp', env=env, check=True, timeout=20,
                       )
                       assert (bin_dir / 'git-calls').read_text().splitlines() == ['rev-parse --short HEAD'], 'compute the current short commit exactly once'
-                      args = (bin_dir / 'dotnet-args').read_text().splitlines()
-                      assert args[:2] == ['build', 'Contoso.slnx'], 'the solution must still be built'
+                      calls = [[arg.decode() for arg in path.read_bytes().split(b'\0')[:-1]]
+                               for path in bin_dir.glob('dotnet-call.*')]
+                      builds = [call for call in calls if call and call[0] in ['build', 'msbuild']]
+                      assert len(builds) == 1 and builds[0][1:2] == ['Contoso.slnx'], 'require exactly one solution build'
+                      args = builds[0]
                       values = [a.split(':', 1)[1] for a in args if re.match(r'[-/]p(?:roperty)?:', a, re.I)]
                       assert any('GitCommit=' + commit in v.split(';') for v in values), 'pass the actual git result, not an empty, fixed or undefined value'
                       assignments = [p for value in values for p in value.split(';')]
@@ -392,7 +395,7 @@ stimuli:
           args:
             - -c
             - |
-              import pathlib, re, shlex
+              import json, os, pathlib, re, shlex, shutil, subprocess, sys, tempfile
               import xml.etree.ElementTree as ET
               project = ET.parse('per-file-exec/Contoso.Schemas.csproj').getroot()
               root = ET.parse('per-file-exec/Schemas.targets').getroot()
@@ -442,6 +445,69 @@ stimuli:
               for directory in [str(pathlib.PurePosixPath(input_list).parent), output_dir]:
                   assert ((pathlib.Path('per-file-exec') / directory).is_dir() or
                           any(d == directory or d.startswith(directory + '/') for d in created)), 'create the list/output directory before writing on a clean build'
+              dotnet = shutil.which('dotnet')
+              assert dotnet, 'the .NET SDK is required to query evaluated Compile items'
+              hooks = list(dict.fromkeys(
+                  name for phase in ['BeforeCompile', 'CoreCompile'] for name, t in targets.items()
+                  if phase in [n.strip() for n in t.get('BeforeTargets', '').split(';')]
+              ))
+              with tempfile.TemporaryDirectory() as tmp:
+                  work = (pathlib.Path(tmp) / 'work').resolve()
+                  shutil.copytree('per-file-exec', work, ignore=shutil.ignore_patterns('bin', 'obj', '*.g.cs'))
+                  bin_dir = pathlib.Path(tmp) / 'bin'
+                  bin_dir.mkdir()
+                  log = pathlib.Path(tmp) / 'schemagen-calls.jsonl'
+                  script = bin_dir / 'schemagen.py'
+                  script.write_text(
+                      'import argparse, json, os, pathlib\n'
+                      'parser = argparse.ArgumentParser()\n'
+                      'parser.add_argument("--input-list", required=True)\n'
+                      'parser.add_argument("--output-dir", required=True)\n'
+                      'args = parser.parse_args()\n'
+                      'work = pathlib.Path(os.environ["SCHEMA_WORK"]).resolve()\n'
+                      'source_list = pathlib.Path(args.input_list).resolve()\n'
+                      'output_dir = pathlib.Path(args.output_dir).resolve()\n'
+                      'assert source_list.is_relative_to(work) and output_dir.is_relative_to(work)\n'
+                      'assert output_dir.is_dir()\n'
+                      'inputs = [pathlib.Path(line).resolve() for line in source_list.read_text(encoding="utf-8-sig").splitlines() if line.strip()]\n'
+                      'assert inputs and all(p.is_relative_to(work) and p.is_file() for p in inputs)\n'
+                      'outputs = [output_dir / (p.stem + ".g.cs") for p in inputs]\n'
+                      'for output in outputs:\n'
+                      '    output.write_text("// generated placeholder for Compile-item inspection\\n", encoding="utf-8")\n'
+                      'with open(os.environ["SCHEMA_LOG"], "a", encoding="utf-8") as stream:\n'
+                      '    stream.write(json.dumps({"inputs": [str(p) for p in inputs], "outputs": [str(p) for p in outputs]}) + "\\n")\n',
+                      encoding='utf-8', newline='\n',
+                  )
+                  if os.name == 'nt':
+                      (bin_dir / 'schemagen.cmd').write_text(
+                          '@echo off\n"' + sys.executable + '" "' + str(script) + '" %*\n',
+                          encoding='utf-8', newline='\r\n',
+                      )
+                  else:
+                      launcher = bin_dir / 'schemagen'
+                      launcher.write_text(
+                          '#!/bin/sh\nexec ' + shlex.quote(sys.executable) + ' ' + shlex.quote(str(script)) + ' "$@"\n',
+                          encoding='utf-8', newline='\n',
+                      )
+                      launcher.chmod(0o755)
+                  env = dict(os.environ, PATH=str(bin_dir) + os.pathsep + os.environ['PATH'],
+                             SCHEMA_WORK=str(work), SCHEMA_LOG=str(log))
+                  result = subprocess.run(
+                      [dotnet, 'msbuild', 'Contoso.Schemas.csproj', '-nologo', '-verbosity:quiet',
+                       '-nodeReuse:false', '-target:' + ';'.join(hooks), '-getItem:Compile'],
+                      cwd=work, env=env, capture_output=True, text=True, timeout=60,
+                  )
+                  assert result.returncode == 0, result.stdout + result.stderr
+                  calls = [json.loads(line) for line in log.read_text().splitlines()]
+                  assert len(calls) == 1, 'schema generation must execute exactly once'
+                  sources = set(work.joinpath('schemas').rglob('*.json'))
+                  required = {work / 'schemas' / (name + '.json') for name in ['Customer', 'Invoice', 'Order']}
+                  assert required <= sources, 'preserve all fixture schema inputs'
+                  assert {pathlib.Path(p) for p in calls[0]['inputs']} == sources, 'generate an output for every schema'
+                  generated = {pathlib.Path(p) for p in calls[0]['outputs']}
+                  compiled = {pathlib.Path(item['FullPath']).resolve() for item in json.loads(result.stdout)['Items']['Compile']}
+                  assert generated <= compiled, 'every generated output must remain a Compile input'
+                  assert all(p.is_file() for p in compiled if p.name.endswith('.g.cs')), 'generated Compile inputs must exist'
           expected_exit_code: 0
       - type: output-matches
         config:
@@ -555,10 +621,22 @@ stimuli:
 
               Verdict: no repeated work worth changing
     graders:
-      - type: file-contains
+      - type: run-command
         config:
-          path: legit-per-project-calls/Directory.Build.props
-          value: net8.0;net9.0;net10.0
+          command: python
+          args:
+            - -c
+            - |
+              import hashlib, pathlib
+              base = pathlib.Path('legit-per-project-calls')
+              expected = {
+                  'Directory.Build.props': '25501be4407cbdb202defb3848da024dc276d2b67d5eea0636dbb1322ab1d634',
+                  'perf-summary.txt': 'a1bc920051a847021358ad164239be568240e1ea120c67f967da039949c6953a',
+              }
+              actual = {p.relative_to(base).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in base.rglob('*') if p.is_file()}
+              assert actual == expected, 'preserve every fixture file without edits, additions or deletions'
+          expected_exit_code: 0
       - type: output-matches
         config:
           pattern: (?i)(12\s*[x×*]\s*3|36\s*=\s*12|three target frameworks|3 target frameworks|per target framework|nothing runs more often|no repeated|not repeated|legitimate)
@@ -607,10 +685,22 @@ stimuli:
 
               Verdict: no repeated work worth changing
     graders:
-      - type: file-contains
+      - type: run-command
         config:
-          path: negligible-repeat/perf-summary.txt
-          value: 4 calls     1530 ms avg
+          command: python
+          args:
+            - -c
+            - |
+              import hashlib, pathlib
+              base = pathlib.Path('negligible-repeat')
+              expected = {
+                  'Directory.Build.targets': '04ec3ab2ea98c4814dcf0646404177408b7940c635dde20d97ce35cd245c7c50',
+                  'perf-summary.txt': 'c9f2e67662ba7a144ab8aad46affbc247ad9d9acdc727b2e72ae94d8ad1f04f0',
+              }
+              actual = {p.relative_to(base).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in base.rglob('*') if p.is_file()}
+              assert actual == expected, 'preserve every fixture file without edits, additions or deletions'
+          expected_exit_code: 0
       - type: output-matches
         config:
           pattern: (?im)^Verdict:[ \t]*no repeated work worth changing[.!]?[ \t]*$
