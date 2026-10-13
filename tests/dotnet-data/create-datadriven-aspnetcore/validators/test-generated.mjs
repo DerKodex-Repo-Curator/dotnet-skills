@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const scenarioDirectory = path.dirname(scriptDirectory);
 const validator = path.join(scriptDirectory, "validate-generated.mjs");
+const restraintValidator = path.join(scriptDirectory, "validate-restraint.mjs");
 const preferredBase = "Q:\\copilot\\26bbc64f-ad82-47bf-a29d-42ec7aead779\\validator-tests";
 const fallbackBase = path.join(os.tmpdir(), "copilot-26bbc64f-ad82-47bf-a29d-42ec7aead779-validator-tests");
 
@@ -22,7 +23,7 @@ function usableBase(candidate) {
   }
 }
 
-const base = usableBase(preferredBase) ? preferredBase : fallbackBase;
+const base = process.platform === "win32" && usableBase(preferredBase) ? preferredBase : fallbackBase;
 fs.mkdirSync(base, { recursive: true });
 const runRoot = path.join(base, `run-${Date.now()}-${process.pid}`);
 fs.mkdirSync(runRoot, { recursive: true });
@@ -33,6 +34,10 @@ const cases = [
   { contract: "mvc", fixture: "mvc-existing-dbcontext", patch: "add-mvc-book-author-crud.patch" },
   { contract: "parent-api", fixture: "minimal-api-parent-fk", patch: "add-parent-child-minimal-api-crud.patch" },
   { contract: "blazor", fixture: "blazor-crud", patch: "add-blazor-employee-department-crud.patch" },
+];
+const restraintCases = [
+  { contract: "razor-static", fixture: "razor-pages-crud", patch: "add-terms-page.patch" },
+  { contract: "blazor-static", fixture: "blazor-crud", patch: "add-reports-component.patch" },
 ];
 
 const failures = [];
@@ -58,6 +63,10 @@ function run(command, args, options = {}) {
 
 function validatorResult(contract, root) {
   return run(process.execPath, [validator, contract, root]);
+}
+
+function restraintValidatorResult(contract, root) {
+  return run(process.execPath, [restraintValidator, contract, root]);
 }
 
 function reportPass(contract, name) {
@@ -94,6 +103,48 @@ function materializeGolden(item) {
   }
   goldenRoots.set(item.contract, fixtureRoot);
   expectPass(item.contract, fixtureRoot, "golden patch");
+}
+
+function materializeRestraintGolden(item) {
+  const work = path.join(runRoot, `golden-${item.contract}`);
+  const fixtureRoot = path.join(work, "fixtures", item.fixture);
+  fs.mkdirSync(path.dirname(fixtureRoot), { recursive: true });
+  copySource(path.join(scenarioDirectory, "fixtures", item.fixture), fixtureRoot);
+  const patch = path.join(scenarioDirectory, "references", item.patch);
+  const applied = run("git", ["apply", "--whitespace=nowarn", patch], { cwd: work });
+  if (applied.status !== 0) throw new Error(`Could not apply ${item.patch}:\n${applied.stderr || applied.stdout}`);
+  goldenRoots.set(item.contract, fixtureRoot);
+  const result = restraintValidatorResult(item.contract, fixtureRoot);
+  if (result.status === 0) reportPass(item.contract, "golden patch");
+  else reportUnexpected(item.contract, "golden patch", result, "pass");
+}
+
+function restraintMutation(contract, name, mutate) {
+  try {
+    const root = cloneForMutation(contract, name);
+    mutate(root);
+    const result = restraintValidatorResult(contract, root);
+    if (result.status !== 0) reportPass(contract, `${name} rejected`);
+    else reportUnexpected(contract, name, result, "failure");
+  } catch (error) {
+    failures.push(`${contract}: ${name} mutation failed: ${error.message}`);
+    console.error(`FAIL ${contract}: ${name} mutation setup`);
+  }
+}
+
+function restraintMutations() {
+  restraintMutation("razor-static", "non-EF AppDbContext over-scaffolding", (root) =>
+    write(root, "Data/AppDbContext.cs", "namespace MyApp.Data; public sealed class AppDbContext { }\n"));
+  restraintMutation("razor-static", "compilable Product and Category CRUD pages", (root) => {
+    write(root, "Pages/Products/Index.cshtml", '@page\n<h1>Products</h1>\n');
+    write(root, "Pages/Categories/Index.cshtml", '@page\n<h1>Categories</h1>\n');
+  });
+  restraintMutation("blazor-static", "non-EF AppDbContext over-scaffolding", (root) =>
+    write(root, "Data/AppDbContext.cs", "namespace BlazorApp.Data; public sealed class AppDbContext { }\n"));
+  restraintMutation("blazor-static", "compilable Employee and Department CRUD components", (root) => {
+    write(root, "Components/Pages/Employees.razor", '@page "/employees"\n<h1>Employees</h1>\n');
+    write(root, "Components/Pages/Departments.razor", '@page "/departments"\n<h1>Departments</h1>\n');
+  });
 }
 
 function cloneForMutation(contract, name, source = goldenRoots.get(contract)) {
@@ -914,6 +965,7 @@ function sharedBlazorBranchMutations() {
 
 try {
   for (const item of cases) materializeGolden(item);
+  for (const item of restraintCases) materializeRestraintGolden(item);
   testPatchTodoLayout();
   testTodoUpdatePatterns();
   razorMutations();
@@ -926,6 +978,7 @@ try {
   testSeparateBlazorLayout();
   testCombinedTwoFormBlazorLayout();
   sharedBlazorBranchMutations();
+  restraintMutations();
 } catch (error) {
   failures.push(error.stack || error.message);
 }
@@ -937,4 +990,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`PASS all validator tests (${cases.length} contracts)`);
+console.log(`PASS all validator tests (${cases.length + restraintCases.length} contracts)`);

@@ -453,6 +453,7 @@ stimuli:
     environment:
       files:
         - { src: fixtures/razor-pages-crud, dest: fixtures/razor-pages-crud }
+        - { src: validators/validate-restraint.mjs, dest: validators/validate-restraint.mjs }
     golden_patch:
       path: references/add-terms-page.patch
     golden_trajectory:
@@ -504,6 +505,16 @@ stimuli:
       - { type: file-exists, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml } }
       - { type: file-not-contains, config: { path: fixtures/razor-pages-crud/MyApp.csproj, value: EntityFrameworkCore } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Migrations } }
+      - { type: file-not-exists, config: { path: "fixtures/razor-pages-crud/**/*DbContext*.cs" } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Products } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Categories } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Controllers } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Endpoints } }
+      - type: run-command
+        config:
+          command: node
+          args: [validators/validate-restraint.mjs, razor-static, fixtures/razor-pages-crud]
+          expected_exit_code: 0
       - *build-razor
       - type: prompt
     rubric:
@@ -520,6 +531,7 @@ stimuli:
     environment:
       files:
         - { src: fixtures/blazor-crud, dest: fixtures/blazor-crud }
+        - { src: validators/validate-restraint.mjs, dest: validators/validate-restraint.mjs }
     golden_patch:
       path: references/add-reports-component.patch
     golden_trajectory:
@@ -570,6 +582,16 @@ stimuli:
       - { type: file-contains, config: { path: fixtures/blazor-crud/Program.cs, value: AddInteractiveServerRenderMode } }
       - { type: file-not-contains, config: { path: fixtures/blazor-crud/BlazorApp.csproj, value: EntityFrameworkCore } }
       - { type: file-not-exists, config: { path: fixtures/blazor-crud/Migrations } }
+      - { type: file-not-exists, config: { path: "fixtures/blazor-crud/**/*DbContext*.cs" } }
+      - { type: file-not-exists, config: { path: "fixtures/blazor-crud/Components/Pages/Employees*" } }
+      - { type: file-not-exists, config: { path: "fixtures/blazor-crud/Components/Pages/Departments*" } }
+      - { type: file-not-exists, config: { path: fixtures/blazor-crud/Controllers } }
+      - { type: file-not-exists, config: { path: fixtures/blazor-crud/Endpoints } }
+      - type: run-command
+        config:
+          command: node
+          args: [validators/validate-restraint.mjs, blazor-static, fixtures/blazor-crud]
+          expected_exit_code: 0
       - type: run-command
         config:
           command: dotnet
@@ -745,6 +767,7 @@ stimuli:
           expected_exit_code: 0
       - type: prompt
     rubric:
-      - The ASP.NET Core scaffolding skill stayed dormant because the target is a non-web class library
+      - Recognized that the target is a plain class library and kept the implementation within that non-web scope
+      - Kept the response focused on the requested class-library behavior rather than proposing or performing ASP.NET Core scaffolding
       - Added only the requested plain C# writer and preserved the existing ReportWriter
       - Did not add ASP.NET Core, Entity Framework, pages, controllers, endpoints, or database artifacts
