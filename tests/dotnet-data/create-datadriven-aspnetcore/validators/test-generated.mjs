@@ -572,6 +572,99 @@ internal static class GeneratedDatabaseStartup
     ));
 }
 
+function testContextRegistrationLayouts() {
+  const todoRoot = cloneForMutation("todo-api", "block-context-callback-layout");
+  replace(
+    todoRoot,
+    "Program.cs",
+    /builder\.Services\.AddDbContext<TodoDbContext>\(options =>\r?\n    options\.UseSqlite\(builder\.Configuration\.GetConnectionString\("TodoDb"\)\)\);/,
+    `builder.Services.AddDbContext<TodoDbContext>(
+    options =>
+    {
+        options.UseSqlite(
+            builder.Configuration.GetConnectionString("TodoDb"));
+    });`,
+    1,
+  );
+  expectPass("todo-api", todoRoot, "multiline block AddDbContext callback");
+
+  const mvcRoot = cloneForMutation("mvc", "named-context-configuration-layout");
+  replace(
+    mvcRoot,
+    "Program.cs",
+    /builder\.Services\.AddDbContext<CatalogDbContext>\(options =>\r?\n    options\.UseSqlite\(builder\.Configuration\.GetConnectionString\("CatalogDb"\)\)\);/,
+    "builder.Services.AddDbContext<CatalogDbContext>(ConfigureCatalogDatabase);",
+    1,
+  );
+  replace(
+    mvcRoot,
+    "Program.cs",
+    "app.Run();",
+    `app.Run();
+
+static void ConfigureCatalogDatabase(DbContextOptionsBuilder databaseOptions)
+{
+    databaseOptions.UseSqlite("Data Source=catalog.db");
+}`,
+    1,
+  );
+  expectPass("mvc", mvcRoot, "named AddDbContext configuration method");
+
+  const blazorRoot = cloneForMutation("blazor", "factory-block-context-callback-layout");
+  replace(
+    blazorRoot,
+    "Program.cs",
+    /builder\.Services\.AddDbContextFactory<AppDbContext>\(options =>\r?\n    options\.UseSqlite\(builder\.Configuration\.GetConnectionString\("AppDbContext"\)\r?\n        \?\? throw new InvalidOperationException\("Connection string 'AppDbContext' was not found\."\)\)\);/,
+    `builder.Services.AddDbContextFactory<AppDbContext>(options =>
+{
+    options.UseSqlite(
+        builder.Configuration.GetConnectionString("AppDbContext")
+            ?? throw new InvalidOperationException("Connection string 'AppDbContext' was not found."));
+});`,
+    1,
+  );
+  expectPass("blazor", blazorRoot, "multiline block AddDbContextFactory callback");
+}
+
+function contextRegistrationMutations() {
+  mutation("todo-api", "UseSqlite only in unused local function", (root) =>
+    replace(
+      root,
+      "Program.cs",
+      /builder\.Services\.AddDbContext<TodoDbContext>\(options =>\r?\n    options\.UseSqlite\(builder\.Configuration\.GetConnectionString\("TodoDb"\)\)\);/,
+      `builder.Services.AddDbContext<TodoDbContext>();
+
+static void ConfigureTodoDatabase(DbContextOptionsBuilder options)
+{
+    options.UseSqlite("Data Source=todo.db");
+}`,
+      1,
+    ));
+
+  mutation("parent-api", "UseSqlite configures a different context registration", (root) => {
+    replace(
+      root,
+      "Program.cs",
+      /builder\.Services\.AddDbContext<StoreDbContext>\(options =>\r?\n    options\.UseSqlite\(builder\.Configuration\.GetConnectionString\("StoreDb"\)\)\);/,
+      `builder.Services.AddDbContext<StoreDbContext>();
+builder.Services.AddDbContext<ReportingDbContext>(options =>
+    options.UseSqlite(builder.Configuration.GetConnectionString("StoreDb")));`,
+      1,
+    );
+    write(
+      root,
+      "Data/ReportingDbContext.cs",
+      `using Microsoft.EntityFrameworkCore;
+
+namespace ParentChildApi.Data;
+
+public sealed class ReportingDbContext(DbContextOptions<ReportingDbContext> options)
+    : DbContext(options);
+`,
+    );
+  });
+}
+
 function testEndpointHostMappingLayouts() {
   const todoRoot = cloneForMutation("todo-api", "formatted-host-mapping");
   replace(
@@ -2742,6 +2835,8 @@ try {
   scopeMutations();
   testInactiveEnsureCreatedLayouts();
   ensureCreatedMutations();
+  testContextRegistrationLayouts();
+  contextRegistrationMutations();
   testEndpointHostMappingLayouts();
   testPatchTodoLayout();
   testRouteGroupConstantLayouts();

@@ -364,12 +364,134 @@ function hasMigration(...entities) {
     });
 }
 
+function argumentValue(argument) {
+  return argument.replace(/^\s*[A-Za-z_]\w*\s*:\s*/, "").trim();
+}
+
+function parameterNames(parameters) {
+  return splitTopLevelArguments(parameters).map((parameter) =>
+    parameter.match(/(@?[A-Za-z_]\w*)\s*(?:=[\s\S]*)?$/)?.[1] ?? ""
+  ).filter(Boolean);
+}
+
+function invokesUseSqliteOn(body, parameter) {
+  const escapedParameter = parameter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${escapedParameter}\\s*\\.\\s*UseSqlite\\s*\\(`).test(body);
+}
+
+function lambdaUsesSqlite(argument) {
+  const value = argumentValue(argument);
+  const arrow = value.indexOf("=>");
+  if (arrow < 0) return false;
+
+  let parameters = value.slice(0, arrow).trim()
+    .replace(/^(?:(?:static|async)\s+)+/, "");
+  if (parameters.startsWith("(")) {
+    const closeParen = balancedEnd(parameters, 0, "(", ")");
+    if (closeParen < 0 || parameters.slice(closeParen + 1).trim() !== "") return false;
+    parameters = parameters.slice(1, closeParen);
+  }
+
+  const body = value.slice(arrow + 2);
+  return parameterNames(parameters).some((parameter) => invokesUseSqliteOn(body, parameter));
+}
+
+function configurationMethodsNamed(text, name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\b${escapedName}\\s*\\(`, "g");
+  const methods = [];
+  for (const match of text.matchAll(pattern)) {
+    const prefixStart = Math.max(
+      text.lastIndexOf("\n", match.index - 1),
+      text.lastIndexOf("{", match.index - 1),
+      text.lastIndexOf("}", match.index - 1),
+      text.lastIndexOf(";", match.index - 1),
+    ) + 1;
+    const declarationPrefix = text.slice(prefixStart, match.index).trim();
+    if (
+      !/^(?:(?:public|private|protected|internal|static|async|unsafe|partial|new|virtual|sealed|override|extern)\s+)*[A-Za-z_@][\w@.:?<>\[\],]*$/.test(
+        declarationPrefix,
+      )
+    ) {
+      continue;
+    }
+
+    const openParen = text.indexOf("(", match.index);
+    const closeParen = balancedEnd(text, openParen, "(", ")");
+    if (closeParen < 0) continue;
+    let cursor = closeParen + 1;
+    while (/\s/.test(text[cursor] ?? "")) cursor += 1;
+    if (text.startsWith("=>", cursor)) {
+      const end = text.indexOf(";", cursor);
+      methods.push({
+        parameters: text.slice(openParen + 1, closeParen),
+        body: text.slice(cursor, end < 0 ? text.length : end + 1),
+      });
+    } else if (text[cursor] === "{") {
+      const closeBrace = balancedEnd(text, cursor, "{", "}");
+      if (closeBrace < 0) continue;
+      methods.push({
+        parameters: text.slice(openParen + 1, closeParen),
+        body: text.slice(cursor, closeBrace + 1),
+      });
+    }
+  }
+  return methods;
+}
+
+function namedMethodUsesSqlite(text, argument) {
+  const methodName = argumentValue(argument).match(/(?:^|\.)([A-Za-z_]\w*)$/)?.[1];
+  if (!methodName) return false;
+  return configurationMethodsNamed(text, methodName).some((method) =>
+    parameterNames(method.parameters).some((parameter) =>
+      invokesUseSqliteOn(method.body, parameter)
+    )
+  );
+}
+
+function contextRegistrationStatus(name, allowFactory) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const registration = allowFactory ? "AddDbContext(?:Factory)?" : "AddDbContext";
+  const pattern = new RegExp(
+    `\\b${registration}\\s*<\\s*${escapedName}\\s*>\\s*\\(`,
+    "g",
+  );
+  let registered = false;
+  let sqliteConfigured = false;
+  const activeFiles = matching(/\.cs$/i).map((file) => ({
+    ...file,
+    activeText: activeSource(file.text),
+  }));
+  const activeCs = activeFiles.map((file) => file.activeText).join("\n");
+
+  for (const file of activeFiles) {
+    const text = file.activeText;
+    for (const match of text.matchAll(pattern)) {
+      registered = true;
+      const openParen = text.indexOf("(", match.index);
+      const closeParen = balancedEnd(text, openParen, "(", ")");
+      if (closeParen < 0) continue;
+      const argumentsList = splitTopLevelArguments(text.slice(openParen + 1, closeParen));
+      if (
+        argumentsList.some((argument) =>
+          lambdaUsesSqlite(argument) || namedMethodUsesSqlite(activeCs, argument)
+        )
+      ) {
+        sqliteConfigured = true;
+      }
+    }
+  }
+
+  return { registered, sqliteConfigured };
+}
+
 function checkContext(name, entities, allowFactory = true) {
-  const registration = allowFactory
-    ? new RegExp(`AddDbContext(?:Factory)?\\s*<\\s*${name}\\s*>`)
-    : new RegExp(`AddDbContext\\s*<\\s*${name}\\s*>`);
-  fail(registration.test(cs), `${name} is not registered.`);
-  fail(/UseSqlite\s*\(/.test(cs), "SQLite is not configured.");
+  const registration = contextRegistrationStatus(name, allowFactory);
+  fail(registration.registered, `${name} is not registered.`);
+  fail(
+    registration.sqliteConfigured,
+    `SQLite is not configured by the ${name} registration.`,
+  );
   for (const entity of entities) {
     fail(
       new RegExp(`DbSet\\s*<\\s*${entity}\\s*>`, "i").test(cs),
