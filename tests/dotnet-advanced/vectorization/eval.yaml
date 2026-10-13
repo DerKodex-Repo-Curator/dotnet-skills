@@ -10,7 +10,7 @@ scoring:
 # live experiments cannot resolve it. Oracle exposes the applied patch as diff,
 # so patch-backed prompts intentionally use trajectory and diff evidence.
 stimuli:
-  - name: Detect unsigned tail offset underflow
+  - name: Review SIMD search behavior on short inputs
     prompt: |
       Review the SIMD search in TailSearch.cs for correctness and memory safety
       across every input length. Do not edit the file. Report only issues that
@@ -115,7 +115,7 @@ stimuli:
       - Keeps the final partial block vectorized by excluding already-counted lanes, whether through ConditionalSelect or an equivalent vector mask
       - Uses the scalar implementation for short inputs and when hardware acceleration is unavailable
 
-  - name: Reject fragile backwards reference
+  - name: Review reverse SIMD traversal safety
     prompt: |
       LastMatch.cs is a proposed helper for a SIMD rewrite. Review its backwards
       traversal for correctness and managed-memory safety. Do not edit the file.
@@ -154,7 +154,7 @@ stimuli:
       - Still rejects forming a one-past-span reference as a conservative safety policy because the pattern is fragile and easy to misuse
       - Recommends keeping the base reference in range and using an element offset
 
-  - name: Detect empty-span reference access
+  - name: Review zero-check behavior for edge-case inputs
     prompt: |
       Review the vectorized zero check in ZeroBytes.cs for edge-case correctness
       and memory safety. Do not edit the file. The public contract permits an
@@ -190,7 +190,7 @@ stimuli:
       - Identifies that indexing element zero throws before the empty-input behavior can be honored
       - Recommends either an existing accelerated span operation that handles empty input or explicit SIMD with bounds-checked span-based vector creation
 
-  - name: Detect unsupported vector element type
+  - name: Review Vector128 branch portability on .NET 8
     prompt: |
       Review the Vector128-based branch in AsciiLetters.cs for portability and
       runtime correctness on .NET 8. Do not edit the file.
@@ -230,7 +230,7 @@ stimuli:
       - Recognizes that the method examines only the first character and has no useful vectorizable work
       - Recommends retaining the direct char.IsAsciiLetter check rather than reinterpreting the input
 
-  - name: Detect architecture-specific behavior change
+  - name: Review zero-search behavior across supported platforms
     prompt: |
       Review the AVX2 search in ContainsZero.cs. It must return the same answer
       on x64, Arm64, and machines with hardware intrinsics disabled. Do not edit
