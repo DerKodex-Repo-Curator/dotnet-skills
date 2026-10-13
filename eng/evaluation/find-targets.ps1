@@ -433,7 +433,7 @@ if ($evt -eq 'workflow_dispatch') {
   # input, a PR-gate auto-dispatch, or a whole-repo sweep) falls through
   # to the two DEFAULT cross-family models set above.
   $mp = "$env:MATRIX_PROFILE_INPUT"
-  if ($mp -and $mp -in @('default','mid','sol','full','newer')) {
+  if ($mp -and $mp -in @('default','mid','sol','full','newer','haiku-judge-trial')) {
     $matrixProfile = $mp
   }
 } elseif ($evalBody) {
@@ -483,7 +483,7 @@ if ($evt -eq 'workflow_dispatch') {
   }
 }
 
-if ($matrixProfile -in @('default','mid','sol','full','newer')) {
+if ($matrixProfile -in @('default','mid','sol','full','newer','haiku-judge-trial')) {
   # §10.2 model tiers. Cost-optimized cadence: the two DEFAULT models
   # ({claude-sonnet-5, gpt-5.6-luna}) carry every PR and every scheduled day that
   # no heavier tier occupies. The cheap MID models run at a lower cadence
@@ -497,6 +497,7 @@ if ($matrixProfile -in @('default','mid','sol','full','newer')) {
     'sol'     = @('gpt-5.6-sol')
     'full'    = @('claude-sonnet-5', 'gpt-5.6-luna', 'claude-haiku-4.5', 'mai-code-1.1-flash', 'gpt-5.3-codex')
     'newer'   = @('gpt-6-astra', 'claude-opus-5')
+    'haiku-judge-trial' = @('gpt-5.6-luna', 'gpt-5.3-codex', 'gpt-5.6-sol', 'gpt-6-astra')
   }
   # §10.5 judge routing. Primary = cross-family (never the same model, and
   # a different family in every case here).
@@ -518,6 +519,9 @@ if ($matrixProfile -in @('default','mid','sol','full','newer')) {
     foreach ($m in $models) {
       $route = $judgeRoutes[$m]
       if (-not $route) { throw "No judge route defined for model '$m'" }
+      if ($matrixProfile -eq 'haiku-judge-trial') {
+        $route = @{ judge = 'claude-haiku-5.5' }
+      }
       $expanded += @{
         name        = "$($e.name)--$m"
         plugin      = $e.plugin

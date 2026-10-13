@@ -70,7 +70,7 @@ on:
         type: string
         required: false
       matrix_profile:
-        description: "Cross-family model matrix (IMPACT-ANALYSIS.md §10). default = claude-sonnet-5 + gpt-5.6-luna; mid = claude-haiku-4.5 + mai-code-1.1-flash + gpt-5.3-codex; sol = gpt-5.6-sol only; full = default + mid (5 models); newer = gpt-6-astra + claude-opus-5."
+        description: "Cross-family model matrix (IMPACT-ANALYSIS.md §10). default = claude-sonnet-5 + gpt-5.6-luna; mid = claude-haiku-4.5 + mai-code-1.1-flash + gpt-5.3-codex; sol = gpt-5.6-sol only; full = default + mid (5 models); newer = gpt-6-astra + claude-opus-5; haiku-judge-trial = Luna + Codex + Sol + Astra with Haiku 5.5 judge."
         type: choice
         required: false
         default: default
@@ -80,6 +80,7 @@ on:
           - sol
           - full
           - newer
+          - haiku-judge-trial
       publish_eval_data:
         description: "Publish generated evaluation data to the shared dashboard. Only allowed for manual runs on main without a PR number."
         type: boolean
