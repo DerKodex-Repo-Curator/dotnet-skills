@@ -122,16 +122,61 @@ stimuli:
           args:
             - -c
             - |
-              import fnmatch, pathlib
+              import fnmatch, pathlib, re
               import xml.etree.ElementTree as ET
               base = pathlib.Path('shared-project-instances')
               build = ET.parse(base / 'Build.proj').getroot()
-              passes_name = any('ComponentName=%(Component.Filename)' in task.get('Properties', '').split(';')
-                                for task in build.findall('.//MSBuild'))
+              normalize = lambda path: str(pathlib.PurePosixPath(path.replace('\\', '/'))).lower()
+              items = {}
+              for group in build.findall('ItemGroup'):
+                  if group.get('Condition'):
+                      continue
+                  for item in group:
+                      if item.get('Condition'):
+                          continue
+                      values = items.setdefault(item.tag, [])
+                      excluded = [normalize(p.strip()) for p in item.get('Exclude', '').split(';') if p.strip()]
+                      included = [normalize(p.strip()) for p in item.get('Include', '').split(';') if p.strip()]
+                      values.extend(p for p in included if not any(fnmatch.fnmatchcase(p, pattern) for pattern in excluded))
+                      for pattern in item.get('Remove', '').split(';'):
+                          if pattern.strip():
+                              values[:] = [p for p in values if not fnmatch.fnmatchcase(p, normalize(pattern.strip()))]
+              targets = {t.get('Name'): t for t in build.findall('Target') if not t.get('Condition')}
+              pending = build.get('DefaultTargets', '').split(';')
+              visited, tasks = set(), []
+              while pending:
+                  name = pending.pop().strip()
+                  if name in visited:
+                      continue
+                  assert name in targets, 'the default build target must exist'
+                  visited.add(name)
+                  target = targets[name]
+                  pending.extend(n for n in target.get('DependsOnTargets', '').split(';') if n.strip())
+                  for task in target.findall('MSBuild'):
+                      if task.get('Condition'):
+                          continue
+                      if not {'Build', 'Rebuild'} & {n.strip() for n in (task.get('Targets') or 'Build').split(';')}:
+                          continue
+                      projects = re.sub(r'@\((\w+)\)', lambda m: ';'.join(items.get(m[1], [])), task.get('Projects', ''))
+                      assert '@(' not in projects and '$(' not in projects, 'resolve the MSBuild Projects input'
+                      roots = {normalize(p.strip()) for p in projects.split(';') if p.strip()}
+                      tasks.append((task, roots))
+              expected_roots = {normalize(f'{c}/{c}.csproj') for c in ['Web', 'Api', 'Worker']}
+              assert expected_roots <= set().union(*(roots for _, roots in tasks)), 'Web, Api and Worker must all remain build roots'
               shared_path = base / 'Directory.Build.targets'
               shared = ET.parse(shared_path).getroot() if shared_path.exists() else ET.Element('Project')
-              normalize = lambda path: path.replace('\\', '/').lower()
               for component in ['Web', 'Api', 'Worker']:
+                  component_path = normalize(f'{component}/{component}.csproj')
+                  passes_name = False
+                  for task, roots in tasks:
+                      if component_path not in roots:
+                          continue
+                      for assignment in task.get('Properties', '').split(';'):
+                          match = re.fullmatch(r'ComponentName=%\((\w+)\.Filename\)', assignment.strip())
+                          if match and '@(' + match[1] + ')' in task.get('Projects', ''):
+                              passes_name = True
+                          elif assignment.strip() == 'ComponentName=' + component and roots == {component_path}:
+                              passes_name = True
                   root = ET.parse(base / component / (component + '.csproj')).getroot()
                   title = root.findtext('.//AssemblyTitle', '')
                   name = root.findtext('.//ComponentName', '')
@@ -199,13 +244,14 @@ stimuli:
             - |
               const fs = require('fs');
               const t = fs.readFileSync('exists-sentinel-race/Directory.Build.targets', 'utf8');
-              const sh = fs.readFileSync('exists-sentinel-race/build.sh', 'utf8');
+              const sh = fs.readFileSync('exists-sentinel-race/build.sh', 'utf8').replace(/^\s*#.*$/gm, '');
               if (!/<Compile\b[^>]*buildinfo\.g\.cs/.test(t)) throw new Error('projects no longer compile buildinfo.g.cs');
               if (!fs.existsSync('exists-sentinel-race/tools/make-buildinfo.sh')) throw new Error('the generator script was removed');
               const gen = sh.search(/make-buildinfo/);
-              const build = sh.search(/dotnet\s+(build|msbuild)\b/);
+              const build = sh.search(/(?:^|[;&])\s*(?:exec\s+)?dotnet\s+(build|msbuild)\b/m);
               if (gen < 0) throw new Error('build.sh never generates the file before building');
-              if (build >= 0 && gen > build) throw new Error('build.sh generates the file after the build starts');
+              if (build < 0) throw new Error('build.sh no longer builds the projects');
+              if (gen > build) throw new Error('build.sh generates the file after the build starts');
           expected_exit_code: 0
       - type: prompt
     rubric:
@@ -249,18 +295,34 @@ stimuli:
           args:
             - -c
             - |
-              import re, shlex
+              import pathlib, re, shlex
               import xml.etree.ElementTree as ET
+              project = ET.parse('per-file-exec/Contoso.Schemas.csproj').getroot()
               root = ET.parse('per-file-exec/Schemas.targets').getroot()
-              properties = {p.tag: p.text or '' for group in root.findall('PropertyGroup') for p in group}
+              properties = {p.tag: p.text or '' for group in project.findall('PropertyGroup') for p in group}
               def expand(value):
                   for _ in range(len(properties) + 1):
                       value = re.sub(r'\$\(([^)]+)\)', lambda m: properties.get(m[1], m[0]), value)
                   return value.replace('\\', '/').rstrip('/')
+              assert any(str(pathlib.PurePosixPath(expand(i.get('Project', '')))) == 'Schemas.targets'
+                         and not i.get('Condition') for i in project.findall('Import')), 'the project must import Schemas.targets'
+              properties.update({p.tag: p.text or '' for group in root.findall('PropertyGroup') for p in group})
               generators = [(target, task) for target in root.findall('Target') for task in target.findall('Exec')
                             if 'schemagen' in task.get('Command', '')]
               assert len(generators) == 1, 'use one generator invocation'
               target, task = generators[0]
+              targets = {t.get('Name'): t for t in root.findall('Target') if not t.get('Condition')}
+              pending = [name for name, t in targets.items()
+                         if {'BeforeCompile', 'CoreCompile'} & {n.strip() for n in t.get('BeforeTargets', '').split(';')}]
+              compile_path = set()
+              while pending:
+                  name = pending.pop()
+                  if name in compile_path:
+                      continue
+                  assert name in targets, 'compile dependencies must reference an existing target'
+                  compile_path.add(name)
+                  pending.extend(n.strip() for n in targets[name].get('DependsOnTargets', '').split(';') if n.strip())
+              assert target.get('Name') in compile_path, 'schema generation must run before compilation'
               command = expand(task.get('Command'))
               assert '%(' not in command, 'the generator still starts once per schema'
               args = shlex.split(command)
