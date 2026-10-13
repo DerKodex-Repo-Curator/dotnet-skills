@@ -1,11 +1,15 @@
 """Replay discovery answers and reject commands that execute tests or rebuild."""
 
 import importlib.util
+import json
 from itertools import product
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 import yaml
+import discovery_commands
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -30,6 +34,12 @@ class DiscoveryContractTests(unittest.TestCase):
         for grader in STIMULUS["graders"]:
             kind = grader["type"]
             if kind == "prompt":
+                continue
+            if kind == "program":
+                try:
+                    discovery_commands.validate_output(response)
+                except AssertionError:
+                    failed.append("program")
                 continue
             self.assertIn(kind, ("output-matches", "output-not-matches"))
             found = checker.vally_regex_found(grader["config"]["pattern"], response)
@@ -88,7 +98,7 @@ class DiscoveryContractTests(unittest.TestCase):
                 commands.insert(position, prefix + command)
                 failures = self.failed_graders("\n".join(commands))
                 self.assertNotIn("output-matches", failures)
-                self.assertIn("output-not-matches", failures)
+                self.assertIn("program", failures)
 
     def test_required_options_in_comments_do_not_satisfy_a_lane(self):
         for index, command in (
@@ -128,7 +138,7 @@ class DiscoveryContractTests(unittest.TestCase):
                 commands.insert(position, prefix + command)
                 failures = self.failed_graders("\n".join(commands))
                 self.assertNotIn("output-matches", failures)
-                self.assertIn("output-not-matches", failures)
+                self.assertIn("program", failures)
 
     def test_valid_flags_before_comments_and_quoted_hashes_pass(self):
         for quote, prefix, comment, whitespace in product(
@@ -159,9 +169,9 @@ class DiscoveryContractTests(unittest.TestCase):
 
     def test_escaped_quotes_do_not_turn_literal_flags_into_options(self):
         command = r'dotnet test VSTest.slnx --no-build --logger "console \" --list-tests "'
-        self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+        self.assertIn("program", self.failed_graders(GOLDEN + "\n" + command))
         command = r'dotnet test VSTest.slnx --list-tests --logger "console \" --no-build "'
-        self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+        self.assertIn("program", self.failed_graders(GOLDEN + "\n" + command))
 
     def test_hash_inside_an_unquoted_word_is_not_a_comment(self):
         command = COMMANDS[0].replace(
@@ -171,7 +181,7 @@ class DiscoveryContractTests(unittest.TestCase):
         for operator in (";", "&&", "||", "|", "&"):
             with self.subTest(operator=operator):
                 self.assertIn(
-                    "output-not-matches",
+                    "program",
                     self.failed_graders(GOLDEN + f"\n{command} {operator} dotnet test"),
                 )
 
@@ -186,7 +196,7 @@ class DiscoveryContractTests(unittest.TestCase):
             with self.subTest(command=command):
                 failures = self.failed_graders(GOLDEN + "\n" + command)
                 self.assertNotIn("output-matches", failures)
-                self.assertIn("output-not-matches", failures)
+                self.assertIn("program", failures)
 
     def test_compound_commands_cannot_borrow_discovery_from_another_segment(self):
         execution = "dotnet test Native.slnx --no-build"
@@ -208,7 +218,7 @@ class DiscoveryContractTests(unittest.TestCase):
                 commands.insert(position, prefix + separator.join(segments))
                 failures = self.failed_graders("\n".join(commands))
                 self.assertNotIn("output-matches", failures)
-                self.assertIn("output-not-matches", failures)
+                self.assertIn("program", failures)
 
     def test_escaped_quotes_cannot_hide_chained_execution(self):
         for value in (
@@ -220,7 +230,7 @@ class DiscoveryContractTests(unittest.TestCase):
             with self.subTest(value=value):
                 command = COMMANDS[0] + f" --results-directory {value}; dotnet test"
                 self.assertIn(
-                    "output-not-matches", self.failed_graders(GOLDEN + "\n" + command)
+                    "program", self.failed_graders(GOLDEN + "\n" + command)
                 )
 
     def test_missing_discovery_command_still_fails(self):
@@ -247,8 +257,8 @@ class DiscoveryContractTests(unittest.TestCase):
                 command = wrapper.format(command="dotnet test Native.slnx --no-build")
                 failures = self.failed_graders(GOLDEN + "\n" + prefix + command)
                 self.assertNotIn("output-matches", failures)
-                self.assertIn("output-not-matches", failures)
-        self.assertIn("output-not-matches", self.failed_graders(
+                self.assertIn("program", failures)
+        self.assertIn("program", self.failed_graders(
             GOLDEN + "\ndotnet.exe test Native.slnx --no-build"
         ))
 
@@ -265,7 +275,7 @@ class DiscoveryContractTests(unittest.TestCase):
         ):
             with self.subTest(executable=executable, wrapper=wrapper, prefix=prefix):
                 extra = f"{prefix}{wrapper}{executable} test Native.slnx --no-build"
-                self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + extra))
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
         self.assertEqual([], self.failed_graders(
             GOLDEN + '\nAvoid `/usr/bin/dotnet test Native.slnx --no-build`.'
         ))
@@ -281,7 +291,73 @@ class DiscoveryContractTests(unittest.TestCase):
             "dotnet test --solution Native.slnx --no-build -t",
         ):
             with self.subTest(command=command):
-                self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + command))
+
+    def test_unlisted_wrappers_cannot_execute_tests(self):
+        for wrapper in ("nice", "nice -n 5", "ionice -c 3", "setsid", "stdbuf -oL",
+                        "perf stat", "arbitrary-wrapper"):
+            for command in (
+                "dotnet test Native.slnx --no-build",
+                "'dotnet test Native.slnx --no-build'",
+                '"/usr/bin/dotnet" test Native.slnx --no-build',
+            ):
+                with self.subTest(wrapper=wrapper, command=command):
+                    self.assertIn(
+                        "program", self.failed_graders(GOLDEN + f"\n{wrapper} {command}")
+                    )
+
+    def test_option_values_cannot_supply_discovery_flags(self):
+        for command in (
+            'dotnet test VSTest.slnx --no-build --logger "--list-tests"',
+            'dotnet test VSTest.slnx --list-tests --results-directory "--no-build"',
+        ):
+            with self.subTest(command=command):
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + command))
+
+    def test_dynamic_shell_substitutions_cannot_hide_execution(self):
+        for value in ('"$(dotnet test)"', '"`dotnet test`"', '<(dotnet test)'):
+            with self.subTest(value=value):
+                extra = COMMANDS[0] + f" --results-directory {value}"
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
+        literal = COMMANDS[0] + " --results-directory '$(dotnet test)'"
+        self.assertEqual([], self.failed_graders(GOLDEN.replace(COMMANDS[0], literal)))
+        self.assertIn(
+            "program", self.failed_graders(GOLDEN + "\n```shell\n./run-tests.sh\n```")
+        )
+
+    def test_production_program_accepts_golden_and_rejects_wrappers_and_tampering(self):
+        config = next(
+            grader["config"] for grader in STIMULUS["graders"] if grader["type"] == "program"
+        )
+        with tempfile.TemporaryDirectory(prefix="discovery-program-") as directory:
+            root = Path(directory)
+            for item in STIMULUS["environment"]["files"]:
+                target = root / item["dest"]
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((EVAL.parent / item["src"]).read_bytes())
+            script = """
+import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { ProgramGrader } from
+  "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/program-grader.js";
+const { config, root, golden } = JSON.parse(readFileSync(0, "utf8"));
+const grader = new ProgramGrader();
+for (const extra of ["", "\\nnice dotnet test Native.slnx --no-build",
+                    "\\nionice -c 3 dotnet test Native.slnx --no-build"]) {
+  const result = await grader.grade({ config, trajectory: { workDir: root, output: golden + extra } });
+  assert.equal(result.passed, extra === "", JSON.stringify(result));
+}
+writeFileSync(join(root, ".eval", "discovery_commands.py"), "print('bypassed')");
+const result = await grader.grade({ config, trajectory: { workDir: root, output: golden } });
+assert.equal(result.passed, false, JSON.stringify(result));
+"""
+            result = subprocess.run(
+                ["node", "--input-type=module", "-e", script], cwd=ROOT,
+                input=json.dumps({"config": config, "root": str(root), "golden": GOLDEN}),
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_inline_command_mention_is_not_execution(self):
         for mention in (

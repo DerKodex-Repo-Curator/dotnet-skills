@@ -25,6 +25,8 @@ stimuli:
           dest: .eval/migration_evidence.py
         - src: ../graders/DiagnosticTimeoutContract.cs
           dest: .eval/DiagnosticTimeoutContract.txt
+        - src: ../graders/migration_cleanliness.py
+          dest: .eval/migration_cleanliness.py
     golden_patch:
       path: goldens/runner-diagnostics.patch
     golden_trajectory:
@@ -43,6 +45,15 @@ stimuli:
               has no direct equivalent here and was documented rather than
               changing pass/fail behavior.
     graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;
+            p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='f86d16f2f6ad2cb708f4d9fc2fbbc67fb51c4d3444831e6e091bda018a0bb624','Migration cleanliness verifier changed';
+            sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" --forbid-timeouts
+          expected_exit_code: 0
+          timeout: 1m
       - type: run-command
         config:
           command: >-
@@ -95,6 +106,8 @@ stimuli:
           dest: .eval/CollectionSchedulingContract.txt
         - src: ../graders/collection_report.py
           dest: .eval/collection_report.py
+        - src: ../graders/migration_cleanliness.py
+          dest: .eval/migration_cleanliness.py
     golden_patch:
       path: goldens/default-collection.patch
     golden_trajectory:
@@ -118,6 +131,15 @@ stimuli:
               initialization/cleanup bounds the resource to this sole collection's
               assembly; adding other collections would require a scope review.
     graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;
+            p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='f86d16f2f6ad2cb708f4d9fc2fbbc67fb51c4d3444831e6e091bda018a0bb624','Migration cleanliness verifier changed';
+            sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})"
+          expected_exit_code: 0
+          timeout: 1m
       - type: program
         config:
           program: python

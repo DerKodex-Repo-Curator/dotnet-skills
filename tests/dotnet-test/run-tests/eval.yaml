@@ -112,6 +112,10 @@ stimuli:
       capability: discovery-command-mode-selection
       risk: executing-tests-or-misrouting-discovery
       journey: list-built-ci-test-inventory
+    environment:
+      files:
+        - src: discovery_commands.py
+          dest: .eval/discovery_commands.py
     golden_trajectory:
       inline:
         schema_version: ATIF-v1.6
@@ -145,21 +149,17 @@ stimuli:
       - type: output-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--solution[ \t]+(?:Native\.slnx|"Native\.slnx"|''Native\.slnx'')(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))[^\r\n]*$'
-      - type: output-not-matches
+      - type: program
         config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+(?:build|run|watch)(?=[ \t\r\n]|$)|^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--(?=[ \t])(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build\b'
-      - type: output-not-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?![ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]-t(?=[ \t\r\n]|$))(?!(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))'
-      - type: output-not-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)[^\r\n]*[;&|]'
-      - type: output-not-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?(?:(?:env|command|exec|nohup|time|timeout|sudo|sh|bash|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)[ \t]+|[&.][ \t]+|[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+)[^\r\n]*\bdotnet(?:\.exe)?[ \t]+(?:test|build|run|watch)\b|^[ \t]*(?:[$>][ \t]*)?dotnet\.exe[ \t]+(?:test|build|run|watch)\b'
-      - type: output-not-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?(?:(?:env|command|exec|nohup|time|timeout|sudo|sh|bash|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)[ \t]+[^\r\n]*?|[&.][ \t]+|[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+)?(?:"(?:[^"\r\n]*[\\/])?dotnet(?:\.exe)?"|''(?:[^''\r\n]*[\\/])?dotnet(?:\.exe)?''|[^ \t''"\r\n]*[\\/]dotnet(?:\.exe)?)[ \t]+(?:test|build|run|watch)\b'
+          program: python
+          args:
+            - -c
+            - >-
+              import hashlib,pathlib;
+              p=pathlib.Path('.eval/discovery_commands.py');data=p.read_bytes();
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='7f79850d8b89286dda697ebe098df2155be7745df6febdda6bbe358c3c026c72','Command verifier changed';
+              exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
+          timeout: 1m
       - type: prompt
     rubric:
       - Gives a discovery-only command for each named solution without running tests or rebuilding
