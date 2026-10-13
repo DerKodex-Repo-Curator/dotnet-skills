@@ -508,6 +508,8 @@ stimuli:
       - { type: file-not-exists, config: { path: "fixtures/razor-pages-crud/**/*DbContext*.cs" } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Products } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Categories } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Product } }
+      - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Pages/Category } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Controllers } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Endpoints } }
       - type: run-command
@@ -653,15 +655,31 @@ stimuli:
             - |
               const crypto = require("crypto");
               const fs = require("fs");
+              const path = require("path");
               function digest(path) {
                 const data = fs.readFileSync(path);
                 return crypto.createHash("sha256").update(data).digest("hex");
               }
+              function stagedFiles(directory, base = directory) {
+                const result = [];
+                for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+                  if (entry.isDirectory() && [".git", "bin", "obj", "node_modules"].includes(entry.name)) continue;
+                  const full = path.join(directory, entry.name);
+                  if (entry.isDirectory()) result.push(...stagedFiles(full, base));
+                  else if (entry.isFile()) result.push(path.relative(base, full).replaceAll("\\", "/"));
+                }
+                return result.sort();
+              }
               const source = digest("CompleteTodoEndpoints.cs");
               const project = digest("CompleteTodoApi.csproj");
+              const files = stagedFiles(".");
               process.exit(
                 source === "d40d2d1e48974e6396fdbff3c8046bea8ce5f424834f1fe7786b09545b581d87"
                 && project === "1d58c3bb174ef3ea30ac7cc78ee70972379196cd7a22177dfcfdeeb6af9057e7"
+                && JSON.stringify(files) === JSON.stringify([
+                  "CompleteTodoApi.csproj",
+                  "CompleteTodoEndpoints.cs"
+                ])
                 ? 0 : 1);
           expected_exit_code: 0
       - type: run-command
@@ -753,23 +771,44 @@ stimuli:
             - |
               const crypto = require("crypto");
               const fs = require("fs");
+              const path = require("path");
               function digest(path) {
                 const data = fs.readFileSync(path);
                 return crypto.createHash("sha256").update(data).digest("hex");
               }
+              function stagedFiles(directory, base = directory) {
+                const result = [];
+                for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+                  if (entry.isDirectory() && [".git", "bin", "obj", "node_modules"].includes(entry.name)) continue;
+                  const full = path.join(directory, entry.name);
+                  if (entry.isDirectory()) result.push(...stagedFiles(full, base));
+                  else if (entry.isFile()) result.push(path.relative(base, full).replaceAll("\\", "/"));
+                }
+                return result.sort();
+              }
+              const root = "fixtures/non-web";
               const program = digest("fixtures/non-web/Program.cs");
               const project = digest("fixtures/non-web/Utility.csproj");
               const verifier = digest("fixtures/non-web/Verifier/Program.cs");
               const verifierProject = digest("fixtures/non-web/Verifier/Verifier.csproj");
+              const files = stagedFiles(root);
               process.exit(
                 program === "62dcf26c0762a4876649255e87a370d622bb754fe04891d68642e10a303f04d6"
                 && project === "b922ca987189c1031e4ccc3285c48e45c7ea3fb563b7a560a587250936416f43"
                 && verifier === "10bbb30e45decc1ba0e3bc3b63bc25424956eb7a5fcf8e1d30bf87e2fc673d83"
                 && verifierProject === "4de9357b55256ab43e871f5b619456ad0b25af8dd7a9cfacbd943ac470a787b4"
+                && JSON.stringify(files) === JSON.stringify([
+                  "CsvReportWriter.cs",
+                  "Program.cs",
+                  "Utility.csproj",
+                  "Verifier/Program.cs",
+                  "Verifier/Verifier.csproj"
+                ])
                 ? 0 : 1);
           expected_exit_code: 0
       - type: prompt
     rubric:
+      - The ASP.NET data-scaffolding skill stayed dormant for this non-web class-library request
       - Recognized that the target is a plain class library and kept the implementation within that non-web scope
       - Kept the response focused on the requested class-library behavior rather than proposing or performing ASP.NET Core scaffolding
       - Added only the requested plain C# writer and preserved the existing ReportWriter

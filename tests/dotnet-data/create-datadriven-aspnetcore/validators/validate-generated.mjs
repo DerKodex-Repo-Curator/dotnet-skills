@@ -235,6 +235,81 @@ function checkContext(name, entities, allowFactory = true) {
   fail(hasMigration(...entities), `A real migration for ${entities.join(" and ")} is missing.`);
 }
 
+function responseMetadataStatuses(statement) {
+  const statuses = new Set();
+  const statusFromExpression = (text) => {
+    const expression = stripOuterParentheses(text);
+    const constant = expression.match(
+      /^(?:global::)?(?:Microsoft\.AspNetCore\.Http\.)?StatusCodes\.Status([1-5]\d{2})[A-Za-z0-9_]*$/,
+    );
+    if (constant) return Number(constant[1]);
+    const literal = expression.match(/^([1-5]\d{2})$/);
+    return literal ? Number(literal[1]) : null;
+  };
+  const statusFromArguments = (argumentsText) => {
+    const args = splitTopLevelArguments(argumentsText);
+    const named = args.find((argument) => /^\s*statusCode\s*[:=]/i.test(argument));
+    if (named) {
+      return statusFromExpression(named.replace(/^\s*statusCode\s*[:=]\s*/i, ""));
+    }
+    for (const argument of args) {
+      if (/^\s*[A-Za-z_]\w*\s*[:=]/.test(argument)) continue;
+      const status = statusFromExpression(argument);
+      if (status !== null) return status;
+    }
+    return null;
+  };
+
+  for (const match of statement.matchAll(
+    /\.(ProducesValidationProblem|ProducesProblem|Produces)(?=\s*(?:<|\())/g,
+  )) {
+    const openParen = statement.indexOf("(", match.index + match[0].length);
+    if (openParen < 0) continue;
+    const closeParen = balancedEnd(statement, openParen, "(", ")");
+    if (closeParen < 0) continue;
+    const argumentsText = statement.slice(openParen + 1, closeParen);
+    const beforeArguments = statement.slice(match.index, openParen);
+    const status = statusFromArguments(argumentsText);
+    if (status !== null) {
+      statuses.add(status);
+    } else if (match[1] === "ProducesValidationProblem") {
+      statuses.add(400);
+    } else if (match[1] === "ProducesProblem" && argumentsText.trim() === "") {
+      statuses.add(500);
+    } else if (
+      match[1] === "Produces" &&
+      /<[\s\S]+>/.test(beforeArguments) &&
+      splitTopLevelArguments(argumentsText).every((argument) =>
+        /^\s*[A-Za-z_]\w*\s*[:=]/.test(argument))
+    ) {
+      statuses.add(200);
+    }
+  }
+
+  for (const match of statement.matchAll(/ProducesResponseType(?:Attribute)?\s*\(/g)) {
+    const openParen = statement.indexOf("(", match.index);
+    const closeParen = balancedEnd(statement, openParen, "(", ")");
+    if (closeParen < 0) continue;
+    const status = statusFromArguments(statement.slice(openParen + 1, closeParen));
+    if (status !== null) statuses.add(status);
+  }
+  for (const match of statement.matchAll(/Responses\s*\[\s*["']([1-5]\d{2})["']\s*\]/g)) {
+    statuses.add(Number(match[1]));
+  }
+  return statuses;
+}
+
+function requireResponseStatuses(record, label, requirements) {
+  const statuses = responseMetadataStatuses(record.statement);
+  for (const requirement of requirements) {
+    const accepted = Array.isArray(requirement) ? requirement : [requirement];
+    fail(
+      accepted.some((status) => statuses.has(status)),
+      `${label} ${record.verb} ${record.route || "(group root)"} lacks response metadata for ${accepted.join(" or ")}.`,
+    );
+  }
+}
+
 function checkMetadata(records, label) {
   for (const record of records) {
     const routeLabel = `${record.verb} ${record.route || "(group root)"}`;
@@ -243,7 +318,10 @@ function checkMetadata(records, label) {
       /\.WithDescription\s*\(|\bDescription\s*=/.test(record.statement),
       `${label} ${routeLabel} lacks an OpenAPI description.`,
     );
-    fail(/\.Produces(?:<|\s*\()/.test(record.statement), `${label} ${routeLabel} lacks response metadata.`);
+    fail(
+      responseMetadataStatuses(record.statement).size > 0,
+      `${label} ${routeLabel} lacks response metadata.`,
+    );
     fail(
       /\.WithTags\s*\(/.test(record.statement + record.tags),
       `${label} ${routeLabel} lacks OpenAPI tags.`,
@@ -274,17 +352,20 @@ function checkApiCrud(records, base, entity, options = {}) {
   fail(Boolean(remove), `${entity} delete route is missing.`);
 
   if (list) fail(/(?:ToList|ToArray)Async\s*\(/.test(list.behavior), `${entity} list does not read asynchronously.`);
+  if (list) requireResponseStatuses(list, entity, [200]);
   if (details) {
     fail(
       /(?:Find|FirstOrDefault|SingleOrDefault)Async\s*\(/.test(details.behavior),
       `${entity} by-id does not perform an async lookup.`,
     );
     fail(/NotFound\s*\(/.test(details.behavior), `${entity} by-id does not handle not-found.`);
+    requireResponseStatuses(details, entity, [200, 404]);
   }
   if (create) {
     fail(/\.(?:Add|AddAsync)\s*\(/.test(create.behavior), `${entity} create does not add an entity.`);
     fail(/SaveChangesAsync\s*\(/.test(create.behavior), `${entity} create does not save asynchronously.`);
     fail(/Created(?:AtRoute|AtAction)?\s*\(/.test(create.behavior), `${entity} create does not return Created.`);
+    requireResponseStatuses(create, entity, [201, [400, 422]]);
   }
   if (update) {
     const submittedEntity =
@@ -304,6 +385,7 @@ function checkApiCrud(records, base, entity, options = {}) {
     );
     fail(/SaveChangesAsync\s*\(/.test(update.behavior), `${entity} update does not save asynchronously.`);
     fail(/NotFound\s*\(/.test(update.behavior), `${entity} update does not handle not-found.`);
+    requireResponseStatuses(update, entity, [[200, 204], 404, [400, 422]]);
   }
   if (remove) {
     fail(
@@ -314,19 +396,24 @@ function checkApiCrud(records, base, entity, options = {}) {
     fail(/SaveChangesAsync\s*\(/.test(remove.behavior), `${entity} delete does not save asynchronously.`);
     fail(/NotFound\s*\(/.test(remove.behavior), `${entity} delete does not handle not-found.`);
     fail(/NoContent\s*\(/.test(remove.behavior), `${entity} delete does not return NoContent.`);
+    requireResponseStatuses(remove, entity, [204, 404]);
   }
 
   if (options.validation) {
     const field = options.validationField ?? "(?:Title|Name)";
     for (const [operation, record] of [["create", create], ["update", update]]) {
       if (!record) continue;
+      const requestParameter =
+        parameterNameForType(record.handlerSignature, options.validationType ?? "") ||
+        parameterNameForType(record.handlerSignature, entity);
       fail(
         /(?:ValidationProblem|BadRequest)\s*\(/.test(record.behavior) &&
         any(
           record.behavior,
           new RegExp(`IsNullOrWhiteSpace\\s*\\([^)]*${field}`, "i"),
           /TryValidateObject\s*\(/,
-        ),
+        ) &&
+        nonEmptyValidationErrorsReachResponse(record.behavior, field, requestParameter),
         `${entity} ${operation} does not enforce required text validation.`,
       );
     }
@@ -364,7 +451,9 @@ function validateRazorPages() {
 
   const surfaces = ["Index", "Details", "Create", "Edit", "Delete"];
   for (const entity of ["Products", "Categories"]) {
-    const singular = entity.slice(0, -1);
+    const singular = entity.endsWith("ies")
+      ? `${entity.slice(0, -3)}y`
+      : entity.slice(0, -1);
     const surface = {};
     const model = {};
     for (const action of surfaces) {
@@ -395,8 +484,8 @@ function validateRazorPages() {
       fail(test(model[action], /\[BindProperty\]/, /OnPostAsync\s*\(/, /ModelState\.IsValid/), `${entity} ${action} lacks bound validation-aware POST behavior.`);
     }
     fail(test(model.Create, /\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/), `${entity} Create does not add and save.`);
-    fail(test(model.Edit, /OnGetAsync\s*\(/, /(?:Find|FirstOrDefault|SingleOrDefault)Async\s*\(/, /SaveChangesAsync\s*\(/), `${entity} Edit lacks async read/update/save.`);
-    fail(any(model.Edit, /\.Update\s*\(/, /EntityState\.Modified/, new RegExp(`\\b${singular}\\.\\w+\\s*=`)), `${entity} Edit does not update the entity.`);
+    fail(test(model.Edit, /OnGetAsync\s*\(/, /(?:Find|FirstOrDefault|SingleOrDefault)Async\s*\(/), `${entity} Edit lacks async read behavior.`);
+    fail(validRazorPostEdit(model.Edit, singular), `${entity} Edit POST does not persist submitted values.`);
 
     fail(test(surface.Delete, /<form\b[^>]*method\s*=\s*["']post/i, /type\s*=\s*["']submit/i), `${entity} Delete has no confirmation form.`);
     fail(test(model.Delete, /OnGetAsync\s*\(/, /OnPostAsync\s*\(/, /\.Remove\s*\(/, /SaveChangesAsync\s*\(/), `${entity} Delete lacks async read/delete/save behavior.`);
@@ -493,7 +582,11 @@ function validateController(entity) {
   fail(Boolean(editPost), `${plural} Edit POST is missing.`);
   if (editPost) {
     fail(/\[ValidateAntiForgeryToken\]/.test(editPost.prefix), `${plural} Edit POST lacks anti-forgery validation.`);
-    fail(test(editPost.body, /ModelState\.IsValid/, /\.(?:Update|Attach)\s*\(/, /SaveChangesAsync\s*\(/, /NotFound\s*\(/, /View\s*\(/), `${plural} Edit POST lacks validation/update/save/not-found behavior.`);
+    fail(
+      test(editPost.body, /ModelState\.IsValid/, /SaveChangesAsync\s*\(/, /NotFound\s*\(/, /View\s*\(/) &&
+        validMvcPostEdit(editPost, entity),
+      `${plural} Edit POST lacks validation/submitted-value update/save/not-found behavior.`,
+    );
   }
 
   const deletes = [
@@ -674,6 +767,128 @@ function hasTargetEntityMutation(text, entity, submittedEntity) {
       referencesAnyIdentifier(argument, submittedValues)));
 }
 
+function boundPropertyName(text, entity) {
+  const escapedEntity = entity.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.match(
+    new RegExp(
+      `\\[BindProperty(?:\\([^)]*\\))?\\][\\s\\S]{0,180}?\\b${escapedEntity}\\s+(@?[A-Za-z_]\\w*)\\b`,
+    ),
+  )?.[1] ?? "";
+}
+
+function marksSubmittedEntityModified(text, submittedNames) {
+  if (submittedNames.size === 0) return false;
+  if (
+    methodInvocations(text).some((invocation) =>
+      invocation.name === "Update" &&
+      invocation.arguments.some((argument) =>
+        referencesAnyIdentifier(argument, submittedNames)))
+  ) {
+    return true;
+  }
+
+  for (const name of submittedNames) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (
+      new RegExp(
+        `\\b(?:Attach|Entry)\\s*\\(\\s*${escaped}\\s*\\)\\s*\\.\\s*State\\s*=\\s*EntityState\\.Modified\\b`,
+      ).test(text)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function associatedAsyncTargetVariables(text, entity, requestNames) {
+  const set = entitySetPattern(entity);
+  const lookup = new RegExp(
+    `\\.${set}\\b[^;]{0,600}?\\.(?:Find|FirstOrDefault|SingleOrDefault)Async\\s*\\(`,
+    "gi",
+  );
+  const variables = [];
+  for (const match of text.matchAll(lookup)) {
+    const start = statementStart(text, match.index);
+    const statement = statementAt(text, start);
+    const relativeLookup = match.index - start;
+    const openParen = relativeLookup + match[0].lastIndexOf("(");
+    const closeParen = balancedEnd(statement, openParen, "(", ")");
+    const awaitIndex = statement.lastIndexOf("await", relativeLookup);
+    if (openParen < 0 || closeParen < 0 || awaitIndex < 0) continue;
+    const argumentsText = statement.slice(openParen + 1, closeParen);
+    if (!referencesAnyIdentifier(argumentsText, requestNames)) continue;
+    const variable = assignedAwaitResult(statement, awaitIndex);
+    if (variable && variable !== "_") variables.push(variable);
+  }
+  return [...new Set(variables)];
+}
+
+function loadedTargetReceivesSubmittedValues(text, entity, submittedNames, requestNames) {
+  if (submittedNames.size === 0 || requestNames.size === 0) return false;
+  const targets = associatedAsyncTargetVariables(text, entity, requestNames);
+  for (const target of targets) {
+    const escaped = target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const submittedSources = new Set(submittedNames);
+    submittedSources.delete(target);
+    const assignments = [...text.matchAll(
+      new RegExp(`\\b${escaped}\\s*\\.\\s*[A-Za-z_]\\w*\\s*=(?!=|>)\\s*([^;]+);`, "g"),
+    )].filter((assignment) =>
+      referencesAnyIdentifier(assignment[1], submittedSources));
+    if (assignments.length === 0) continue;
+    const firstAssignment = Math.min(...assignments.map((assignment) => assignment.index));
+    const handlesMissingTarget = parsedIfStatements(text).some((node) => {
+      if (node.start >= firstAssignment || !referencesIdentifier(node.condition, target)) {
+        return false;
+      }
+      const nullResult = conditionResultForNullTarget(node.condition, target);
+      const missingBranch = nullResult === null
+        ? null
+        : (nullResult ? node.thenText : node.elseText);
+      return missingBranch !== null && returnsNotFoundResult(missingBranch);
+    });
+    if (handlesMissingTarget) return true;
+  }
+  return false;
+}
+
+function validRazorPostEdit(text, entity) {
+  const post = methodsNamed(text, "OnPostAsync")[0] ?? methodsNamed(text, "OnPost")[0];
+  if (!post || !/SaveChangesAsync\s*\(/.test(post.body)) return false;
+  const submitted = boundPropertyName(text, entity);
+  if (!submitted) return false;
+  const submittedNames = requestDerivedNames(post.body, submitted);
+  if (marksSubmittedEntityModified(post.body, submittedNames)) return true;
+
+  const requestNames = new Set([
+    ...submittedNames,
+    ...methodParameterNames(post.signature),
+  ].filter(Boolean));
+  return loadedTargetReceivesSubmittedValues(
+    post.body,
+    entity,
+    submittedNames,
+    requestNames,
+  );
+}
+
+function validMvcPostEdit(post, entity) {
+  const submitted = parameterNameForType(post.signature, entity);
+  if (!submitted) return false;
+  const submittedNames = requestDerivedNames(post.body, submitted);
+  if (marksSubmittedEntityModified(post.body, submittedNames)) return true;
+
+  const requestNames = new Set([
+    ...submittedNames,
+    ...methodParameterNames(post.signature),
+  ].filter(Boolean));
+  return loadedTargetReceivesSubmittedValues(
+    post.body,
+    entity,
+    submittedNames,
+    requestNames,
+  );
+}
+
 function requestDerivedNames(text, submittedEntity) {
   const names = new Set([submittedEntity]);
   let changed = true;
@@ -749,6 +964,35 @@ function errorResponse(text) {
   return /\b(?:NotFound|ValidationProblem|BadRequest|UnprocessableEntity)\s*\(/.test(text);
 }
 
+function isNotFoundExpression(text) {
+  const expression = stripOuterParentheses(text);
+  return /^(?:(?:[A-Za-z_]\w*)\s*\.\s*)*NotFound\s*\(/.test(expression);
+}
+
+function returnsNotFoundResult(text) {
+  const assignedResults = [];
+  for (const assignment of text.matchAll(
+    /\b(?:var|[A-Za-z_]\w*(?:\s*<[^;=]+>)?\??)\s+(@?[A-Za-z_]\w*)\s*=\s*([^;]+);/g,
+  )) {
+    if (assignment[1] !== "_" && isNotFoundExpression(assignment[2])) {
+      assignedResults.push({ name: assignment[1], index: assignment.index });
+    }
+  }
+
+  for (const returned of text.matchAll(/\breturn\s+([^;]+);/g)) {
+    if (isNotFoundExpression(returned[1])) return true;
+    const local = stripOuterParentheses(returned[1]).match(/^(@?[A-Za-z_]\w*)$/)?.[1];
+    if (
+      local &&
+      assignedResults.some((assignment) =>
+        assignment.name === local && assignment.index < returned.index)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function changedErrorStates(text) {
   return new Set([
     ...[...text.matchAll(/\b(@?[A-Za-z_]\w*)\s*\[[^\]]+\]\s*=/g)].map((match) => match[1]),
@@ -802,6 +1046,66 @@ function stripOuterParentheses(text) {
   return result;
 }
 
+function conditionResultForNullTarget(condition, variable) {
+  let expression = stripOuterParentheses(condition);
+  if (expression.startsWith("!")) {
+    const nested = conditionResultForNullTarget(
+      stripOuterParentheses(expression.slice(1)),
+      variable,
+    );
+    return nested === null ? null : !nested;
+  }
+
+  expression = expression.replace(/\s+/g, "");
+  const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (
+    new RegExp(`^(?:${escaped}(?:==|is)null|null==${escaped})$`).test(expression)
+  ) return true;
+  if (
+    new RegExp(`^(?:${escaped}(?:!=|isnot)null|null!=${escaped})$`).test(expression)
+  ) return false;
+  return null;
+}
+
+function conditionResultForNullOrWhiteSpace(
+  condition,
+  requiredField = "",
+  requestNames = new Set(),
+) {
+  let expression = stripOuterParentheses(condition);
+  if (expression.startsWith("!")) {
+    const nested = conditionResultForNullOrWhiteSpace(
+      stripOuterParentheses(expression.slice(1)),
+      requiredField,
+      requestNames,
+    );
+    return nested === null ? null : !nested;
+  }
+
+  const call = expression.match(
+    /^(?:(?:global::)?(?:System\.)?(?:string|String)\s*\.\s*)?IsNullOrWhiteSpace\s*\(/,
+  );
+  if (!call) return null;
+  const openParen = expression.indexOf("(", call.index);
+  const closeParen = balancedEnd(expression, openParen, "(", ")");
+  if (closeParen < 0) return null;
+  const argument = expression.slice(openParen + 1, closeParen);
+  if (requiredField) {
+    const escapedField = requiredField.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const referencesRequiredField = [...requestNames].some((requestName) => {
+      const escapedRequest = requestName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(
+        `(?:^|[^A-Za-z0-9_@])${escapedRequest}\\s*\\.\\s*${escapedField}(?![A-Za-z0-9_])`,
+      ).test(argument);
+    });
+    if (!referencesRequiredField) return null;
+  }
+  const suffix = expression.slice(closeParen + 1).replace(/\s+/g, "").toLowerCase();
+  if (["", "==true", "istrue", "!=false", "isnotfalse"].includes(suffix)) return true;
+  if (["==false", "isfalse", "!=true", "isnottrue"].includes(suffix)) return false;
+  return null;
+}
+
 function conditionResultForNonEmptyCollection(condition, variable) {
   const escaped = variable.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   let expression = stripOuterParentheses(condition);
@@ -837,6 +1141,97 @@ function conditionResultForNonEmptyCollection(condition, variable) {
     new RegExp(`^${count}is(?:0|<=0|<1)$`).test(expression)
   ) return false;
   return null;
+}
+
+function validationErrorResponseUses(text, variable) {
+  return methodInvocations(text).some((invocation) =>
+    /^(?:ValidationProblem|BadRequest|UnprocessableEntity)$/.test(invocation.name) &&
+    invocation.arguments.some((argument) => referencesIdentifier(argument, variable)));
+}
+
+function requiredValidationErrorStates(text, requiredField, requestNames) {
+  const states = new Set();
+  for (const node of parsedIfStatements(text)) {
+    const whitespaceResult = conditionResultForNullOrWhiteSpace(
+      node.condition,
+      requiredField,
+      requestNames,
+    );
+    if (whitespaceResult === null) continue;
+    const requiredBranch = whitespaceResult ? node.thenText : node.elseText;
+    for (const state of changedErrorStates(requiredBranch)) states.add(state);
+  }
+  for (const invocation of methodInvocations(text)) {
+    if (invocation.name !== "TryValidateObject" || invocation.arguments.length < 3) continue;
+    if (!referencesAnyIdentifier(invocation.arguments[0], requestNames)) continue;
+    const resultCollection = invocation.arguments[2].match(/^\s*(@?[A-Za-z_]\w*)\s*$/)?.[1];
+    if (resultCollection) states.add(resultCollection);
+  }
+  return states;
+}
+
+function requiredValidationErrorCollections(text, requiredField, requestParameter) {
+  const requestNames = new Set([requestParameter].filter(Boolean));
+  const collections = requiredValidationErrorStates(text, requiredField, requestNames);
+
+  for (const assignment of text.matchAll(
+    /\b(?:var|[A-Za-z_]\w*(?:\s*<[^;=]+>)?\??)\s+(@?[A-Za-z_]\w*)\s*=\s*(?:await\s+)?([A-Za-z_]\w*)\s*\(([^;]*)\)\s*;/g,
+  )) {
+    const argumentsList = splitTopLevelArguments(assignment[3]);
+    const requestArgumentIndex = argumentsList.findIndex((argument) =>
+      referencesAnyIdentifier(argument, requestNames));
+    if (requestArgumentIndex < 0) continue;
+    for (const method of methodsNamed(text, assignment[2])) {
+      if (!/\b(?:IsNullOrWhiteSpace|TryValidateObject)\s*\(/.test(method.body)) continue;
+      const methodRequestParameter = methodParameterNames(method.signature)[requestArgumentIndex];
+      if (!methodRequestParameter) continue;
+      const changed = requiredValidationErrorStates(
+        method.body,
+        requiredField,
+        new Set([methodRequestParameter]),
+      );
+      if (
+        [...changed].some((collection) =>
+          new RegExp(`\\breturn\\s+${collection.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*;`).test(method.body))
+      ) {
+        collections.add(assignment[1]);
+      }
+    }
+  }
+
+  for (const collection of [...collections]) {
+    for (const alias of requestDerivedNames(text, collection)) collections.add(alias);
+  }
+  return collections;
+}
+
+function nonEmptyValidationErrorsReachResponse(text, requiredField, requestParameter) {
+  const validationCollections = requiredValidationErrorCollections(
+    text,
+    requiredField,
+    requestParameter,
+  );
+  for (const node of parsedIfStatements(text)) {
+    const variables = new Set([
+      ...[...node.condition.matchAll(/\b(@?[A-Za-z_]\w*)\s*\.\s*Count\b/g)]
+        .map((match) => match[1]),
+      ...[...node.condition.matchAll(/\b(@?[A-Za-z_]\w*)\s*\.\s*Any\s*\(\s*\)/g)]
+        .map((match) => match[1]),
+    ]);
+    for (const variable of variables) {
+      if (!validationCollections.has(variable)) continue;
+      const nonEmptyResult = conditionResultForNonEmptyCollection(node.condition, variable);
+      if (nonEmptyResult === null) continue;
+      const nonEmptyBranch = nonEmptyResult ? node.thenText : node.elseText;
+      if (validationErrorResponseUses(nonEmptyBranch, variable)) return true;
+      if (!nonEmptyResult && !node.elseText) {
+        const fallthrough = text.slice(node.end)
+          .split(/\n\s*(?:public|private|protected|internal)\s+/)[0];
+        if (validationErrorResponseUses(fallthrough, variable)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function hasSubmittedCategoryLookup(text, requestParameter) {

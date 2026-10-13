@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 
 const [contract, rootArg] = process.argv.slice(2);
 const contracts = new Set(["razor-static", "blazor-static"]);
@@ -20,6 +21,7 @@ function visit(directory) {
     if (entry.isDirectory()) visit(full);
     else files.push({
       rel: path.relative(root, full).replaceAll("\\", "/"),
+      bytes: fs.readFileSync(full),
       text: fs.readFileSync(full, "utf8"),
     });
   }
@@ -47,14 +49,21 @@ forbidText(project, /EntityFrameworkCore|Microsoft\.Data\.Sqlite/i, "data-access
 forbidText(joined, /\b(?:DbContext|DbSet)\b|AddDbContext(?:Factory)?\s*<|UseSqlite\s*\(|EnsureCreated\s*\(/, "data-access code is forbidden");
 
 if (contract === "razor-static") {
-  forbidPath(/(?:^|\/)Pages\/(?:Products|Categories)(?:\/|$)/i, "Product or Category CRUD pages are forbidden");
+  forbidPath(
+    /(?:^|\/)Pages\/(?:Products?|Categor(?:y|ies))(?:\/|$)/i,
+    "Product or Category CRUD pages are forbidden",
+  );
 } else {
   forbidPath(/(?:^|\/)Components\/Pages\/(?:Employees?|Departments?)(?:[./]|\/|$)/i, "Employee or Department CRUD components are forbidden");
   const reports = files.find((file) => /(?:^|\/)Components\/Pages\/Reports\.razor$/i.test(file.rel))?.text ?? "";
   forbidText(reports, /@rendermode\b/i, "the static Reports component must not add a render mode");
-  const serverServices = (program.match(/AddInteractiveServerComponents\s*\(/g) ?? []).length;
-  const serverModes = (program.match(/AddInteractiveServerRenderMode\s*\(/g) ?? []).length;
-  if (serverServices !== 1 || serverModes !== 1) failures.push("the existing interactive server chains must be preserved exactly once");
+  const programFile = files.find((file) => file.rel === "Program.cs");
+  const programHash = programFile
+    ? crypto.createHash("sha256").update(programFile.bytes).digest("hex")
+    : "";
+  if (programHash !== "8ecc472ed8e07e0c2e7a7773b3d06e475577ed722673500d7db9837683dfdb9a") {
+    failures.push("Program.cs must remain byte-for-byte identical to the staged interactive host");
+  }
   forbidText(program, /AddInteractiveWebAssemblyComponents|AddInteractiveWebAssemblyRenderMode|AddInteractiveAutoRenderMode/i, "new render modes are forbidden");
 }
 
