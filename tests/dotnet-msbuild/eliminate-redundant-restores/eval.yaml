@@ -34,6 +34,14 @@ stimuli:
             source: agent
             message: |-
               The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the second restore is redundant. dotnet msbuild does not accept --no-restore, so the fix is -restore:false on that one invocation. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it. The Test step already uses --no-build, which implies --no-restore.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Restore | Explicit | No | Keep | Restores Contoso.slnx first |
+              | Build | Rsp | Yes | Add -restore:false | Same solution and restore inputs; no package changes |
+              | Test | No | Yes | Keep --no-build | Runs the solution's Release build without restoring |
+
+              Verdict: removed 1 of 2 restores, first restore kept
     graders:
       - type: file-contains
         config:
@@ -58,6 +66,9 @@ stimuli:
                 throw new Error('--no-restore is not a dotnet msbuild switch');
               }
           expected_exit_code: 0
+      - type: output-matches
+        config: &restore_report
+          pattern: '(?im)^[ \t]*\|[^\r\n]*\bStep\b[^\r\n]*\|[^\r\n]*\bRestores today\b[^\r\n]*\|[^\r\n]*Covered by an earlier restore\?[^\r\n]*\|[^\r\n]*\bChange\b[^\r\n]*\|[^\r\n]*\bEvidence\b[^\r\n]*\|[ \t]*\r?\n[ \t]*\|(?:[ \t]*:?-+:?[ \t]*\|){5}[ \t]*\r?\n(?:[ \t]*\|(?:[^|\r\n]+\|){5}[ \t]*\r?\n)+[\s\S]*?^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*(?:removed \d+ of \d+ restores, first restore kept|no redundant restores)\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that the Build step restores again because Directory.Build.rsp contains -restore and applies to every
@@ -93,6 +104,15 @@ stimuli:
             source: agent
             message: |-
               The explicit restore covers Contoso.slnx and the projects it lists. The solution build is therefore safe to run with --no-restore. tools/Packager/Packager.csproj is not listed in the solution and nothing in the solution references it, so the restore never produced a project.assets.json for it. Building it with --no-restore would fail with NETSDK1004. I left that command restoring on its own, and the test step already uses --no-build, which implies --no-restore. Not validated: I could not run the pipeline here.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Restore solution | Explicit | No | Keep | Restores the solution's ProjectReference closure |
+              | Build solution | Implicit | Yes | Add --no-restore | Same solution and inputs |
+              | Build Packager | Implicit | No | Keep restore | No solution project references Packager |
+              | Test | No | Yes | Keep --no-build | Uses the solution's Release build |
+
+              Verdict: removed 1 of 3 restores, first restore kept
     graders:
       - type: run-command
         config:
@@ -103,9 +123,16 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('uncovered-project/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
-              const sol = steps.find(l => /^dotnet build\b/.test(l) && /Contoso\.slnx/.test(l));
+              if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
+              const solIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && /Contoso\.slnx\b/.test(l));
+              const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
+              const testIndex = steps.findIndex(l => /^dotnet test\b/.test(l) && /Contoso\.slnx\b/.test(l));
               const pkIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && /Packager/.test(l));
-              if (!sol || !/--no-restore/.test(sol)) throw new Error('the solution build still restores');
+              if (solIndex < 0 || !/--no-restore/.test(steps[solIndex])) throw new Error('the solution build is missing or still restores');
+              if (restoreIndex < 0 || restoreIndex > solIndex) throw new Error('the solution must be restored before its build');
+              if (testIndex < 0 || testIndex < solIndex || !/--no-build/.test(steps[testIndex])) {
+                throw new Error('the solution must still be tested with --no-build after its build');
+              }
               if (pkIndex < 0) throw new Error('the Packager build step is missing');
               if (/--no-restore/.test(steps[pkIndex])) {
                 const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Packager/.test(l));
@@ -118,6 +145,8 @@ stimuli:
       - type: output-matches
         config:
           pattern: Packager
+      - type: output-matches
+        config: *restore_report
       - type: prompt
     rubric:
       - Added --no-restore to the solution build, which the explicit restore covers
@@ -151,6 +180,14 @@ stimuli:
             source: agent
             message: |-
               The publish restores again because the first restore ran without a runtime identifier and publish asks for linux-x64 and self-contained. Simply adding --no-restore to publish would fail with NETSDK1047, since the assets file has no net10.0/linux-x64 target. The fix is to give the single restore the inputs publish uses: restore with -r linux-x64 and -p:SelfContained=true, then build and publish with --no-restore. A restore with a runtime identifier still produces the plain framework target, so the build step keeps working. Not validated on a clean machine: please run build.sh from a clean checkout.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Restore Gateway | Explicit | No | Add -r linux-x64 and -p:SelfContained=true | Matches publish's restore inputs |
+              | Build Gateway | No | Yes | Keep --no-restore | Restore also produces the framework target |
+              | Publish Gateway | Implicit | Not with the original inputs | Add --no-restore; keep RID and self-contained output | Updated restore covers net10.0/linux-x64 and SelfContained=true |
+
+              Verdict: removed 1 of 2 restores, first restore kept
     graders:
       - type: run-command
         config:
@@ -161,23 +198,37 @@ stimuli:
               const fs = require('fs');
               const cmds = fs.readFileSync('rid-mismatch/build.sh', 'utf8').split(/\r?\n/)
                 .map(l => l.trim()).filter(l => /^dotnet\s/.test(l));
-              if (!cmds.some(l => /^dotnet publish\b/.test(l))) throw new Error('the publish command was removed');
+              const gateway = c => /(?:^|\s)(?:\.\/)?src\/Gateway\/Gateway\.csproj(?:\s|$)/.test(c);
+              const rid = c => /(?:^|\s)(-r|--runtime)[ =]+linux-x64(?:\s|$)/.test(c);
+              const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
+              const buildIndex = cmds.findIndex(c => /^dotnet build\b/.test(c) && gateway(c));
+              const publishIndex = cmds.findIndex(c => /^dotnet publish\b/.test(c) && gateway(c));
+              if (buildIndex < 0 || publishIndex < 0 || buildIndex > publishIndex) {
+                throw new Error('Gateway must still be built before it is published');
+              }
+              if (![cmds[buildIndex], cmds[publishIndex]].every(c => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(c))) {
+                throw new Error('the build and publish must keep the Release configuration');
+              }
+              if (!rid(cmds[publishIndex]) || !selfContained(cmds[publishIndex])) {
+                throw new Error('publish must keep linux-x64 and self-contained output');
+              }
               let restored = null;
               let count = 0;
               for (const c of cmds) {
                 const skips = /--no-restore|--no-build/.test(c);
-                const rid = /(-r|--runtime)[ =]+linux-x64/.test(c);
                 if (/^dotnet restore\b/.test(c) || !skips) {
                   count++;
-                  restored = { rid };
+                  restored = { gateway: gateway(c), rid: rid(c), selfContained: selfContained(c) };
                 } else if (!restored) {
                   throw new Error('a command skips restore before anything restored: ' + c);
-                } else if (/^dotnet publish\b/.test(c) && !restored.rid) {
-                  throw new Error('publish skips restore but the restore had no linux-x64 runtime identifier: ' + c);
+                } else if (/^dotnet publish\b/.test(c) && (!restored.gateway || !restored.rid || !restored.selfContained)) {
+                  throw new Error('publish skips restore without a Gateway restore carrying linux-x64 and SelfContained=true: ' + c);
                 }
               }
-              if (count > 1) throw new Error('restore still runs ' + count + ' times');
+              if (count !== 1) throw new Error('restore runs ' + count + ' times instead of once');
           expected_exit_code: 0
+      - type: output-matches
+        config: *restore_report
       - type: prompt
     rubric:
       - Explained that the later restore happens because the earlier restore did not include the runtime identifier that
@@ -216,6 +267,15 @@ stimuli:
             source: agent
             message: |-
               The Build step restores again because the tool edits Contoso.Core.csproj after the first restore: the new PackageReference is not in project.assets.json, so the earlier restore is stale and a --no-restore build would miss the analyzer. The solution only needs one restore, and it must run after the tool. I moved the explicit restore below the tool step and added --no-restore to the build. The test step already uses --no-build. Not validated: run the pipeline from a clean checkout to confirm.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Analyzer tool | Implicit (tool only) | No | Keep; run before solution restore | Edits Core's PackageReference without restoring Core |
+              | Restore solution | Explicit | No | Move after the tool | Includes the newly added analyzer package |
+              | Build solution | Implicit | No; the original restore becomes stale | Add --no-restore after the moved restore | No package changes after the new restore |
+              | Test | No | Yes | Keep --no-build | Uses the solution's Release build |
+
+              Verdict: removed 1 of 3 restores, first restore kept
     graders:
       - type: run-command
         config:
@@ -228,6 +288,12 @@ stimuli:
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
               const gen = steps.findIndex(l => /AddAnalyzer/.test(l));
               if (gen < 0) throw new Error('the analyzer tool step was removed');
+              const build = steps.findIndex(l => /^dotnet build\b/.test(l) && /Contoso\.slnx\b/.test(l));
+              const test = steps.findIndex(l => /^dotnet test\b/.test(l) && /Contoso\.slnx\b/.test(l));
+              if (build < 0 || test < 0) throw new Error('the solution build and test steps must remain');
+              if (build < gen || test < build || !/--no-build/.test(steps[test])) {
+                throw new Error('the solution must be built after the tool, then tested with --no-build');
+              }
               const restoring = [];
               steps.forEach((l, i) => {
                 if (/Contoso\.slnx/.test(l) && (/^dotnet restore\b/.test(l) ||
@@ -241,6 +307,8 @@ stimuli:
                 }
               });
           expected_exit_code: 0
+      - type: output-matches
+        config: *restore_report
       - type: prompt
     rubric:
       - Identified that the tool edits package references after the first restore, so that restore is stale for the build
@@ -275,6 +343,16 @@ stimuli:
             source: agent
             message: |-
               dotnet test restores and builds before it runs tests, so each of the three steps repeats that setup even though the earlier restore covers the same solution. Adding --no-restore alone would still rebuild three times. I added one build step for the solution with --no-restore in the same Release configuration, and every test step now uses --no-build, which also implies --no-restore. The three test steps stay separate. Not validated: I could not run the pipeline here, so confirm the stage passes from a clean checkout.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Restore solution | Explicit | No | Keep | Covers all three test projects |
+              | Build solution (new) | No | Yes | Build once in Release with --no-restore | Contoso.slnx includes every test project |
+              | Unit tests | Implicit | Yes | Add --no-build | Reuses the solution's Release build |
+              | Integration tests | Implicit | Yes | Add --no-build | Reuses the solution's Release build |
+              | Contract tests | Implicit | Yes | Add --no-build | Reuses the solution's Release build |
+
+              Verdict: removed 3 of 4 restores, first restore kept
     graders:
       - type: run-command
         config:
@@ -287,12 +365,22 @@ stimuli:
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
               const tests = steps.filter(l => /^dotnet test\b/.test(l));
               if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
+              for (const project of ['UnitTests', 'IntegrationTests', 'ContractTests']) {
+                if (!tests.some(l => l.includes('tests/Contoso.' + project + '/Contoso.' + project + '.csproj'))) {
+                  throw new Error('the ' + project + ' test step is missing');
+                }
+              }
               if (!tests.every(l => /--no-build/.test(l))) throw new Error('a test step still rebuilds');
               if (!tests.every(l => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(l))) {
                 throw new Error('a test step dropped the Release configuration');
               }
               const build = steps.findIndex(l => /^dotnet build\b/.test(l));
               if (build < 0 || build > steps.findIndex(l => /^dotnet test\b/.test(l))) throw new Error('no build step before the tests');
+              if (steps.filter(l => /^dotnet build\b/.test(l)).length !== 1 || !/Contoso\.slnx\b/.test(steps[build])) {
+                throw new Error('the one build must target Contoso.slnx to produce every test project output');
+              }
+              const restore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
+              if (restore < 0 || restore > build) throw new Error('the explicit solution restore must precede the build');
               if (!/(-c|--configuration)[ =]+Release|Configuration=Release/.test(steps[build])) {
                 throw new Error('the build step is not Release, so --no-build tests would not find the output');
               }
@@ -300,6 +388,8 @@ stimuli:
                 (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
               if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
           expected_exit_code: 0
+      - type: output-matches
+        config: *restore_report
       - type: prompt
     rubric:
       - Identified that each dotnet test step repeats restore and build work that an earlier step already did
@@ -332,6 +422,15 @@ stimuli:
             source: agent
             message: |-
               Nothing is redundant. The pipeline restores once, in the explicit Restore step with --locked-mode, which is also the gate that checks the lock files, so it should stay. Build uses --no-restore, Test uses --no-build, which implies --no-restore, and Pack uses --no-build. I would not change any step.
+
+              | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
+              |---|---|---|---|---|
+              | Restore | Explicit | No | Keep --locked-mode | The only restore also checks lock files |
+              | Build | No | Yes | None | Uses --no-restore |
+              | Test | No | Yes | None | Uses --no-build |
+              | Pack | No | Yes | None | Uses --no-build |
+
+              Verdict: no redundant restores
     graders:
       - type: file-contains
         config:
@@ -340,6 +439,8 @@ stimuli:
       - type: output-matches
         config:
           pattern: (?i)(nothing is redundant|no redundant|no repeated|not redundant|nothing to (change|remove|eliminate)|already (avoid|skip|minimal|optimal)|only one restore|single restore|restores once)
+      - type: output-matches
+        config: *restore_report
       - type: prompt
     rubric:
       - Concluded that no step repeats restore work, because the single explicit restore is followed by --no-restore or
@@ -373,7 +474,7 @@ stimuli:
           pattern: (?i)(cache|mirror|feed|packages folder|lock file)
       - type: prompt
     rubric:
-      - The eliminate-redundant-restores skill stayed dormant because the request concerns a slow first restore, not a
-        repeated restore
+      - Recognized that the delay comes from downloading packages into an empty cache on the first restore, not from
+        repeating package work in later build steps
       - Recommended caching the NuGet package folder or using a nearby feed or mirror
-      - Did not recommend --no-restore, -restore:false, or removing the first restore
+      - Did not apply or recommend --no-restore, -restore:false, or removing the required first restore

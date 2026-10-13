@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Contoso.Core\Contoso.Core.csproj" />
+    <ProjectReference Include="..\..\src\Contoso.Web\Contoso.Web.csproj" />
+  </ItemGroup>
+</Project>
