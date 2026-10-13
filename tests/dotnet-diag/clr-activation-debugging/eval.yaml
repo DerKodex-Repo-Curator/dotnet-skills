@@ -191,7 +191,7 @@ stimuli:
     constraints:
       reject_tools: [bash, powershell, edit, create]
 
-  - name: Confirm a normal compiler startup
+  - name: Review compiler runtime-startup diagnostics
     prompt: >-
       Review logs/csc.exe.CLRLoad00.txt from a compiler invocation. Tell me
       whether runtime startup succeeded and cite the evidence. Do not invent a
@@ -246,7 +246,7 @@ stimuli:
     constraints:
       reject_tools: [bash, powershell, edit, create]
 
-  - name: Separate two activation attempts in one linker log
+  - name: Investigate a linker startup and later symbol failure
     prompt: >-
       link.exe loads managed support successfully but later symbol work fails.
       Use logs/link.exe.CLRLoad00.txt to separate the activation attempts and
@@ -538,7 +538,7 @@ stimuli:
     constraints:
       reject_tools: [bash, powershell, edit, create]
 
-  - name: Redirect a modern host framework resolution failure
+  - name: Investigate a service failure before Main
     prompt: >-
       A self-contained migration of ModernService now fails before Main with
       error 0x80008096. Read logs/host-trace.txt and tell me what is wrong and
@@ -597,7 +597,7 @@ stimuli:
     constraints:
       reject_tools: [bash, powershell, edit, create]
 
-  - name: Redirect an assembly binding failure after runtime startup
+  - name: Investigate a post-startup assembly load failure
     prompt: >-
       FrameworkApp starts but then throws FileNotFoundException for
       Contoso.Reporting. The captured diagnostic text is in

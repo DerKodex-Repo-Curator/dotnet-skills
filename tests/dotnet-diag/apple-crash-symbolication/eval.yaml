@@ -4,7 +4,7 @@ type: capability
 defaults:
   timeout: 6m
 stimuli:
-  - name: Triage a CoreCLR iOS launch crash offline
+  - name: Investigate an offline iOS launch crash
     prompt: >-
       ios_crash.ips came from a .NET MAUI app that aborts during launch. I am on
       Windows without Apple tools or network access. Give me a first-pass
@@ -148,14 +148,14 @@ stimuli:
       - Grouped frames under the correct images
       - Preserved separate UUID and load-address requirements
 
-  - name: Recover a macOS runtime version from its path
+  - name: Prepare an offline handoff from a macOS crash report
     prompt: >-
-      Review fixtures/macos-version.ips. Give me a no-network handoff that names
+      Review macos-incident.ips. Give me a no-network handoff that names
       the runtime version, crashing image, and a ready Apple command using the
       captured addresses.
     tags: { capability: runtime-version-from-image-path, risk: medium, journey: triage-macos-crash }
     environment:
-      files: [{ src: ./fixtures/macos-version.ips, dest: macos-version.ips }]
+      files: [{ src: ./fixtures/macos-version.ips, dest: macos-incident.ips }]
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
@@ -169,7 +169,7 @@ stimuli:
 
               `atos -arch arm64 -o libcoreclr.dylib.dSYM/Contents/Resources/DWARF/libcoreclr.dylib -l 0x200000000 0x200001234 0x200005678`
     graders:
-      - { type: file-exists, config: { path: macos-version.ips } }
+      - { type: file-exists, config: { path: macos-incident.ips } }
       - { type: output-matches, config: { pattern: '(?i)(\.NET )?10\.0\.4' } }
       - { type: output-matches, config: { pattern: '(?i)libcoreclr\.dylib[\s\S]*12345678-?90ab-?cdef-?1234-?567890abcdef' } }
       - { type: output-matches, config: { pattern: '(?i)atos[\s\S]*-l 0x200000000[\s\S]*0x200001234[\s\S]*0x200005678' } }
@@ -281,13 +281,13 @@ stimuli:
       - Identified CoreCLR as the only active .NET image
       - Avoided unsupported causation claims
 
-  - name: Route an Apple crash without dotnet
+  - name: Determine ownership for an Apple crash report
     prompt: >-
-      Review fixtures/no-dotnet.ips and tell me which team should receive it.
+      Review customer-incident.ips and tell me which team should receive it.
       Preserve the app image identity without installing tools or fetching symbols.
     tags: { capability: native-apple-handoff, risk: routing, journey: route-native-apple-crash }
     environment:
-      files: [{ src: ./fixtures/no-dotnet.ips, dest: no-dotnet.ips }]
+      files: [{ src: ./fixtures/no-dotnet.ips, dest: customer-incident.ips }]
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
@@ -310,7 +310,7 @@ stimuli:
       - Avoided a .NET runtime workflow
       - Stopped .NET crash symbolication after confirming that the report contains no .NET images
 
-  - name: Stay dormant for an Android tombstone
+  - name: Identify a mobile crash report from an Android build
     prompt: >-
       tombstone_sample.txt is from our Android build. Identify the format and
       tell the Android engineer which debug artifact and resolver they need.
@@ -340,7 +340,7 @@ stimuli:
       - Preserved a concrete library, BuildId, and offset
       - Did not apply Apple steps
 
-  - name: Stay dormant for a legacy Apple text report
+  - name: Assess an older Apple crash report format
     prompt: >-
       fixtures/legacy.crash is all I received from an older device. Tell me
       whether the modern device-report parser applies and what artifact to find.

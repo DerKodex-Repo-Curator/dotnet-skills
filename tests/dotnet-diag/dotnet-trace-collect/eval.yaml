@@ -161,7 +161,7 @@ stimuli:
       - Keeps dump capture in the appropriate collection workflow
     constraints: { reject_tools: [bash, edit, create] }
 
-  - name: State the .NET Framework high-CPU privilege limit
+  - name: Assess .NET Framework high CPU without administrator access
     prompt: |
       A .NET Framework 4.8 Windows service has high CPU, but I cannot get
       administrator rights. What diagnostic collection is actually possible?
@@ -285,7 +285,7 @@ stimuli:
       - Explains the avoided race without execution
     constraints: { reject_tools: [bash, edit, create] }
 
-  - name: Stay dormant for an existing trace analysis request
+  - name: Analyze an existing CPU trace
     prompt: |
       I already have checkout.nettrace from yesterday. Inspect it and tell me
       which methods consumed the most CPU. Do not change files.
@@ -314,7 +314,7 @@ stimuli:
       - The target collection workflow stayed dormant
     constraints: { reject_tools: [bash, edit, create] }
 
-  - name: Stay dormant for crash dump capture
+  - name: Plan capture of a Linux process dump
     prompt: |
       A modern .NET service is deadlocked and I need a full process dump from
       PID 4400 on Linux. Give safe capture steps only; do not run them.
@@ -343,7 +343,7 @@ stimuli:
       - The target collection workflow stayed dormant
     constraints: { reject_tools: [bash, edit, create] }
 
-  - name: Stay dormant for source performance review
+  - name: Review source-level performance issues
     prompt: |
       Review this C# caching implementation for allocation hot spots and
       algorithmic mistakes. I want source findings, not production collection.
@@ -373,7 +373,7 @@ stimuli:
       - The target collection workflow stayed dormant
     constraints: { reject_tools: [bash, edit, create] }
 
-  - name: Stay dormant for development benchmarking
+  - name: Design a local serializer benchmark
     prompt: |
       Compare two JSON serializers in a local .NET 9 project. Design a
       repeatable microbenchmark with warmup, payload sizes, and memory

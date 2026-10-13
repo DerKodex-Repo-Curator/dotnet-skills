@@ -4,7 +4,7 @@ type: capability
 defaults:
   timeout: 6m
 stimuli:
-  - name: Produce an offline Mono tombstone symbolication plan
+  - name: Investigate an offline Android app tombstone
     prompt: >-
       A customer sent tombstone_sample.txt after our Android app aborted. I am
       on an offline machine without LLVM installed. Inspect the capture, tell me
@@ -70,9 +70,9 @@ stimuli:
       - Provided a reproducible command for resolving the captured frames later
       - Respected the offline constraint
 
-  - name: Distinguish a CoreCLR Android crash from Mono
+  - name: Prepare a runtime-team handoff from an Android tombstone
     prompt: >-
-      Review tombstone_coreclr.txt and prepare a short handoff for the runtime
+      Review runtime-incident.txt and prepare a short handoff for the runtime
       team. State which .NET runtime is present, preserve the first unresolved
       frame, and include the exact symbol lookup inputs. This machine has no
       network access.
@@ -83,7 +83,7 @@ stimuli:
     environment:
       files:
         - src: ./tombstone_coreclr.txt
-          dest: tombstone_coreclr.txt
+          dest: runtime-incident.txt
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
@@ -102,7 +102,7 @@ stimuli:
     graders:
       - type: file-exists
         config:
-          path: tombstone_coreclr.txt
+          path: runtime-incident.txt
       - type: output-matches
         config:
           pattern: '(?i)CoreCLR[\s\S]*libcoreclr\.so'
@@ -224,9 +224,9 @@ stimuli:
       - Recognized that one BuildId applies across the relevant threads
       - Preserved enough thread context for a useful runtime-team handoff
 
-  - name: Handle runtime frames without BuildIds
+  - name: Assess an Android tombstone for offline symbolication
     prompt: >-
-      Analyze tombstone_no_buildid.txt on an offline machine. Tell me what can
+      Analyze offline-incident.txt on an offline machine. Tell me what can
       and cannot be resolved from this capture, and give the next artifact I
       should request from the build owner. Do not invent missing identifiers.
     tags:
@@ -236,7 +236,7 @@ stimuli:
     environment:
       files:
         - src: ./tombstone_no_buildid.txt
-          dest: tombstone_no_buildid.txt
+          dest: offline-incident.txt
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
@@ -418,11 +418,10 @@ stimuli:
       - Preserved every .NET offset from the crashing thread
       - Explicitly excluded background-thread frames
 
-  - name: Route a native Android crash without .NET frames
+  - name: Prepare an ownership handoff from an Android tombstone
     prompt: >-
-      Please review tombstone_no_dotnet.txt and tell me where this Android native
-      crash most likely belongs. I want a concise handoff and do not want any
-      tools installed.
+      Please review ownership-incident.txt and tell me which team should own
+      this crash. I want a concise handoff and do not want any tools installed.
     tags:
       capability: native-only-tombstone-handoff
       risk: routing
@@ -430,7 +429,7 @@ stimuli:
     environment:
       files:
         - src: ./tombstone_no_dotnet.txt
-          dest: tombstone_no_dotnet.txt
+          dest: ownership-incident.txt
     golden_trajectory:
       inline:
         schema_version: "ATIF-v1.6"
@@ -459,7 +458,7 @@ stimuli:
       - Avoided requesting Microsoft .NET symbols or installing unrelated tools
       - Stopped the .NET symbolication workflow after confirming that no .NET frames were present
 
-  - name: Stay dormant for an Apple crash report
+  - name: Identify an unfamiliar mobile crash report
     prompt: >-
       crashlog_ios.txt is the crash report from our mobile app. Identify its
       format and tell the iOS engineer what symbol artifact and platform tool
@@ -500,7 +499,7 @@ stimuli:
       - Did not apply Android ELF symbol lookup steps
       - Did not install or invoke unrelated tools
 
-  - name: Stay dormant for an already managed exception
+  - name: Summarize an application exception from CI logs
     prompt: >-
       CI captured fixtures/managed-exception-logcat.txt when checkout failed.
       Summarize the actionable failure and the code location the application

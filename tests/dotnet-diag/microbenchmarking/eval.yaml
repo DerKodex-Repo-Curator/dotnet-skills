@@ -54,7 +54,7 @@ stimuli:
       - Proposed a fast validation run before final measurements
       - Left the supplied project unchanged
 
-  - name: Review a benchmark that measures setup and manual repetition
+  - name: Review a normalization microbenchmark from code review
     prompt: |
       This benchmark was added during a code review. Explain why its numbers
       would not represent one Normalize operation and give a corrected design.
@@ -186,7 +186,7 @@ stimuli:
       - Required reproducible environment metadata and one side-by-side invocation
       - Left the supplied source unchanged
 
-  - name: Detect state contamination between sort iterations
+  - name: Review inconsistent sort benchmark timings
     prompt: |
       The first sort iteration is slow and later iterations are almost free.
       Review the benchmark class and explain how to make every measurement use
@@ -359,7 +359,7 @@ stimuli:
       - Avoided unrelated expensive diagnostics
       - Left the supplied source unchanged
 
-  - name: Prevent an interactive benchmark entry point
+  - name: Review a CI benchmark entry point
     prompt: |
       CI sometimes hangs and command-line filters appear to be ignored. Review
       the entry point and show the minimal correction and invocation pattern.
@@ -403,7 +403,7 @@ stimuli:
       - Supplied a filtered noninteractive validation command
       - Left the supplied source unchanged
 
-  - name: Stay dormant for service load testing
+  - name: Plan a deployed-service capacity test
     prompt: |
       I need to find the maximum sustained request rate of our deployed ASP.NET
       Core service with 500 concurrent clients and realistic think time. What
@@ -440,7 +440,7 @@ stimuli:
       - Did not propose a process-local benchmark harness
       - Stayed dormant instead of activating the microbenchmark workflow
 
-  - name: Stay dormant for production CPU trace analysis
+  - name: Analyze an existing production CPU trace
     prompt: |
       A production worker has periodic CPU spikes. We already captured a
       dotnet-trace file during an incident. How should we find the hot call

@@ -8,7 +8,7 @@ environment:
     - src: ../graders/readonly_guard.py
       dest: .eval/readonly_guard.py
 stimuli:
-  - name: Prioritize regex startup and transformation allocations
+  - name: Review hot-path text transformations under startup constraints
     prompt: |
       Review CaseTransformExtensions.cs for performance risks. These transforms
       run millions of times, while startup time also matters. Give prioritized
@@ -53,7 +53,7 @@ stimuli:
       - Treated the source-generated regex as a positive pattern
       - Left the supplied source unchanged
 
-  - name: Choose a comparer and regex construction strategy
+  - name: Review startup initialization and request-time vocabulary lookups
     prompt: |
       This vocabulary is initialized once and checked on every request. Review
       the implementation for startup and lookup costs. The stored words are
@@ -94,7 +94,7 @@ stimuli:
       - Avoided recommending source generation for dynamic patterns
       - Left the supplied source unchanged
 
-  - name: Find per-call collection and formatting allocations
+  - name: Review localized number conversion in a large export
     prompt: |
       These localized converters run for every row in a large financial export.
       Identify the highest-value allocation reductions and explain any
@@ -135,7 +135,7 @@ stimuli:
       - Identified the literal formatting box and a behavior-preserving alternative
       - Left the supplied source unchanged
 
-  - name: Explain compound recursive string allocations
+  - name: Review a slow localized invoice converter
     prompt: |
       Invoice generation spends significant time in GreekConverter.Convert.
       Review the method for allocation and globalization risks, prioritize the
@@ -180,7 +180,7 @@ stimuli:
       - Preserved a globalization caveat instead of assuming invariant casing is always correct
       - Left the supplied source unchanged
 
-  - name: Distinguish immutable and mutable dictionary candidates
+  - name: Review request-path costs in multi-locale conversion
     prompt: |
       Review MultiLocaleConverters.cs for request-path costs. Some lookup tables
       are fixed after startup, while another cache changes at runtime. Recommend
@@ -224,7 +224,7 @@ stimuli:
       - Explicitly preserved the mutable runtime cache
       - Left the supplied source unchanged
 
-  - name: Review replacement chains and value equality
+  - name: Review a monitoring-dashboard value formatter
     prompt: |
       This formatter runs for every data point on a monitoring dashboard.
       Identify avoidable repeated work and value-type costs, while recognizing
@@ -268,7 +268,7 @@ stimuli:
       - Recognized the existing frozen dictionary as a positive pattern
       - Left the supplied source unchanged
 
-  - name: Analyze branched format replacement without false positives
+  - name: Review a high-frequency transfer-size formatter
     prompt: |
       DataSize.Format is called for thousands of live transfer rows. Review its
       allocation profile and the struct design, then recommend a measured next
@@ -309,7 +309,7 @@ stimuli:
       - Did not falsely report missing value equality
       - Left the supplied source unchanged
 
-  - name: Find layered enumeration in string readability helpers
+  - name: Review text-label helpers in a high-traffic CMS
     prompt: |
       These helpers run on every rendered CMS label. Review the hot methods for
       layered enumeration and hidden array allocations. Keep behavior and
@@ -350,7 +350,7 @@ stimuli:
       - Preserved behavior and readability as constraints on any rewrite
       - Left the supplied source unchanged
 
-  - name: Find repeated enumeration in time and collection formatting
+  - name: Review formatting on a high-volume logging path
     prompt: |
       This formatting code is used by a high-volume logging path. Identify
       repeated enumeration and materialization that scales with each log entry,
@@ -394,7 +394,7 @@ stimuli:
       - Prioritized per-entry collection work above the conditional params concern
       - Left the supplied source unchanged
 
-  - name: Compare allocation strategies across sibling truncators
+  - name: Review sibling text truncation methods
     prompt: |
       These truncation methods are siblings and run on every displayed string.
       Compare their allocation behavior, including shared symbol storage.
@@ -438,7 +438,7 @@ stimuli:
       - Replaced mutable heap-backed symbol storage with an immutable alternative
       - Left the supplied source unchanged
 
-  - name: Apply sealing only to true leaf types
+  - name: Review virtual locale formatting on a hot path
     prompt: |
       Virtual formatting calls are frequent in this locale hierarchy. Review
       which classes can safely be sealed and which must remain extensible.
@@ -482,7 +482,7 @@ stimuli:
       - Preserved the abstract extension point and noted compatibility risk
       - Left the supplied source unchanged
 
-  - name: Stay dormant for algorithmic complexity design
+  - name: Choose an algorithm for a dense route planner
     prompt: |
       Our route planner uses a naive recursive search over a dense graph and
       becomes unusable at 200 nodes. We need help choosing an algorithm with
@@ -519,7 +519,7 @@ stimuli:
       - Did not substitute an API anti-pattern scan for algorithm design
       - Stayed dormant instead of activating the .NET API performance scan
 
-  - name: Stay dormant for cold startup configuration code
+  - name: Assess a one-time settings-validation optimization
     prompt: |
       This console tool reads a 20-line JSON settings file once at startup and
       then spends hours processing data. A reviewer wants us to replace the

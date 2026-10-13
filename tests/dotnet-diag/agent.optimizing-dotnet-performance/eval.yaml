@@ -4,7 +4,7 @@ type: capability
 defaults:
   timeout: 6m
 stimuli:
-  - name: Perform two-pass regex hot-path review
+  - name: Review hot-path text transformations under startup constraints
     prompt: |
       Review CaseTransformExtensions.cs. These methods run millions of times,
       but application startup also has a strict budget. Prioritize changes and
@@ -55,7 +55,7 @@ stimuli:
       - Prioritized compound per-call allocations separately from startup cost
       - Preserved behavior caveats and left the source unchanged
 
-  - name: Separate direct findings from dictionary deep scan
+  - name: Review allocation costs in localized number conversion
     prompt: |
       Our export spends substantial time in NumberConverters.cs. Review the two
       converters, recommend concrete allocation reductions, and leave the file
@@ -106,7 +106,7 @@ stimuli:
       - Included static-state correctness and thread-safety constraints
       - Left the source unchanged
 
-  - name: Avoid freezing a mutable runtime cache
+  - name: Review request-path lookup and caching costs
     prompt: |
       Review MultiLocaleConverters.cs for throughput improvements. Fixed lookup
       tables may be optimized, but runtime behavior must remain correct. Do not
@@ -207,7 +207,7 @@ stimuli:
       - Flagged behavior compatibility as a prerequisite
       - Left the source unchanged
 
-  - name: Preserve a public hierarchy extension point
+  - name: Review virtual-call costs in locale formatting
     prompt: |
       Virtual locale formatting is a measured hot path. Review Locales.cs for
       devirtualization opportunities without breaking intended inheritance.
@@ -258,7 +258,7 @@ stimuli:
       - Treated sealing as an API compatibility decision
       - Left the source unchanged
 
-  - name: Surface globalization risk before allocation tuning
+  - name: Review a localized converter with high allocation pressure
     prompt: |
       GreekConverter.Convert is allocation-heavy, but localized output must stay
       correct. Prioritize improvements without changing the file or assuming
@@ -312,7 +312,7 @@ stimuli:
       - Explained the compound recursive allocation mechanism
       - Left the source unchanged
 
-  - name: Give measured guidance for branched formatting
+  - name: Review a high-frequency data-size formatter
     prompt: |
       DataSize.Format appears in a high-frequency UI trace. Review the code,
       recommend the next optimization step, and avoid unsupported speedup
@@ -363,7 +363,7 @@ stimuli:
       - Recognized the existing equality implementation
       - Left the source unchanged
 
-  - name: Escalate when source review cannot locate the bottleneck
+  - name: Assess an intermittent slowdown from limited source evidence
     prompt: |
       A background worker is intermittently slow in production, but the only
       file we have is this small formatter. Explain what review can establish

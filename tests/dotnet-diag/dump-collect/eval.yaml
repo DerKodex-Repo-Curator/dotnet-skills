@@ -418,7 +418,7 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Stay dormant for existing dump analysis
+  - name: Analyze an existing production dump
     prompt: |
       I already have payments.dmp from a production crash. Analyze it and tell
       me the exception and failing thread. Do not modify any files.
@@ -454,7 +454,7 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Stay dormant for performance trace collection
+  - name: Collect a CPU trace from a Linux service
     prompt: |
       A .NET 8 Linux service has high CPU. Give me a 30-second event trace with
       sampled stacks from PID 9010 and an explicit output file. Do not run it.
@@ -490,7 +490,7 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Stay dormant for crash-prone source review
+  - name: Review a crash-prone interop wrapper
     prompt: |
       Review this unsafe C# interop wrapper and identify source defects that
       could corrupt memory or crash the process. I want code findings only.
@@ -527,7 +527,7 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Stay dormant for local benchmarking
+  - name: Design a local dependency-injection benchmark
     prompt: |
       Compare startup time and steady-state throughput for two dependency
       injection containers in a local .NET 9 project. Design a repeatable
@@ -567,7 +567,7 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Stay dormant for .NET Framework dump collection
+  - name: Capture a dump from a .NET Framework service
     prompt: |
       A .NET Framework 4.8 service on Windows is hung. I need a full dump of
       PID 6612 and have permission to use Sysinternals tools. Give advisory
