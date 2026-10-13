@@ -1,16 +1,15 @@
 ---
 name: run-tests
 description: >-
-  ALWAYS USE before running .NET tests or answering with a test command or
-  flags. Trigger on "run the tests", "exact dotnet test command", one
-  test/class/category/trait/target framework, list or discover tests, combined filters,
-  `--filter-query`, `--no-build`, `--diag`, diagnostic logs, TRX, coverage
-  collection, crash/hang dumps, filter errors, or unrecognized options. Chooses
-  repository-compatible classic, VSTest, bridged MTP, or native MTP syntax for
+  ALWAYS USE for .NET test execution or command/flag advice. Trigger on
+  "run the tests", "exact dotnet test command", one
+  test/class/category/trait/target framework, list/discover tests, combined filters,
+  `--filter-query`, `--no-build`, `--diag`, diagnostic logs, TRX, coverage,
+  crash/hang dumps, filter errors, or unrecognized options. Selects
+  classic, VSTest, or bridged/native MTP commands for
   MSTest/xUnit/NUnit/TUnit. DO NOT USE for platform identification alone
-  (platform-detection), writing or debugging test code, interpreting an
-  existing coverage report, CI investigation, migration, or a persistent hot
-  reload/watch loop.
+  (platform-detection), writing/debugging test code, existing coverage-report
+  interpretation, CI investigation, migration, or persistent hot reload/watch loops.
 license: MIT
 metadata:
   portability: portable
