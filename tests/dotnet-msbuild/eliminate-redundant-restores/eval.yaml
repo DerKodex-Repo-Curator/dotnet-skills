@@ -33,20 +33,16 @@ stimuli:
           - step_id: 1
             source: agent
             message: |-
-              The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the later restores are redundant. dotnet msbuild does not accept --no-restore, so the Build fix is -restore:false. Test uses --no-build, but that only suppresses its implicit restore; the rsp still enables one, so Test also needs an explicit --no-restore. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it.
+              The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the later restores are redundant. dotnet msbuild does not accept --no-restore, so the Build fix is -restore:false. Test uses --no-build, but that only suppresses its implicit restore; the rsp still enables one, so Test also needs --no-restore -restore:false. The explicit MSBuild override works on older SDKs too, where --no-restore alone does not override an rsp. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it.
 
               | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
               |---|---|---|---|---|
               | Restore | Explicit | No | Keep | Restores Contoso.slnx first |
               | Build | Rsp | Yes | Add -restore:false | Same solution and restore inputs; no package changes |
-              | Test | Rsp | Yes | Keep --no-build; add --no-restore | Explicitly overrides the inherited restore while reusing the Release build |
+              | Test | Rsp | Yes | Keep --no-build; add --no-restore -restore:false | Overrides the inherited restore on older and current SDKs while reusing the Release build |
 
               Verdict: removed 2 of 3 restores, first restore kept
     graders:
-      - type: file-contains
-        config:
-          path: rsp-inherited/Directory.Build.rsp
-          value: -restore
       - type: run-command
         config:
           command: node
@@ -54,6 +50,10 @@ stimuli:
             - -e
             - |
               const fs = require('fs');
+              const rsp = fs.readFileSync('rsp-inherited/Directory.Build.rsp', 'utf8').split(/\r?\n/).map(l => l.trim());
+              if (!rsp.includes('-restore') || rsp.some(l => /^[-/](?:restore|r):false$/i.test(l))) {
+                throw new Error('Directory.Build.rsp must keep an enabled -restore line for local builds');
+              }
               const steps = fs.readFileSync('rsp-inherited/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
@@ -91,7 +91,7 @@ stimuli:
       - Identified that the Build step restores again because Directory.Build.rsp contains -restore and applies to every
         MSBuild invocation in that directory
       - Stopped the Build step from restoring in a way that works for the invocation it uses, such as -restore:false on
-        dotnet msbuild or dotnet build --no-restore, and did not put --no-restore on a dotnet msbuild command
+        dotnet msbuild or dotnet build --no-restore -restore:false, and did not put --no-restore on a dotnet msbuild command
       - Kept the explicit Restore step and left the -restore line in Directory.Build.rsp so local builds keep working
       - Kept the same build and test coverage
       - Also stopped the test step inheriting the rsp restore rather than relying on --no-build alone
@@ -155,6 +155,10 @@ stimuli:
                 throw new Error('the solution must still be tested with --no-build after its build');
               }
               if (pkIndex < 0) throw new Error('the Packager build step is missing');
+              if (![steps[solIndex], steps[testIndex], steps[pkIndex]].every(l =>
+                  /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(l))) {
+                throw new Error('the solution build, solution test, and Packager build must keep Release');
+              }
               if (/--no-restore/.test(steps[pkIndex])) {
                 const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && packager(l));
                 if (restoredBefore < 0 || restoredBefore > pkIndex) {
@@ -170,30 +174,31 @@ stimuli:
           command: node
           args:
             - -e
-            - |
+            - &immutable_fixture |
               const fs = require('fs');
               const path = require('path');
               const crypto = require('crypto');
-              const expected = JSON.parse(process.argv[1]);
-              const root = 'uncovered-project';
+              const root = process.argv[1];
+              const expected = JSON.parse(process.argv[2]);
               function collect(directory) {
                 return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
                   const file = path.join(directory, entry.name);
                   if (entry.isDirectory()) return ['bin', 'obj', '.vs', 'TestResults'].includes(entry.name) ? [] : collect(file);
                   if (!entry.isFile()) throw new Error('unexpected non-file fixture entry: ' + file);
                   const relative = path.relative(root, file).split(path.sep).join('/');
-                  return relative === 'ci.yml' ? [] : [relative];
+                  return relative === 'ci.yml' && !('ci.yml' in expected) ? [] : [relative];
                 });
               }
               if (JSON.stringify(collect(root).sort()) !== JSON.stringify(Object.keys(expected).sort())) {
-                throw new Error('only ci.yml may change; a fixture file was added or removed');
+                throw new Error('a fixture file was added or removed: ' + root);
               }
               for (const [file, hash] of Object.entries(expected)) {
                 const content = fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
                 if (crypto.createHash('sha256').update(content).digest('hex') !== hash) {
-                  throw new Error('only ci.yml may change: ' + file);
+                  throw new Error('fixture file changed: ' + path.join(root, file));
                 }
               }
+            - uncovered-project
             - >-
               {"Contoso.slnx":"92fddd1b297d8ac86c30b1472949a2c5cd2c1f82ca21cc862e3a7990c76621c2",
               "src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
@@ -269,16 +274,21 @@ stimuli:
               const gateway = c => /(?:^|\s)(?:\.\/)?src\/Gateway\/Gateway\.csproj(?:\s|$)/.test(c);
               const rid = c => /(?:^|\s)(-r|--runtime)[ =]+linux-x64(?:\s|$)/.test(c);
               const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
+              const release = c => /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(c);
               const buildIndex = cmds.findIndex(c => /^dotnet build\b/.test(c) && gateway(c));
               const publishIndex = cmds.findIndex(c => /^dotnet publish\b/.test(c) && gateway(c));
               if (buildIndex < 0 || publishIndex < 0 || buildIndex > publishIndex) {
                 throw new Error('Gateway must still be built before it is published');
               }
-              if (![cmds[buildIndex], cmds[publishIndex]].every(c => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(c))) {
+              if (![cmds[buildIndex], cmds[publishIndex]].every(release)) {
                 throw new Error('the build and publish must keep the Release configuration');
               }
               if (!rid(cmds[publishIndex]) || !selfContained(cmds[publishIndex])) {
                 throw new Error('publish must keep linux-x64 and self-contained output');
+              }
+              if (/--no-build/.test(cmds[publishIndex]) && !cmds.slice(0, publishIndex).some(c =>
+                  /^dotnet build\b/.test(c) && gateway(c) && rid(c) && selfContained(c) && release(c))) {
+                throw new Error('--no-build publish requires a preceding Release build with linux-x64 and SelfContained=true');
               }
               let restored = null;
               let count = 0;
@@ -312,6 +322,7 @@ stimuli:
         skip restore
       - Kept the build and publish commands, and either stated what remains unvalidated or said how to validate on a clean
         checkout
+      - If publish skips building, first built Gateway with the same Release, linux-x64, and self-contained inputs
 
   - name: Restore after the step that edits package references
     prompt: |
@@ -319,7 +330,8 @@ stimuli:
       package to Contoso.Core, then builds and tests. The Build step takes
       noticeably longer than the compile itself. Cut the repeated package work
       from the pipeline without changing what the tool does or which packages
-      the build ends up using.
+      the build ends up using. Only edit ci.yml; use a temporary copy for any
+      pipeline validation so the other fixture files stay unchanged.
     tags:
       capability: restore-ordering
       risk: high
@@ -367,6 +379,10 @@ stimuli:
               if (build < gen || test < build || !/--no-build/.test(steps[test])) {
                 throw new Error('the solution must be built after the tool, then tested with --no-build');
               }
+              if (![steps[build], steps[test]].every(l =>
+                  /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(l))) {
+                throw new Error('the solution build and test must keep the shared Release configuration');
+              }
               const restoring = [];
               steps.forEach((l, i) => {
                 if (/Contoso\.slnx/.test(l) && (/^dotnet restore\b/.test(l) ||
@@ -379,6 +395,23 @@ stimuli:
                   throw new Error('a step skips restore before the restore ran: ' + l);
                 }
               });
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - generated-reference
+            - >-
+              {"Contoso.slnx":"1f4d5020abc9485063c5a2b9eaced3b3d8f9bbb8120b1dfd92531950973da62a",
+              "src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419",
+              "tools/AddAnalyzer/AddAnalyzer.csproj":"cdd6f0b4e4b9c72196431282fc7f42508e52e0f6a10b88a948a157bbdabd220b",
+              "tools/AddAnalyzer/Program.cs":"eacd116061991ef0bdef4d5a65189880c68b5a0bccdafa53e8eb26c4ccfb2039",
+              "tools/AddAnalyzer/README.txt":"71bd0831214aa914468587a67e9a5827491e1487cd32eae38d09cf99b4131580"}
           expected_exit_code: 0
       - type: output-matches
         config: *restore_report
@@ -393,6 +426,8 @@ stimuli:
       - Ended with the solution restored once, after the tool step, and the later steps not restoring
       - Did not put --no-restore on the build while the only restore still ran before the tool
       - Kept the tool step and the build and test steps
+      - Changed only ci.yml, preserving the analyzer tool, package inputs, and source files
+      - Kept both the build and --no-build test in Release
 
   - name: Build once and run each test project without rebuilding
     prompt: |
@@ -515,10 +550,15 @@ stimuli:
 
               Verdict: no redundant restores
     graders:
-      - type: file-contains
+      - type: run-command
         config:
-          path: already-minimal/ci.yml
-          value: --locked-mode
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - already-minimal
+            - '{"ci.yml":"939674552702aba23953d56fed641379a814ba4f99e965a105612795edc017d4"}'
+          expected_exit_code: 0
       - type: output-matches
         config:
           pattern: (?i)(nothing is redundant|no redundant|no repeated|not redundant|nothing to (change|remove|eliminate)|already (avoid|skip|minimal|optimal)|only one restore|single restore|restores once)

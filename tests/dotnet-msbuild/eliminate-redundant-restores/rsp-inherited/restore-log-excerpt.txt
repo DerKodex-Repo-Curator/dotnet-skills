@@ -5,7 +5,7 @@ Excerpt of the CI log for the "Build" step of the same commit, run right after t
     Determining projects to restore...
     All projects are up-to-date for restore.
     Contoso.Core -> /agent/_work/1/s/src/Contoso.Core/bin/Release/net10.0/Contoso.Core.dll
-    Contoso.Web -> /agent/_work/1/s/src/Contoso.Web/bin/Release/net10.0/Contoso.Web.dll
+    Contoso.Tests -> /agent/_work/1/s/tests/Contoso.Tests/bin/Release/net10.0/Contoso.Tests.dll
   Time Elapsed 00:00:41.20
 
 The "Determining projects to restore" phase took about 6.1 s of the 41 s.

@@ -9,5 +9,5 @@ diff --git a/rsp-inherited/ci.yml b/rsp-inherited/ci.yml
 +  - script: dotnet msbuild Contoso.slnx -t:Build -p:Configuration=Release -restore:false
      displayName: Build
 -  - script: dotnet test Contoso.slnx -c Release --no-build
-+  - script: dotnet test Contoso.slnx -c Release --no-build --no-restore
++  - script: dotnet test Contoso.slnx -c Release --no-build --no-restore -restore:false
      displayName: Test
