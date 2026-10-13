@@ -114,7 +114,7 @@ stimuli:
               records one created instance and one disposal after both cases.
 
               This is conservative scheduling, not exact collection equivalence:
-              unrelated classes cannot overlap with these members. Assembly
+              unrelated classes cannot overlap each other or these members. Assembly
               initialization/cleanup bounds the resource to this sole collection's
               assembly; adding other collections would require a scope review.
     graders:
@@ -126,7 +126,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='67ae86c7e4ec636487c94f3d8eacf8f78843efb6970e722597eb76c193b78345','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='7a97d417ea346377add91df60a1d6b68534c8d5c48f07d3ce3e5486e10172a7b','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

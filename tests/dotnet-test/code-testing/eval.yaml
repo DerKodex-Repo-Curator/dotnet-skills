@@ -58,11 +58,11 @@ stimuli:
         config:
           command: >-
             python -c "import hashlib,pathlib,subprocess,sys;
-            root=pathlib.Path('NoopRepair');
-            expected={'amounts.py':'3251dbf18617cd67c47707cb9bd1611dbac212ff0ee9814a75b8ce1f34b85aad','test_amounts.py':'2f9d898323917f0f5014dc669e4fbe874e9c54f57c0bf53333a06b310489d8bc'};
-            actual={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in root.rglob('*') if p.is_file() and not (p.parent==root/'__pycache__' and p.suffix=='.pyc')};
+            root=pathlib.Path('.');
+            expected={'NoopRepair/amounts.py':'3251dbf18617cd67c47707cb9bd1611dbac212ff0ee9814a75b8ce1f34b85aad','NoopRepair/test_amounts.py':'2f9d898323917f0f5014dc669e4fbe874e9c54f57c0bf53333a06b310489d8bc','.eval/authenticated_artifacts.py':'e1f80ddf5efca29aa82174dafd3130df9ec19572f34b6aeff7a9ed184faad8b7'};
+            actual={p.as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in root.rglob('*') if p.is_file() and p.parts[0] not in {'.git','.agents','.copilot','.claude'} and not (p.parent==pathlib.Path('NoopRepair/__pycache__') and p.suffix=='.pyc')};
             assert actual==expected, 'Already-correct repair changed files';
-            subprocess.run([sys.executable,'-B','-m','unittest','-v'],cwd=root,check=True)"
+            subprocess.run([sys.executable,'-B','-m','unittest','-v'],cwd='NoopRepair',check=True)"
           expected_exit_code: 0
           timeout: 1m
       - type: output-matches

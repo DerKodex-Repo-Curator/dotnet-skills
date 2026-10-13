@@ -11,17 +11,19 @@ import yaml
 
 
 SPEC = Path(__file__).with_name("eval.yaml")
+DOCUMENT = yaml.safe_load(SPEC.read_text(encoding="utf-8"))
 CASE = next(
-    case for case in yaml.safe_load(SPEC.read_text(encoding="utf-8"))["stimuli"]
+    case for case in DOCUMENT["stimuli"]
     if case["name"] == "Leave already-correct tests unchanged during a repair request"
 )
+FILES = DOCUMENT["environment"]["files"] + CASE["environment"]["files"]
 
 
 class RepairNoopTests(unittest.TestCase):
     def test_healthy_golden_and_every_file_mutation(self):
         with tempfile.TemporaryDirectory(prefix="repair-noop-") as directory:
             root = Path(directory)
-            for item in CASE["environment"]["files"]:
+            for item in FILES:
                 target = root / item["dest"]
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes((SPEC.parent / item["src"]).read_bytes())
@@ -34,7 +36,13 @@ class RepairNoopTests(unittest.TestCase):
             result = run_guard()
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertIn("Ran 2 tests", result.stderr)
-            for item in CASE["environment"]["files"]:
+            subprocess.run(
+                [sys.executable, "-m", "unittest", "-v"], cwd=root / "NoopRepair",
+                check=True, capture_output=True, text=True, timeout=30,
+            )
+            result = run_guard()
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            for item in FILES:
                 path = root / item["dest"]
                 original = path.read_bytes()
                 for remove in (False, True):
@@ -45,9 +53,13 @@ class RepairNoopTests(unittest.TestCase):
                             path.write_bytes(original + b"\n# unnecessary rewrite\n")
                         self.assertNotEqual(0, run_guard().returncode)
                         path.write_bytes(original)
-            for name in ("amount.py", "__pycache__/hidden.py", "nested/extra.txt"):
+            for name in (
+                "NoopRepair/amount.py", "NoopRepair/__pycache__/hidden.py",
+                "NoopRepair/nested/extra.txt", "amount.py", "unrelated/source.py",
+                ".eval/extra.py",
+            ):
                 with self.subTest(addition=name):
-                    addition = root / "NoopRepair" / name
+                    addition = root / name
                     addition.parent.mkdir(parents=True, exist_ok=True)
                     addition.write_text("from amounts import total\n", encoding="utf-8")
                     self.assertNotEqual(0, run_guard().returncode)

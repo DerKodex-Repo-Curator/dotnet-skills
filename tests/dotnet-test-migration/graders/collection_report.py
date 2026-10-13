@@ -89,9 +89,11 @@ def validate_report(policy, response):
             "may overlap each other, but cannot overlap these deferred members"
         )
     else:
-        assert claims and not any(permitted for _, permitted in claims), (
+        assert claims & {("peers", False), ("unspecified", False)} and not any(
+            permitted for _, permitted in claims
+        ), (
             f"Scheduling disclosure contradicts {policy}: "
-            "unrelated tests cannot freely overlap these serialized members"
+            "unrelated classes must be disclosed as serialized with each other too"
         )
 
 
