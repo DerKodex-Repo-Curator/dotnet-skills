@@ -236,13 +236,13 @@ stimuli:
       - Matched the existing UI framework and added navigation to both resources
       - Created a migration and built without EnsureCreated, startup seeding, or command-line scaffolding
 
-  - name: Add required-parent Minimal API routes and ordered requests
+  - name: Add Product and Category Minimal API CRUD from an empty database
     prompt: |
       In fixtures/minimal-api-parent-fk/ParentChildApi.csproj, add complete Product and Category
       Minimal API CRUD. Product requires Category. Reuse StoreDbContext with SQLite, place mappings
-      in ProductEndpoints, add descriptive OpenAPI metadata, create a migration, and add a .http
-      workflow that creates a category first and reuses its returned id when creating a product.
-      Do not use command-line scaffolding or EnsureCreated.
+      in ProductEndpoints, add descriptive OpenAPI metadata, and create a migration. Include an
+      executable .http workflow that exercises the end-to-end Product and Category experience
+      starting from an empty database. Do not use command-line scaffolding or EnsureCreated.
     tags: { capability: minimal-api-required-parent-flow, risk: high, journey: add-parent-child-api }
     environment:
       files:
@@ -446,9 +446,9 @@ stimuli:
 
   - name: Add an empty Razor Page without data-access side effects
     prompt: |
-      Add a simple empty Terms Razor Page to fixtures/razor-pages-crud/MyApp.csproj. Match the
-      existing page conventions. This page has no model or database behavior, so do not add Entity
-      Framework packages, a DbContext, migrations, or generated CRUD files.
+      Add a static Terms Razor Page to fixtures/razor-pages-crud/MyApp.csproj. Match the existing
+      page conventions, and keep the change limited to the page surface and any navigation needed
+      to reach it.
     tags: { capability: empty-razor-page-restraint, risk: medium, journey: add-static-razor-page }
     environment:
       files:
@@ -530,9 +530,9 @@ stimuli:
 
   - name: Add an empty Blazor page while preserving host configuration
     prompt: |
-      Add a Reports page at /reports to fixtures/blazor-crud/BlazorApp.csproj and link it from the
-      existing navigation. Match the existing component and Bootstrap conventions. It is static,
-      so do not add Entity Framework, a DbContext, migrations, or a new render mode.
+      Add a static Reports page at /reports to fixtures/blazor-crud/BlazorApp.csproj and link it
+      from the existing navigation. Match the existing component and Bootstrap conventions, keep
+      the change limited to the page and navigation, and preserve the host's current behavior.
     tags: { capability: empty-blazor-page-preservation, risk: medium, journey: add-static-blazor-page }
     environment:
       files:
