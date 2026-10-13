@@ -49,7 +49,9 @@ forbidText(joined, /\b(?:DbContext|DbSet)\b|AddDbContext(?:Factory)?\s*<|UseSqli
 if (contract === "razor-static") {
   forbidPath(/(?:^|\/)Pages\/(?:Products|Categories)(?:\/|$)/i, "Product or Category CRUD pages are forbidden");
 } else {
-  forbidPath(/(?:^|\/)Components\/Pages\/(?:Employees|Departments)(?:[./]|\/|$)/i, "Employee or Department CRUD components are forbidden");
+  forbidPath(/(?:^|\/)Components\/Pages\/(?:Employees?|Departments?)(?:[./]|\/|$)/i, "Employee or Department CRUD components are forbidden");
+  const reports = files.find((file) => /(?:^|\/)Components\/Pages\/Reports\.razor$/i.test(file.rel))?.text ?? "";
+  forbidText(reports, /@rendermode\b/i, "the static Reports component must not add a render mode");
   const serverServices = (program.match(/AddInteractiveServerComponents\s*\(/g) ?? []).length;
   const serverModes = (program.match(/AddInteractiveServerRenderMode\s*\(/g) ?? []).length;
   if (serverServices !== 1 || serverModes !== 1) failures.push("the existing interactive server chains must be preserved exactly once");

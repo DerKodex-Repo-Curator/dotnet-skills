@@ -585,6 +585,9 @@ stimuli:
       - { type: file-not-exists, config: { path: "fixtures/blazor-crud/**/*DbContext*.cs" } }
       - { type: file-not-exists, config: { path: "fixtures/blazor-crud/Components/Pages/Employees*" } }
       - { type: file-not-exists, config: { path: "fixtures/blazor-crud/Components/Pages/Departments*" } }
+      - { type: file-not-exists, config: { path: fixtures/blazor-crud/Components/Pages/Employee } }
+      - { type: file-not-exists, config: { path: fixtures/blazor-crud/Components/Pages/Department } }
+      - { type: file-not-contains, config: { path: fixtures/blazor-crud/Components/Pages/Reports.razor, value: "@rendermode" } }
       - { type: file-not-exists, config: { path: fixtures/blazor-crud/Controllers } }
       - { type: file-not-exists, config: { path: fixtures/blazor-crud/Endpoints } }
       - type: run-command

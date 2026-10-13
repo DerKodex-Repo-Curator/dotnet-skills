@@ -145,6 +145,12 @@ function restraintMutations() {
     write(root, "Components/Pages/Employees.razor", '@page "/employees"\n<h1>Employees</h1>\n');
     write(root, "Components/Pages/Departments.razor", '@page "/departments"\n<h1>Departments</h1>\n');
   });
+  restraintMutation("blazor-static", "singular Employee and Department CRUD directories", (root) => {
+    write(root, "Components/Pages/Employee/Index.razor", '@page "/employees"\n<h1>Employees</h1>\n');
+    write(root, "Components/Pages/Department/Index.razor", '@page "/departments"\n<h1>Departments</h1>\n');
+  });
+  restraintMutation("blazor-static", "Reports adds an unnecessary render mode", (root) =>
+    write(root, "Components/Pages/Reports.razor", '@page "/reports"\n@rendermode InteractiveServer\n<h1>Reports</h1>\n'));
 }
 
 function cloneForMutation(contract, name, source = goldenRoots.get(contract)) {
