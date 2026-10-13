@@ -39,9 +39,12 @@ def verify(root, forbid_timeouts=False):
             )
             assert not re.search(
                 r"\b(?:global\s+)?using\s+(?:(?:static|unsafe)\s+)?"
-                r"(?:\w+\s*=\s*)?(?:global\s*::\s*)?Xunit\b",
+                r"(?:\w+\s*=\s*)?(?:global\s*::\s*)?@?Xunit\b",
                 text,
             ), f"Retained xUnit using directive: {path}"
+            assert not re.search(
+                r"\bnamespace\s+@?Xunit\b|\bXunit\s*(?:\.|::)", text,
+            ), f"Retained xUnit namespace or qualified reference: {path}"
 
 
 def main():

@@ -26,6 +26,11 @@ checker_spec = importlib.util.spec_from_file_location(
 )
 checker = importlib.util.module_from_spec(checker_spec)
 checker_spec.loader.exec_module(checker)
+REPORT_CONFIG = next(
+    grader["config"] for grader in STIMULUS["graders"] if grader["type"] == "program"
+)
+REPORT = {"__name__": "bridge_report_test"}
+exec(compile(REPORT_CONFIG["args"][1], str(EVAL), "exec"), REPORT)
 
 
 class PlatformContractTests(unittest.TestCase):
@@ -34,6 +39,12 @@ class PlatformContractTests(unittest.TestCase):
         for grader in STIMULUS["graders"]:
             kind = grader["type"]
             if kind in ("prompt", "run-command", "tool-calls"):
+                continue
+            if kind == "program":
+                try:
+                    REPORT["validate_bridge_report"](response)
+                except AssertionError:
+                    failed.append("program")
                 continue
             self.assertIn(kind, ("output-matches", "output-not-matches"))
             found = checker.vally_regex_found(grader["config"]["pattern"], response)
@@ -126,6 +137,53 @@ class PlatformContractTests(unittest.TestCase):
                     labels + "\n\n" + explanation +
                     "\nMTP 2 supports the VSTest bridge on SDK 10."
                 ))
+
+    def test_bridge_constraint_must_bind_both_actual_versions(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for explanation in (
+            "MTP 1 cannot bridge on SDK 10; this project uses MTP 2.",
+            "MTP 1 cannot bridge on SDK 10. This project uses MTP 2.",
+            "MTP 1 cannot bridge on SDK 10, while this project uses MTP 2.",
+            "MTP 2 supports native mode, but MTP 1 cannot bridge on SDK 10.",
+            "MTP 2 cannot bridge on SDK 9; this project uses SDK 10.",
+            "SDK 10 cannot bridge MTP 1, and this project uses MTP 2.",
+            "MTP 2 is not unsupported by the VSTest bridge on SDK 10.",
+            "This project has MTP 2 installed on SDK 10.",
+            "MTP 2 supports native mode on SDK 10.",
+        ):
+            with self.subTest(explanation=explanation):
+                self.assertIn("program", self.failures(labels + "\n\n" + explanation))
+        for explanation in (
+            "MTP 1 can bridge on SDK 10, whereas MTP 2 cannot bridge.",
+            "On SDK 10, MTP 2 cannot use the VSTest bridge.",
+            "MTP 2 supports native mode, but cannot use the VSTest bridge on SDK 10.",
+        ):
+            with self.subTest(explanation=explanation):
+                self.assertEqual([], self.failures(labels + "\n\n" + explanation))
+
+    def test_production_report_grader_rejects_wrong_version_relationship(self):
+        script = """
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { ProgramGrader } from "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/program-grader.js";
+const { config, root, golden } = JSON.parse(readFileSync(0, "utf8"));
+const grader = new ProgramGrader();
+for (const [output, passed] of [
+  [golden, true],
+  ["MTP 1 cannot bridge on SDK 10; this project uses MTP 2.", false],
+  ["MTP 2 cannot bridge on SDK 10.", true],
+]) {
+  const result = await grader.grade({ config, trajectory: { workDir: root, output } });
+  assert.equal(result.passed, passed, JSON.stringify(result));
+}
+"""
+        with tempfile.TemporaryDirectory(prefix="bridge-report-") as directory:
+            result = subprocess.run(
+                ["node", "--input-type=module", "-e", script], cwd=ROOT,
+                input=json.dumps({"config": REPORT_CONFIG, "root": directory, "golden": GOLDEN}),
+                capture_output=True, text=True, timeout=30,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_wrong_mode_framework_and_missing_version_evidence_fail(self):
         for original, replacement in (

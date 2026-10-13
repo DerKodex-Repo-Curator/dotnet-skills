@@ -75,12 +75,39 @@ stimuli:
       - type: output-matches
         config:
           pattern: '(?im)^[ \t]*\**[ \t]*Framework:[ \t]*\**[ \t]*MSTest\b'
-      - type: output-matches
+      - type: program
         config:
-          pattern: '(?is)(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2(?:\.\d+)*.*?(?:SDK|\.NET)[\s`*]*10|(?:SDK|\.NET)[\s`*]*10.*?(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2'
-      - type: output-matches
-        config:
-          pattern: '(?i)(?:cannot|can''t|does not|doesn''t|no longer|removes?|removed|unsupported|incompatible|not supported|unavailable)[^.!?\r\n]{0,100}(?:bridg(?:e|ing)|VSTest)|(?:bridg(?:e|ing)|VSTest)[^.!?\r\n]{0,100}(?:cannot|can''t|does not|doesn''t|no longer|removed|unsupported|incompatible|not supported|unavailable)'
+          program: python
+          args:
+            - -c
+            - |
+              import json, os, pathlib, re
+
+              def validate_bridge_report(response):
+                  assert isinstance(response, str) and response.strip(), "Missing compatibility report"
+                  text = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
+                  text = re.sub(r"(?im)^\s*(?:dotnet test mode|platform|framework)\s*:[^\r\n]*(?:\r?\n|$)", "", text)
+                  text = re.sub(r"\s+", " ", text)
+                  for statement in re.split(r"(?<=[.!?])\s+|;", text):
+                      mtp = sdk = None
+                      for clause in re.split(r",|\b(?:but|yet|however|whereas|while|and)\b", statement, flags=re.I):
+                          versions = set(re.findall(r"\b(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)\s*(?:version\s*|v)?([0-9]+)(?:\.[0-9]+)*\b", clause, re.I))
+                          sdks = set(re.findall(r"(?:\bSDK|\.NET)\s*([0-9]+)\b", clause, re.I))
+                          if versions:
+                              mtp = next(iter(versions)) if len(versions) == 1 else None
+                          if sdks:
+                              sdk = next(iter(sdks)) if len(sdks) == 1 else None
+                          bridge = re.search(r"\b(?:bridg(?:e[sd]?|ing)|VSTest)\b", clause, re.I)
+                          negative = re.search(r"\b(?:cannot|can't|does not|doesn't|no longer|removes?|removed|unsupported|incompatible|not supported|unavailable)\b", clause, re.I)
+                          reversed_negative = re.search(r"\b(?:not|never)\s+(?:unsupported|incompatible|unavailable)\b", clause, re.I)
+                          if mtp == "2" and sdk == "10" and bridge and negative and not reversed_negative:
+                              return
+                  raise AssertionError("Missing correlated MTP 2 / SDK 10 negative bridge statement")
+
+              if __name__ == "__main__":
+                  data = json.loads(pathlib.Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
+                  validate_bridge_report(data["trajectory"]["output"])
+          timeout: 1m
       - type: output-not-matches
         config:
           pattern: '(?i)(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[ \t`*]*(?:version[ \t`*]+|v)?2(?:\.\d+)*[ \t`*+]*(?:supports|allows|enables|can (?:use|run|execute|bridge))(?:(?!\b(?:but|yet|however|whereas|while|cannot|can''t|does not|doesn''t|not|no longer)\b)[^.!?\r\n]){0,100}(?:bridge|VSTest)|(?:VSTest[ -]mode[ \t]+)?bridge[ \t]+(?:is|remains)[ \t]+(?:supported|available|compatible)[^.!?\r\n]{0,100}(?:SDK|\.NET)[ \t`*]*10|(?:SDK|\.NET)[ \t`*]*10[^.!?\r\n]{0,100}bridge[ \t]+(?:is|remains)[ \t]+(?:supported|available|compatible)'

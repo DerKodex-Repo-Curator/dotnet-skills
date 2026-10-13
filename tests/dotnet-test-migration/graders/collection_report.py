@@ -37,6 +37,8 @@ def validate_report(policy, response):
         r"remain|continue|not|never|no longer)\b"
     )
     claims = set()
+    previous_subject = None
+    previous_historical = False
     for sentence in re.split(r"[.!?;\n]+|\b(?:whereas|unlike)\b", normalized, flags=re.I):
         subject = None
         historical = False
@@ -51,13 +53,20 @@ def validate_report(policy, response):
                 historical = True
             elif re.match(r"^mstest\b", clause, re.I):
                 historical = False
-            if historical:
-                continue
+            pronoun = re.match(r"^they\s+", clause, re.I)
+            if pronoun and re.search(parallel + "|" + serial, clause, re.I):
+                assert previous_subject, "Scheduling disclosure has an unresolved pronoun"
+                clause = previous_subject + " " + clause[pronoun.end():]
+                historical = previous_historical
             if subject and re.match(continuation, clause, re.I):
                 clause = subject + " " + clause
             actor = re.search(unrelated + "|" + members, clause, re.I)
             if actor:
                 subject = actor[0]
+                previous_subject = subject
+                previous_historical = historical
+            if historical:
+                continue
             if not re.search(unrelated, clause, re.I):
                 continue
             # Member adjectives (for example, "serialized members") are not predicates.

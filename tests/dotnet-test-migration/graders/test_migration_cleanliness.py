@@ -107,6 +107,53 @@ class MigrationCleanlinessTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Retained xUnit import"):
                 check(CASES[0], root)
 
+    def test_xunit_fact_shim_can_run_but_is_not_a_completed_migration(self):
+        for case in CASES:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                replay.materialize(SPEC, case, root)
+                source = root / ("DiagnosticsTests.cs" if case["name"] == NAMES[0] else "CollectionTests.cs")
+                source.write_text(
+                    source.read_text(encoding="utf-8").replace("[TestMethod]", "[Xunit.Fact]"),
+                    encoding="utf-8",
+                )
+                shim = root / "FactShim.cs"
+                shim.write_text(
+                    "namespace Xunit { public sealed class FactAttribute : "
+                    "Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute { } }",
+                    encoding="utf-8",
+                )
+                runtime_only = dict(case, graders=[
+                    grader for grader in case["graders"]
+                    if grader["type"] in {"program", "run-command"} and
+                    "migration_cleanliness.py" not in grader["config"].get("command", "")
+                ])
+                replay.run_graders(runtime_only, root)
+                with self.assertRaisesRegex(AssertionError, "Retained xUnit namespace or qualified"):
+                    check(case, root)
+
+    def test_namespaces_and_qualified_references_are_code_not_comments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            replay.materialize(SPEC, CASES[0], root)
+            extra = root / "Legacy.cs"
+            for text in (
+                "namespace Xunit {}", "namespace @Xunit;",
+                "[Xunit.Fact] class Legacy {}", "[global::Xunit.Theory] class Legacy {}",
+                "class Legacy { void Check() => Xunit.Assert.True(true); }",
+                "class Legacy { object Value => typeof(Xunit.Sdk.XunitException); }",
+            ):
+                with self.subTest(text=text):
+                    extra.write_text(text, encoding="utf-8")
+                    with self.assertRaisesRegex(AssertionError, "Retained xUnit namespace or qualified"):
+                        check(CASES[0], root)
+            extra.write_text(
+                '// namespace Xunit {}\n// [Xunit.Fact]\n'
+                'class Notes { const string Old = "Xunit.Assert.True(true)"; }\n',
+                encoding="utf-8",
+            )
+            check(CASES[0], root)
+
     def test_configured_runsettings_cannot_turn_warning_into_deadline(self):
         case = next(case for case in CASES if case["name"] == NAMES[0])
         with tempfile.TemporaryDirectory() as directory:

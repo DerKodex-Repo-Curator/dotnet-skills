@@ -50,7 +50,7 @@ stimuli:
           command: >-
             python -c "import hashlib,pathlib,sys;
             p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='f86d16f2f6ad2cb708f4d9fc2fbbc67fb51c4d3444831e6e091bda018a0bb624','Migration cleanliness verifier changed';
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='1e74e999a4d11fd4c9734abd2017544efc54103bb3b6ac6c82a08603707f990c','Migration cleanliness verifier changed';
             sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" --forbid-timeouts
           expected_exit_code: 0
           timeout: 1m
@@ -67,12 +67,47 @@ stimuli:
             --mstest-major 4 --expect CompletesNormally=Passed
           expected_exit_code: 0
           timeout: 4m
-      - type: output-matches
+      - type: program
         config:
-          pattern: '(?i)longRunningTestSeconds'
-      - type: output-matches
-        config:
-          pattern: '(?i)diagnostic|warning'
+          program: python
+          args:
+            - -c
+            - |
+              import json, os, pathlib, re
+
+              def validate_diagnostic_report(response):
+                  assert isinstance(response, str) and response.strip(), "Missing diagnostic report"
+                  text = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
+                  text = re.sub(r"\s+", " ", text)
+                  active = described = False
+                  continuation = (
+                      r"^(?:its?\b|(?:this|that|the)\s+(?:source\s+)?(?:setting|option|threshold)\b|"
+                      r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostic|"
+                      r"warns?|fail(?:ures?|s|ing)?|enforc(?:es?|ed|ing)|timeouts?|deadlines?)\b)"
+                  )
+                  negative = r"\b(?:not|never|no|cannot|can't|doesn't|isn't|wasn't|without)\b"
+                  for clause in re.split(r"(?<=[.!?])\s+|[;,]|\b(?:but|and|whereas|however|yet)\b", text, flags=re.I):
+                      clause = clause.strip()
+                      if not clause:
+                          continue
+                      active = bool(re.search(r"\blongRunningTestSeconds\b", clause, re.I)) or (
+                          active and bool(re.match(continuation, clause, re.I))
+                      )
+                      if not active:
+                          continue
+                      warning = re.search(r"\b(?:diagnostic(?:-only)?|warnings?|warns?)\b", clause, re.I)
+                      if warning:
+                          assert not re.search(negative + r"|\bnon[- ]$", clause[:warning.start()], re.I), "Source diagnostic warning was negated"
+                          described = True
+                      enforcing = re.search(r"\b(?:timeouts?|deadlines?|fail(?:s|ures?|ing)?|enforc(?:es?|ed|ing)|aborts?|terminates?)\b", clause, re.I)
+                      if enforcing:
+                          assert re.search(negative + r"|\bnon[- ]", clause[:enforcing.start()], re.I), "Source warning was described as an enforced deadline"
+                  assert described, "Missing diagnostic warning relationship for longRunningTestSeconds"
+
+              if __name__ == "__main__":
+                  data = json.loads(pathlib.Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
+                  validate_diagnostic_report(data["trajectory"]["output"])
+          timeout: 1m
       - type: prompt
         config:
           evidence: [trajectory, diff]
@@ -136,7 +171,7 @@ stimuli:
           command: >-
             python -c "import hashlib,pathlib,sys;
             p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='f86d16f2f6ad2cb708f4d9fc2fbbc67fb51c4d3444831e6e091bda018a0bb624','Migration cleanliness verifier changed';
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='1e74e999a4d11fd4c9734abd2017544efc54103bb3b6ac6c82a08603707f990c','Migration cleanliness verifier changed';
             sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})"
           expected_exit_code: 0
           timeout: 1m
@@ -148,7 +183,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='7a97d417ea346377add91df60a1d6b68534c8d5c48f07d3ce3e5486e10172a7b','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='51bb6d55ba174eb95ea6fac1a78fe61ae199a97445c0ac30c52d8c862aa9d956','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

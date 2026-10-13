@@ -55,6 +55,12 @@ class DefaultCollectionTests(unittest.TestCase):
             replay.run_graders(CASE, root)
             with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                 replay.run_graders(
+                    CASE, root,
+                    "MSTest serializes unrelated classes. They may still run in "
+                    "parallel with one another. This is conservative scheduling.",
+                )
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                replay.run_graders(
                     CASE, root, "Unrelated classes cannot overlap these members. "
                     "This is conservative scheduling.",
                 )
@@ -334,6 +340,36 @@ class DefaultCollectionTests(unittest.TestCase):
         ):
             with self.subTest(response=response):
                 report.validate_report("assembly-serial", response)
+
+    def test_pronoun_continuations_retain_subject_and_framework(self):
+        for policy, valid, invalid in (
+            (
+                "assembly-serial",
+                "MSTest serializes unrelated classes. They cannot overlap one another.",
+                "MSTest serializes unrelated classes. They may still run in parallel with one another.",
+            ),
+            (
+                "deferred-members",
+                DEFERRED_REPORT + " They cannot overlap these members.",
+                DEFERRED_REPORT + " They may overlap these members.",
+            ),
+            (
+                "shared-resource",
+                RESOURCE_REPORT + " They can overlap these members.",
+                RESOURCE_REPORT + " They cannot overlap these members.",
+            ),
+        ):
+            with self.subTest(policy=policy):
+                report.validate_report(policy, valid)
+                with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                    report.validate_report(policy, invalid)
+        report.validate_report(
+            "assembly-serial",
+            "MSTest serializes unrelated classes. In xUnit unrelated collections "
+            "may overlap. They may run in parallel with one another.",
+        )
+        with self.assertRaisesRegex(AssertionError, "unresolved pronoun"):
+            report.validate_report("assembly-serial", "They may run in parallel with one another.")
 
 
 if __name__ == "__main__":
