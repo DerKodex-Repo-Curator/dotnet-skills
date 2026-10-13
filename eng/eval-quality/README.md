@@ -555,6 +555,40 @@ decides anything.
 CI runs the gate without `--strict`, so these are informational there. Passing
 `--strict` returns exit code 1 when any warning is present.
 
+### Likely semantic answer leakage
+
+The gate warns when a stimulus name or prompt appears to disclose the answer
+that the treatment is meant to produce. The deterministic patterns are narrow:
+
+- `Select <specific technology>` when the customer prompt did not name it;
+- `Replace <problem> with <solution>`;
+- `Detect <exact defect>` when the prompt left the cause open;
+- solution-specific APIs or algorithms in a name but not in the prompt; and
+- a diagnostic or performance prompt that also prescribes explicit remediation,
+  such as doing the work "with one database operation".
+
+This remains a warning because natural language cannot provide a universal
+hard-error boundary. A conversion, migration, or scaffold can legitimately name
+its target when that is the direct customer requirement.
+
+Disposition each warning with a prompt-blindness review:
+
+1. Hide the stimulus name, rubric, golden evidence, skill, and skill
+   instructions. Read only the prompt and fixture inputs.
+2. State the solution space that remains. A diagnostic or selection case should
+   not disclose the technology, API, algorithm, exact defect, or remediation.
+3. Rewrite the name to describe the customer outcome, and remove prescriptive
+   remediation from the prompt.
+4. If the customer directly requested the exact conversion or scaffold, retain
+   it and record that disposition in review. Do not reword only to evade the
+   detector.
+
+The #1305 regression is representative. `Replace per-row saves with one
+set-based update` and a prompt requiring "one database operation" disclosed the
+remediation. The corrected case is named `Improve slow category discount
+maintenance`, and its prompt asks for preserved behavior and better performance
+without naming the database operation.
+
 ### Capability stimulus without a proven reference
 
 Vally cannot prove solvability or grader calibration without a golden input.

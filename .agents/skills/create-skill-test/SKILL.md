@@ -161,6 +161,20 @@ own value rather than defaulting it.
 - Add a dormancy stimulus for each real routing boundary. No-op proves restraint on an on-target,
   already-correct input; dormancy proves the target stays inactive on an off-target request.
 
+**Run a prompt-blindness review before keeping a stimulus:**
+
+1. Hide the stimulus name, rubric, golden evidence, target skill, and target instructions. Read only
+   the customer prompt and fixture inputs.
+2. Write down the valid solution space that remains. The prompt must leave the technology, API,
+   algorithm, exact defect, and remediation open unless the customer directly requested one.
+3. Reveal the name and rubric. Rewrite names such as `Select <technology>`,
+   `Replace <problem> with <solution>`, and `Detect <exact defect>` so they describe the customer
+   outcome rather than the expected answer.
+4. Remove prompt clauses that prescribe the rubric's remediation, such as "with one database
+   operation", when the task is meant to test diagnosis or technology choice.
+5. Keep exact conversions and scaffolding requirements when they are the real customer request.
+   Record that disposition in review if `check_eval_quality.py` reports a semantic-leakage warning.
+
 ### Step 5: Configure the environment
 
 ```yaml
@@ -396,7 +410,7 @@ Validation must cover four layers:
    family and one Claude family executor. Report each result separately. Different executor or
    judge families do not increase the independent stimulus count.
 
-`check_eval_quality.py` blocks 22 structural defect classes that can corrupt a result:
+`check_eval_quality.py` blocks 23 structural defect classes that can corrupt a result:
 missing or untracked fixtures, self-contradicting coverage fixtures, empty grader configs, dormancy
 guards with `reject_skills`, sub-floor stimulus counts, duplicate YAML keys or stimulus names, and
 invalid defaults, tags, golden evidence, test commands, or ATIF trajectories. See
@@ -414,6 +428,8 @@ For the official run, submit a PR review containing `/evaluate` so it binds to t
 - [ ] Every stimulus is necessary and fits the target; each preference case adds distinct voting value
 - [ ] Each capability stimulus has stable `capability`, `risk`, and `journey` tags and a unique name
 - [ ] Prompts never name the skill, the agent, or its vocabulary
+- [ ] Prompt-blindness review leaves the technology, API, algorithm, exact defect, and remediation
+      undisclosed unless the customer directly requested them
 - [ ] Every referenced fixture exists and is tracked by `git ls-files`
 - [ ] Every fixture behaves as its stimulus assumes — healthy ones build, deliberately broken ones fail only for the stated reason
 - [ ] Preservation and scope graders cover the complete in-scope file set
@@ -436,6 +452,7 @@ For the official run, submit a PR review containing `/evaluate` so it binds to t
 | Landing an eval at exactly 5 stimuli | A single tie makes a pass unreachable; size for the effect and tie rate |
 | Raising `runs` to clear the floor | Repeats measure reliability for one task; add stimuli |
 | Prompt mentions the skill or agent by name | Rewrite as a natural developer request |
+| Name or prompt discloses the expected technology, defect, API, algorithm, or remediation | Run the prompt-blindness review; describe the outcome and remove solution cues unless they are direct customer requirements |
 | Rubric rewards using the skill | Drop the item — the harness reports activation separately; rubrics measure outcomes |
 | Fixture present but ignored by git | Verify with `git ls-files`; CI setup will fail otherwise |
 | Fixture that does not build, or breaks for the wrong reason | Fix the fixture before blaming the skill |

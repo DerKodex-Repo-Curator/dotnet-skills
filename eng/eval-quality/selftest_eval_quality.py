@@ -1466,6 +1466,133 @@ def duplicate_stimulus_names(d):
         f.write(raw.replace("name: Does the edge thing", "name: Does the thing", 1))
 
 
+def replace_first_stimulus_text(d, *, name, prompt):
+    path = EV(d)
+    with open(path) as f:
+        raw = f.read()
+    raw = raw.replace("Does the thing", name, 1)
+    raw = raw.replace("prompt: do it", f"prompt: {prompt}", 1)
+    with open(path, "w") as f:
+        f.write(raw)
+
+
+def leaked_set_based_remediation(d):
+    replace_first_stimulus_text(
+        d,
+        name="Replace per-row saves with one set-based update",
+        prompt=(
+            "ApplyCategoryDiscount takes minutes for large categories. Make it perform "
+            "the same update with one database operation."
+        ),
+    )
+
+
+def leaked_technology_selection(d):
+    replace_first_stimulus_text(
+        d,
+        name="Select ML.NET for tabular churn prediction",
+        prompt=(
+            "Add a feature that flags customers likely to churn from the supplied "
+            "tabular CSV, and explain the technology choice."
+        ),
+    )
+
+
+def leaked_exact_performance_defect(d):
+    replace_first_stimulus_text(
+        d,
+        name="Detect a project evaluated twice under different global properties",
+        prompt=(
+            "This small project takes longer to evaluate than expected. Inspect the "
+            "provided binlog and identify the cause."
+        ),
+    )
+
+
+def leaked_solution_api(d):
+    replace_first_stimulus_text(
+        d,
+        name="Speed up membership checks with HashSet",
+        prompt="The membership checks get much slower as the input grows. Improve them.",
+    )
+
+
+def leaked_solution_algorithm(d):
+    replace_first_stimulus_text(
+        d,
+        name="Improve sorted lookups with binary search",
+        prompt="The sorted lookup path gets much slower as the input grows. Improve it.",
+    )
+
+
+def leaked_prompt_remediation(d):
+    replace_first_stimulus_text(
+        d,
+        name="Improve slow category discount maintenance",
+        prompt=(
+            "ApplyCategoryDiscount takes minutes for large categories. Make it perform "
+            "the same update with one database operation."
+        ),
+    )
+
+
+def direct_conversion_requirement(d):
+    replace_first_stimulus_text(
+        d,
+        name="Replace ExpectedExceptionAttribute with Assert.ThrowsExactly",
+        prompt=(
+            "Replace ExpectedExceptionAttribute with Assert.ThrowsExactly in these "
+            "MSTest tests and preserve their behavior."
+        ),
+    )
+
+
+def contextual_direct_conversion_requirement(d):
+    replace_first_stimulus_text(
+        d,
+        name="Migrate package management",
+        prompt=(
+            "This solution has package version drift. Please convert the repository "
+            "to Central Package Management."
+        ),
+    )
+
+
+def direct_scaffolding_requirement(d):
+    replace_first_stimulus_text(
+        d,
+        name="Create an ASP.NET Core API",
+        prompt="Create an ASP.NET Core API with one health endpoint.",
+    )
+
+
+def direct_technology_requirement(d):
+    replace_first_stimulus_text(
+        d,
+        name="Select ML.NET for the requested classifier",
+        prompt="Build the classifier with ML.NET and the supplied training data.",
+    )
+
+
+def explicit_defect_requirement(d):
+    replace_first_stimulus_text(
+        d,
+        name="Detect unsigned tail offset underflow",
+        prompt=(
+            "I suspect unsigned tail offset underflow in the vectorized loop. Confirm "
+            "whether that exact defect is present."
+        ),
+    )
+
+
+def generic_selection_outcome(d):
+    replace_first_stimulus_text(
+        d,
+        name="Select one target framework in a multi-targeted project",
+        prompt="Run the tests once for the most suitable target framework.",
+    )
+
+
 def grandfathered_reports_its_arithmetic(d):
     # The gate's job for a grandfathered eval is to tell the contributor what to
     # change, so the report must separate distinct stimuli from repeated runs.
@@ -1948,6 +2075,42 @@ results = [
     case("stimulus-level timeout is silently ignored", stimulus_level_timeout, expect_fail=True),
     case("duplicate stimulus names make slot identity ambiguous",
          duplicate_stimulus_names, expect_fail=True),
+    output_case("set-based name and prompt expose remediation",
+                leaked_set_based_remediation,
+                "may leak the expected answer"),
+    output_case("technology-selection name exposes the answer",
+                leaked_technology_selection,
+                "may leak the expected answer"),
+    output_case("performance name exposes the exact defect",
+                leaked_exact_performance_defect,
+                "may leak the expected answer"),
+    output_case("solution API in a name remains visible",
+                leaked_solution_api,
+                "may leak the expected answer"),
+    output_case("solution algorithm in a name remains visible",
+                leaked_solution_algorithm,
+                "may leak the expected answer"),
+    output_case("diagnostic prompt prescribes the remediation",
+                leaked_prompt_remediation,
+                "may leak the expected answer"),
+    silent_case("direct conversion requirement is not leakage",
+                direct_conversion_requirement,
+                "may leak the expected answer"),
+    silent_case("contextual direct conversion is not leakage",
+                contextual_direct_conversion_requirement,
+                "may leak the expected answer"),
+    silent_case("direct scaffolding requirement is not leakage",
+                direct_scaffolding_requirement,
+                "may leak the expected answer"),
+    silent_case("direct technology requirement is not leakage",
+                direct_technology_requirement,
+                "may leak the expected answer"),
+    silent_case("explicitly named defect is a direct requirement",
+                explicit_defect_requirement,
+                "may leak the expected answer"),
+    silent_case("generic selection outcome is not a solution cue",
+                generic_selection_outcome,
+                "may leak the expected answer"),
     case("reject_skills wildcard blocks the target skill",
          wildcard_rejects_target_skill, expect_fail=True),
     case("capability stimulus cannot reject all skills",

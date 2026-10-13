@@ -78,8 +78,9 @@ REPORTS warnings for explicit oracle debt and judgement calls: capability
 stimuli without a reference, expected workspace changes without replayable
 state, simple response references hidden in separate JSON, grandfathered
 underpowered evals, orphaned fixtures, targets with no eval, and dormancy guards
-that appear to lack an anti-hijack rubric item. Warnings do not fail unless
-`--strict` is passed.
+that appear to lack an anti-hijack rubric item, plus likely semantic answer
+leakage from solution-shaped stimulus names or prompts. Warnings do not fail
+unless `--strict` is passed.
 
 Usage:  python eng/eval-quality/check_eval_quality.py [--strict] [--all]
 """
@@ -162,6 +163,71 @@ MAX_INLINE_REFERENCE_CHARS = 2_000
 MAX_INLINE_REFERENCE_LINES = 30
 REQUIRED_STIMULUS_TAGS = ("capability", "risk", "journey")
 TAG_VALUE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+DIRECT_REQUIREMENT = re.compile(
+    r"^\s*(?:(?:please|can you|could you|would you)\s+|"
+    r"(?:i (?:need|want) you to)\s+)?"
+    r"(?:add|build|convert|create|generate|implement|migrate|port|replace|"
+    r"rewrite|scaffold|switch|upgrade|use)\b",
+    re.I,
+)
+DIRECT_REQUIREMENT_ANYWHERE = re.compile(
+    r"\b(?:(?:please|can you|could you|would you|help me)\s+|"
+    r"i (?:need|want)(?: you)? to\s+)"
+    r"(?:add|build|convert|create|generate|implement|migrate|port|replace|"
+    r"rewrite|scaffold|switch|upgrade|use)\b",
+    re.I,
+)
+DIRECT_TRANSFORMATION = re.compile(
+    r"\b(?:convert|migrate|switch|upgrade)\s+"
+    r"(?:all|my|our|the|these|this|project|repo|repository|solution)\b",
+    re.I,
+)
+DIAGNOSTIC_FRAMING = re.compile(
+    r"\b(?:analy[sz]e|bottleneck|degraded|diagnos|issue|problem|root cause|"
+    r"slow|taking minutes|why)\b",
+    re.I,
+)
+PRESCRIPTIVE_REMEDIATION = re.compile(
+    r"\b(?:"
+    r"replace\s+[^.\n]{1,80}\s+(?:with|by)\s+[^.\n]{1,80}|"
+    r"(?:switch|migrate|convert)\s+[^.\n]{1,80}\s+to\s+[^.\n]{1,80}|"
+    r"use\s+(?:`[^`]+`|[A-Z][A-Za-z0-9_.+#]*)(?:\s+instead\b|\s+to\s+avoid\b)|"
+    r"(?:with|using)\s+(?:one|a single)\s+(?:database operation|query|"
+    r"round[- ]?trip|update statement)|"
+    r"(?:one|a single)\s+set-based\s+(?:operation|query|update)|"
+    r"(?:without|instead of)\s+(?:loading|materializing)\b[^.\n]{0,80}"
+    r")",
+    re.I,
+)
+EXACT_DEFECT_MARKERS = re.compile(
+    r"\b(?:cartesian|deadlock|double|duplicate[sd]?|global propert(?:y|ies)|"
+    r"incompatible|n\+1|overflow|race|tail offset|twice|underflow|"
+    r"unreachable|unsupported|unused)\b",
+    re.I,
+)
+ALGORITHM_PHRASE = re.compile(
+    r"\b(?:binary search|keyset pagination|set-based (?:operation|query|update)|"
+    r"[A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z][A-Za-z0-9-]*){0,2}\s+algorithm)\b",
+    re.I,
+)
+SPECIFIC_TECHNOLOGIES = {
+    "angular", "asp net", "azure", "docker", "graphql", "grpc", "kubernetes",
+    "ml net", "mstest", "postgresql", "react", "redis", "sqlite", "xunit",
+}
+SOLUTION_IDENTIFIER_SUFFIXES = (
+    "Async", "Attribute", "Cleanup", "Context", "Culture", "Data", "Details",
+    "Dictionary", "Errors", "Fixture", "Framework", "Handler", "Import", "Info",
+    "Initialize", "Object", "Observer", "Output", "Parallel", "Property",
+    "Provider", "Reference", "Row", "Set", "Source", "Strategy",
+)
+NON_SOLUTION_FILE_EXTENSIONS = {
+    "binlog", "config", "csproj", "dll", "dmp", "fsproj", "json", "md",
+    "props", "sln", "so", "targets", "vbproj", "xml", "yaml", "yml",
+}
+LEAKAGE_STOP_WORDS = {
+    "a", "an", "and", "as", "at", "by", "detect", "for", "from", "in", "into",
+    "of", "on", "or", "replace", "select", "the", "to", "with",
+}
 
 # Local fixture validation leaves these deterministic build-output directories
 # behind. They are not eval inputs and must not be required in the git index.
@@ -1412,6 +1478,139 @@ def check_stimulus_names(spec: str, doc: dict) -> None:
         seen.add(name)
 
 
+def _normalized_semantic_text(value: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", value.casefold()))
+
+
+def _semantic_keywords(value: str) -> set[str]:
+    return {
+        token for token in _normalized_semantic_text(value).split()
+        if token not in LEAKAGE_STOP_WORDS and len(token) > 1
+    }
+
+
+def _phrase_present(phrase: str, text: str) -> bool:
+    phrase_words = _semantic_keywords(phrase)
+    if not phrase_words:
+        return False
+    return phrase_words.issubset(_semantic_keywords(text))
+
+
+def _technical_terms(value: str) -> list[str]:
+    terms = []
+    terms.extend(re.findall(r"`([^`\r\n]+)`", value))
+    terms.extend(
+        term
+        for term in re.findall(
+            r"\b[A-Za-z][A-Za-z0-9+#]*(?:\.[A-Za-z][A-Za-z0-9+#]*)+\b",
+            value)
+        if term.rsplit(".", 1)[-1].casefold() not in NON_SOLUTION_FILE_EXTENSIONS
+    )
+    terms.extend(
+        term
+        for term in re.findall(r"\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]+)+\b", value)
+        if term.endswith(SOLUTION_IDENTIFIER_SUFFIXES)
+    )
+    terms.extend(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\(\)", value))
+    terms.extend(match.group(0) for match in ALGORITHM_PHRASE.finditer(value))
+    return list(dict.fromkeys(terms))
+
+
+def _is_direct_requirement(prompt: str) -> bool:
+    sentences = [
+        part.strip()
+        for part in re.split(r"(?<=[.!?])\s+|\r?\n+", prompt)
+        if part.strip()
+    ]
+    if not sentences:
+        return False
+    if (DIRECT_REQUIREMENT.search(sentences[0])
+            or DIRECT_REQUIREMENT_ANYWHERE.search(prompt)
+            or DIRECT_TRANSFORMATION.search(prompt)):
+        return True
+    return (
+        not DIAGNOSTIC_FRAMING.search(prompt)
+        and any(DIRECT_REQUIREMENT.search(sentence) for sentence in sentences)
+    )
+
+
+def _specific_selection(selection: str) -> bool:
+    normalized = _normalized_semantic_text(selection)
+    return (
+        bool(_technical_terms(selection))
+        or normalized in SPECIFIC_TECHNOLOGIES
+        or any(
+            normalized.startswith(f"{technology} ")
+            for technology in SPECIFIC_TECHNOLOGIES
+        )
+    )
+
+
+def check_semantic_answer_leakage(spec: str, doc: dict) -> None:
+    """Warn when a stimulus appears to disclose the expected solution.
+
+    This is deliberately heuristic. It requires a solution-shaped construction
+    plus evidence that the disclosed technology, API, algorithm, or exact defect
+    is absent from the customer prompt. Direct conversion and scaffolding
+    requests remain quiet when the customer explicitly names the target.
+    """
+    for stimulus in doc.get("stimuli") or []:
+        if not isinstance(stimulus, dict):
+            continue
+        name = stimulus.get("name")
+        prompt = stimulus.get("prompt")
+        if not isinstance(name, str) or not isinstance(prompt, str):
+            continue
+
+        reasons = []
+        selection = re.match(
+            r"^Select\s+(.+?)(?:\s+(?:for|from|in|to|when)\b|$)",
+            name,
+            re.I,
+        )
+        if (selection
+                and _specific_selection(selection.group(1))
+                and not _phrase_present(selection.group(1), prompt)):
+            reasons.append(
+                f"name selects {selection.group(1)!r}, which the customer prompt does not")
+
+        replacement = re.match(r"^Replace\s+.+?\s+with\s+(.+)$", name, re.I)
+        if replacement and not _phrase_present(replacement.group(1), prompt):
+            reasons.append(
+                f"name prescribes replacement {replacement.group(1)!r}")
+
+        detected = re.match(r"^Detect\s+(.+)$", name, re.I)
+        if (detected
+                and EXACT_DEFECT_MARKERS.search(detected.group(1))
+                and not _phrase_present(detected.group(1), prompt)):
+            reasons.append(
+                "name states an exact defect that the customer prompt leaves to diagnose")
+
+        missing_terms = [
+            term for term in _technical_terms(name)
+            if not _phrase_present(term, prompt)
+        ]
+        if missing_terms:
+            reasons.append(
+                "name discloses solution-specific term(s) absent from the prompt: "
+                + ", ".join(repr(term) for term in missing_terms[:3]))
+
+        remediation = PRESCRIPTIVE_REMEDIATION.search(prompt)
+        if remediation and not _is_direct_requirement(prompt):
+            excerpt = " ".join(remediation.group(0).split())
+            reasons.append(
+                f"prompt includes prescriptive remediation {excerpt!r} after framing "
+                "a diagnostic or performance problem")
+
+        if reasons:
+            warnings.append(
+                f"{spec}: stimulus {name!r} may leak the expected answer: "
+                f"{'; '.join(dict.fromkeys(reasons))}. Review it with the name, rubric, "
+                "golden evidence, and target instructions hidden. Rewrite solution cues, "
+                "or retain a legitimate direct customer requirement and record that "
+                "disposition in review.")
+
+
 def check_skill_constraints(spec: str, doc: dict) -> None:
     for stim in doc.get("stimuli") or []:
         if not isinstance(stim, dict):
@@ -1946,6 +2145,7 @@ def main() -> int:
         check_spec_shape(spec, doc, raw)
         check_unquoted_rubric_code_tokens(spec, raw)
         check_stimulus_names(spec, doc)
+        check_semantic_answer_leakage(spec, doc)
         check_skill_constraints(spec, doc)
 
     check_cobertura(changed_paths)
