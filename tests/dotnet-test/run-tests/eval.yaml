@@ -100,8 +100,8 @@ stimuli:
     prompt: |
       I need discovery-only commands for three CI lanes, without running test
       bodies or rebuilding. All three solutions already have current Debug
-      outputs and use SDK 10.0.100. Give one command for each lane; do not
-      execute anything or modify files.
+      outputs and use SDK 10.0.100. Give one standalone command on its own
+      line for each lane; do not execute anything or modify files.
 
       - VSTest.slnx uses VSTest with MSTest.
       - Bridge.slnx explicitly selects VSTest in global.json, but its projects
@@ -149,11 +149,14 @@ stimuli:
       - type: output-not-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?![^\r\n]*[ \t]--list-tests(?:[ \t\r\n]|$))'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)[^\r\n]*[;&|]'
       - type: prompt
     rubric:
       - Gives a discovery-only command for each named solution without running tests or rebuilding
       - Preserves the legacy bridge on the compatible MTP version despite SDK 10, and keeps SDK build options before forwarded application arguments
-      - Uses the native solution selector only for the native MTP lane
+      - Uses --solution for the native MTP lane (valid SDK 10 syntax), while the VSTest and legacy bridge lanes keep positional solution paths
       - Does not claim that listing tests proves they passed or that the commands were executed
     constraints:
       reject_tools:

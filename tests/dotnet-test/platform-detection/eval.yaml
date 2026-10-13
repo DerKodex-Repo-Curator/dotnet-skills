@@ -14,6 +14,85 @@ defaults:
   timeout: 4m
   runs: 2
 stimuli:
+  - name: Reject SDK 10 VSTest mode for an MTP 2 application
+    prompt: |
+      Identify this project's test platform and framework from its configuration.
+      Can our normal dotnet test entry point run it as written? Inspect the
+      configuration only; do not build, run tests, or modify files.
+
+      Answer with these three lines first:
+      dotnet test mode: <VSTest or native MTP>
+      Platform: <VSTest, MTP, or unavailable>
+      Framework: <MSTest, xUnit, NUnit, or TUnit>
+      Then explain the deciding compatibility constraint.
+    tags:
+      capability: reject-sdk10-mtp2-legacy-bridge
+      risk: false-executable-platform
+      journey: diagnose-incompatible-test-integration
+    environment:
+      files:
+        - src: fixtures/sdk10-mtp2-vstest-bridge/global.json
+          dest: global.json
+        - src: fixtures/sdk10-mtp2-vstest-bridge/TestProject.csproj
+          dest: TestProject.csproj
+        - src: fixtures/sdk10-mtp2-vstest-bridge/SampleTests.cs
+          dest: SampleTests.cs
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: platform-detection-sdk10-mtp2-unavailable
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              dotnet test mode: VSTest
+              Platform: unavailable
+              Framework: MSTest
+
+              global.json selects VSTest mode on SDK 10, while the executable
+              enables the MSTest MTP runner and pins Microsoft.Testing.Platform.MSBuild
+              2.4.1. MTP 2 removes the VSTest-mode bridge on SDK 10 even when
+              TestingPlatformDotnetTestSupport is true. This entry point cannot
+              run as configured; it does not silently fall back to VSTest.
+              Selecting native MTP would require an explicit configuration change.
+              I did not build, run commands, or modify files.
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*\**[ \t]*dotnet test mode:[ \t]*\**[ \t]*VSTest\b'
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*\**[ \t]*Platform:[ \t]*\**[ \t]*unavailable\b'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^[ \t]*\**[ \t]*Platform:[ \t]*\**[ \t]*(?:VSTest|MTP|Microsoft\.Testing\.Platform)\b'
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*\**[ \t]*Framework:[ \t]*\**[ \t]*MSTest\b'
+      - type: output-matches
+        config:
+          pattern: '(?is)(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2(?:\.\d+)*.*?(?:SDK|\.NET)[\s`*]*10|(?:SDK|\.NET)[\s`*]*10.*?(?:MTP|Microsoft\.Testing\.Platform(?:\.MSBuild)?)[\s`*]*(?:version[\s`*]+|v)?2'
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib;
+            expected={'global.json':'d2274b8a769cf15d1e663c34ae8b3285b88ea8c552ea096e037e498c5cc8a99c','TestProject.csproj':'1d0a3f11460934cfa2f8ec8130d6f4699d57cf5aec8967a870da00d87b40f0a7','SampleTests.cs':'0c799e74455a9079482584d53b5a69668c84afe3c049b854509ac8e8dc97b74e'};
+            assert all(hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==h for p,h in expected.items()), 'Read-only fixture changed'"
+          expected_exit_code: 0
+          timeout: 1m
+      - type: prompt
+    rubric:
+      - Identifies the configured VSTest command mode and MSTest framework but reports the executed platform unavailable
+      - Explains that MTP 2 cannot use the VSTest-mode bridge on SDK 10 despite enabled runner, bridge property and executable output
+      - Does not silently reclassify the incompatible entry point as VSTest or MTP, change configuration, or claim successful execution
+    constraints:
+      reject_tools:
+        - edit
+        - create
+        - apply_patch
+        - task
+
   - name: SDK 10 VSTest mode bridges to an MSTest.Sdk MTP project
     prompt: |
       Detect this project's test platform and test framework. The SDK is pinned

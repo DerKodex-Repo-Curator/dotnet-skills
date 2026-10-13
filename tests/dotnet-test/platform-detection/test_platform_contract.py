@@ -1,0 +1,136 @@
+"""Check the incompatible MTP bridge answer and its fixture configuration."""
+
+import importlib.util
+import json
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+import tempfile
+import unittest
+import xml.etree.ElementTree as ET
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[3]
+EVAL = Path(__file__).with_name("eval.yaml")
+SPEC = yaml.safe_load(EVAL.read_text(encoding="utf-8"))
+STIMULUS = next(
+    item for item in SPEC["stimuli"]
+    if item["name"] == "Reject SDK 10 VSTest mode for an MTP 2 application"
+)
+GOLDEN = STIMULUS["golden_trajectory"]["inline"]["steps"][-1]["message"]
+checker_spec = importlib.util.spec_from_file_location(
+    "eval_quality", ROOT / "eng" / "eval-quality" / "check_eval_quality.py"
+)
+checker = importlib.util.module_from_spec(checker_spec)
+checker_spec.loader.exec_module(checker)
+
+
+class PlatformContractTests(unittest.TestCase):
+    def failures(self, response):
+        failed = []
+        for grader in STIMULUS["graders"]:
+            kind = grader["type"]
+            if kind in ("prompt", "run-command"):
+                continue
+            self.assertIn(kind, ("output-matches", "output-not-matches"))
+            found = checker.vally_regex_found(grader["config"]["pattern"], response)
+            if found != (kind == "output-matches"):
+                failed.append(kind)
+        return failed
+
+    def test_fixture_has_every_bridge_signal_but_an_incompatible_version(self):
+        fixture = EVAL.parent / "fixtures" / "sdk10-mtp2-vstest-bridge"
+        global_json = json.loads((fixture / "global.json").read_text(encoding="utf-8"))
+        project = ET.parse(fixture / "TestProject.csproj")
+        self.assertEqual("10.0.100", global_json["sdk"]["version"])
+        self.assertEqual("VSTest", global_json["test"]["runner"])
+        for name, value in (
+            ("TargetFramework", "net8.0"),
+            ("OutputType", "Exe"),
+            ("EnableMSTestRunner", "true"),
+            ("TestingPlatformDotnetTestSupport", "true"),
+        ):
+            self.assertEqual(value, project.findtext(f".//{name}"))
+        packages = {
+            node.attrib["Include"]: node.attrib["Version"]
+            for node in project.findall(".//PackageReference")
+        }
+        self.assertEqual("4.4.1", packages["MSTest"])
+        self.assertEqual("2.4.1", packages["Microsoft.Testing.Platform.MSBuild"])
+        for entry in STIMULUS["environment"]["files"]:
+            self.assertTrue((EVAL.parent / entry["src"]).is_file(), entry["src"])
+
+    def test_golden_and_formatted_labels_pass(self):
+        self.assertEqual([], self.failures(GOLDEN))
+        formatted = GOLDEN
+        for label in ("dotnet test mode", "Platform", "Framework"):
+            formatted = formatted.replace(f"{label}:", f"**{label}:**")
+        self.assertEqual([], self.failures(formatted))
+
+    def test_inline_code_package_name_and_version_are_valid_evidence(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for evidence in (
+            "`Microsoft.Testing.Platform.MSBuild` 2.4.1 cannot bridge on SDK 10.",
+            "SDK **10** cannot bridge `Microsoft.Testing.Platform.MSBuild` version **2.4.1**.",
+            "MTP **2** removed the VSTest-mode bridge on .NET **10**.",
+        ):
+            with self.subTest(evidence=evidence):
+                self.assertEqual([], self.failures(labels + "\n\n" + evidence))
+
+    def test_executable_fallbacks_are_rejected_even_alongside_unavailable(self):
+        for platform in ("VSTest", "MTP", "Microsoft.Testing.Platform"):
+            with self.subTest(platform=platform):
+                self.assertTrue(self.failures(
+                    GOLDEN.replace("Platform: unavailable", f"Platform: {platform}")
+                ))
+                self.assertIn("output-not-matches", self.failures(
+                    GOLDEN + f"\nPlatform: {platform}\n"
+                ))
+
+    def test_wrong_mode_framework_and_missing_version_evidence_fail(self):
+        for original, replacement in (
+            ("dotnet test mode: VSTest", "dotnet test mode: native MTP"),
+            ("Framework: MSTest", "Framework: NUnit"),
+        ):
+            with self.subTest(replacement=replacement):
+                self.assertTrue(self.failures(GOLDEN.replace(original, replacement)))
+        self.assertTrue(self.failures(GOLDEN.split("\n\n", 1)[0]))
+
+    def test_read_only_guard_checks_every_staged_file(self):
+        guard = next(
+            grader["config"]["command"] for grader in STIMULUS["graders"]
+            if grader["type"] == "run-command"
+        )
+        command = shlex.split(guard)
+        self.assertEqual("python", command[0])
+        command[0] = sys.executable
+        with tempfile.TemporaryDirectory(prefix="platform-contract-") as directory:
+            root = Path(directory)
+            for entry in STIMULUS["environment"]["files"]:
+                (root / entry["dest"]).write_bytes((EVAL.parent / entry["src"]).read_bytes())
+
+            def run_guard():
+                return subprocess.run(
+                    command, cwd=root, capture_output=True, text=True, timeout=30
+                )
+
+            result = run_guard()
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            for entry in STIMULUS["environment"]["files"]:
+                path = root / entry["dest"]
+                original = path.read_bytes()
+                for remove in (False, True):
+                    with self.subTest(path=entry["dest"], remove=remove):
+                        if remove:
+                            path.unlink()
+                        else:
+                            path.write_bytes(original + b"\nchanged\n")
+                        self.assertNotEqual(0, run_guard().returncode)
+                        path.write_bytes(original)
+
+
+if __name__ == "__main__":
+    unittest.main()

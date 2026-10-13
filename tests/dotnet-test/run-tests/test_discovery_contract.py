@@ -103,6 +103,28 @@ class DiscoveryContractTests(unittest.TestCase):
                 self.assertNotIn("output-matches", failures)
                 self.assertIn("output-not-matches", failures)
 
+    def test_compound_commands_cannot_borrow_discovery_from_another_segment(self):
+        execution = "dotnet test Native.slnx --no-build"
+        discovery = "dotnet test --solution Native.slnx --no-build --list-tests"
+        for separator, prefix, position, reversed_commands in product(
+            ("; ", " && ", " || ", " | ", " & ", ";", "&&", "||"),
+            ("", "  ", "$ ", "> ", "\t"),
+            range(4),
+            (False, True),
+        ):
+            with self.subTest(
+                separator=separator, prefix=prefix, position=position,
+                reversed_commands=reversed_commands,
+            ):
+                segments = [execution, discovery]
+                if reversed_commands:
+                    segments.reverse()
+                commands = list(COMMANDS)
+                commands.insert(position, prefix + separator.join(segments))
+                failures = self.failed_graders("\n".join(commands))
+                self.assertNotIn("output-matches", failures)
+                self.assertIn("output-not-matches", failures)
+
     def test_missing_discovery_command_still_fails(self):
         for command in COMMANDS:
             with self.subTest(command=command):
@@ -111,9 +133,13 @@ class DiscoveryContractTests(unittest.TestCase):
                 )
 
     def test_inline_command_mention_is_not_execution(self):
-        self.assertEqual([], self.failed_graders(
-            GOLDEN + "\nDo not use `dotnet test Native.slnx --no-build` to discover tests."
-        ))
+        for mention in (
+            "Do not use `dotnet test Native.slnx --no-build` to discover tests.",
+            "Do not chain `dotnet test Native.slnx --no-build; "
+            "dotnet test --solution Native.slnx --no-build --list-tests`.",
+        ):
+            with self.subTest(mention=mention):
+                self.assertEqual([], self.failed_graders(GOLDEN + "\n" + mention))
 
 
 if __name__ == "__main__":

@@ -12,8 +12,10 @@ Supports any language tree-sitter-language-pack can parse and classify (Python,
 TypeScript, JavaScript, Go, Java, Rust, C#, Ruby, Kotlin, Swift, PowerShell,
 C++, ...).
 
-Output: JSON to stdout matching the schema used by the C# `find-untested-sources`
-skill, so the same prompt patterns can consume both tools.
+Output: JSON to stdout with repo_root, summary, untested_sources, orphan_tests,
+and optional tested_sources (--include-tested). This legacy schema differs from
+the C# analyzer's repo/counts/untested/source_to_tests schema; consumers must use
+the selected engine's keys. Pairing is heuristic reference evidence, not coverage.
 
 Dependencies:
     pip install tree-sitter-language-pack
