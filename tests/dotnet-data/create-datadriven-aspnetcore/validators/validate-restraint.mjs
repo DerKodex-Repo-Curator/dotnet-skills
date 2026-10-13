@@ -41,6 +41,41 @@ function forbidText(text, pattern, description) {
   if (pattern.test(text)) failures.push(description);
 }
 
+function requireArtifact(pattern, description) {
+  const file = files.find((candidate) => pattern.test(candidate.rel));
+  if (!file) failures.push(`${description} is missing`);
+  else if (!file.text.trim()) failures.push(`${description} is empty`);
+  return file?.text ?? "";
+}
+
+function activeRazor(text) {
+  return text
+    .replace(/@\*[\s\S]*?\*@/g, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+}
+
+function hasEntityPrefixedRazorPage(relativePath) {
+  const match = relativePath.match(/(?:^|\/)Pages\/(?:.*\/)?([^/]+)\.cshtml(?:\.cs)?$/);
+  if (!match) return false;
+  const prefix = match[1].match(/^(Products?|Categor(?:y|ies))/i)?.[0];
+  if (!prefix) return false;
+  const suffix = match[1].slice(prefix.length);
+  return suffix === "" ||
+    /^(?:Index|Details|Create|Edit|Delete)$/i.test(suffix) ||
+    /^[A-Z0-9_.-]/.test(suffix);
+}
+
+function hasEntityPrefixedBlazorComponent(relativePath) {
+  const match = relativePath.match(/(?:^|\/)Components\/Pages\/(?:.*\/)?([^/]+)\.razor(?:\.cs)?$/);
+  if (!match) return false;
+  const prefix = match[1].match(/^(Employees?|Departments?)/i)?.[0];
+  if (!prefix) return false;
+  const suffix = match[1].slice(prefix.length);
+  return suffix === "" ||
+    /^(?:Index|Details|Create|Edit|Delete)$/i.test(suffix) ||
+    /^[A-Z0-9_.-]/.test(suffix);
+}
+
 forbidPath(/(?:^|\/)Migrations(?:\/|$)/i, "migrations are forbidden");
 forbidPath(/(?:^|\/)[^/]*DbContext[^/]*\.cs$/i, "DbContext source is forbidden");
 forbidPath(/(?:^|\/)(?:Controllers|Endpoints)(?:\/|$)/i, "controller or endpoint scaffolding is forbidden");
@@ -53,9 +88,55 @@ if (contract === "razor-static") {
     /(?:^|\/)Pages\/(?:Products?|Categor(?:y|ies))(?:\/|$)/i,
     "Product or Category CRUD pages are forbidden",
   );
+  if (files.some((file) => hasEntityPrefixedRazorPage(file.rel))) {
+    failures.push("Product or Category entity-prefixed Razor Page files are forbidden");
+  }
+  const terms = activeRazor(requireArtifact(
+    /(?:^|\/)Pages\/Terms\.cshtml$/,
+    "Pages/Terms.cshtml",
+  ));
+  const termsModel = requireArtifact(
+    /(?:^|\/)Pages\/Terms\.cshtml\.cs$/,
+    "Pages/Terms.cshtml.cs",
+  );
+  if (!/^\s*@page(?:\s|$)/m.test(terms)) failures.push("Terms.cshtml must contain an active @page directive");
+  if (!/^\s*@model\s+(?:global::)?MyApp\.Pages\.TermsModel\s*$/m.test(terms)) {
+    failures.push("Terms.cshtml must reference MyApp.Pages.TermsModel");
+  }
+  if (!/\bclass\s+TermsModel\b[^:{]*:\s*(?:(?:global::)?Microsoft\.AspNetCore\.Mvc\.RazorPages\.)?PageModel\b/.test(termsModel)) {
+    failures.push("Terms.cshtml.cs must define TermsModel as a PageModel");
+  }
 } else {
   forbidPath(/(?:^|\/)Components\/Pages\/(?:Employees?|Departments?)(?:[./]|\/|$)/i, "Employee or Department CRUD components are forbidden");
-  const reports = files.find((file) => /(?:^|\/)Components\/Pages\/Reports\.razor$/i.test(file.rel))?.text ?? "";
+  if (files.some((file) => hasEntityPrefixedBlazorComponent(file.rel))) {
+    failures.push("Employee or Department entity-prefixed Blazor component files are forbidden");
+  }
+  const reports = activeRazor(requireArtifact(
+    /(?:^|\/)Components\/Pages\/Reports\.razor$/,
+    "Components/Pages/Reports.razor",
+  ));
+  const navigation = activeRazor(requireArtifact(
+    /(?:^|\/)Components\/Layout\/NavMenu\.razor$/,
+    "Components/Layout/NavMenu.razor",
+  ));
+  if (!/^\s*@page\s+["']\/reports["']\s*$/m.test(reports)) {
+    failures.push('Reports.razor must contain an active @page "/reports" directive');
+  }
+  if (!/<PageTitle>\s*Reports\s*<\/PageTitle>/i.test(reports)) {
+    failures.push("Reports.razor must define a Reports PageTitle");
+  }
+  if (!/<h1\b[^>]*>\s*Reports\s*<\/h1>/i.test(reports)) {
+    failures.push("Reports.razor must contain a Reports heading");
+  }
+  const reportsContent = reports
+    .replace(/^\s*@page[^\r\n]*$/gm, "")
+    .replace(/<PageTitle>[\s\S]*?<\/PageTitle>/gi, "")
+    .replace(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi, "")
+    .trim();
+  if (!reportsContent) failures.push("Reports.razor must contain page content");
+  if (!/<NavLink\b[^>]*\bhref\s*=\s*["']\/?reports["'][^>]*>/i.test(navigation)) {
+    failures.push("NavMenu.razor must link to /reports");
+  }
   forbidText(reports, /@rendermode\b/i, "the static Reports component must not add a render mode");
   const programFile = files.find((file) => file.rel === "Program.cs");
   const programHash = programFile

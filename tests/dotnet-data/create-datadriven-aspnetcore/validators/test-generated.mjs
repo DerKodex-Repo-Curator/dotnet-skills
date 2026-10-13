@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
@@ -12,7 +11,7 @@ const scenarioDirectory = path.dirname(scriptDirectory);
 const validator = path.join(scriptDirectory, "validate-generated.mjs");
 const restraintValidator = path.join(scriptDirectory, "validate-restraint.mjs");
 const preferredBase = "Q:\\copilot\\26bbc64f-ad82-47bf-a29d-42ec7aead779\\validator-tests";
-const fallbackBase = path.join(os.tmpdir(), "dotnet-skills-create-datadriven-validator-tests");
+const fallbackBase = path.join(scenarioDirectory, ".validator-tests");
 
 function usableBase(candidate) {
   try {
@@ -268,6 +267,28 @@ function restraintMutations() {
     write(root, "Pages/Product/Index.cshtml", '@page\n<h1>Product</h1>\n');
     write(root, "Pages/Category/Index.cshtml", '@page\n<h1>Category</h1>\n');
   });
+  restraintMutation("razor-static", "flat entity-prefixed Razor pages", (root) => {
+    write(root, "Pages/ProductIndex.cshtml", '@page\n<h1>Product</h1>\n');
+    write(root, "Pages/CategoryEdit.cshtml.cs",
+      "using Microsoft.AspNetCore.Mvc.RazorPages; public class CategoryEditModel : PageModel { }\n");
+  });
+  restraintMutation("razor-static", "nested entity-prefixed Razor pages", (root) => {
+    write(root, "Pages/Admin/ProductDetails.cshtml", '@page\n<h1>Product</h1>\n');
+    write(root, "Pages/Admin/CategoryEdit.cshtml", '@page\n<h1>Category</h1>\n');
+  });
+  restraintMutation("razor-static", "plural flat entity-prefixed Razor pages", (root) => {
+    write(root, "Pages/ProductsIndex.cshtml", '@page\n<h1>Products</h1>\n');
+    write(root, "Pages/CategoriesEdit.cshtml.cs",
+      "using Microsoft.AspNetCore.Mvc.RazorPages; public class CategoriesEditModel : PageModel { }\n");
+  });
+  restraintMutation("razor-static", "Terms page missing route", (root) =>
+    replace(root, "Pages/Terms.cshtml", "@page", "@* @page *@", 1));
+  restraintMutation("razor-static", "empty Terms page", (root) =>
+    write(root, "Pages/Terms.cshtml", ""));
+  restraintMutation("razor-static", "Terms page references wrong model", (root) =>
+    replace(root, "Pages/Terms.cshtml", "MyApp.Pages.TermsModel", "MyApp.Pages.MissingTermsModel", 1));
+  restraintMutation("razor-static", "Terms backing file is not a PageModel", (root) =>
+    replace(root, "Pages/Terms.cshtml.cs", ": PageModel", "", 1));
   restraintMutation("blazor-static", "non-EF AppDbContext over-scaffolding", (root) =>
     write(root, "Data/AppDbContext.cs", "namespace BlazorApp.Data; public sealed class AppDbContext { }\n"));
   restraintMutation("blazor-static", "compilable Employee and Department CRUD components", (root) => {
@@ -278,8 +299,34 @@ function restraintMutations() {
     write(root, "Components/Pages/Employee/Index.razor", '@page "/employees"\n<h1>Employees</h1>\n');
     write(root, "Components/Pages/Department/Index.razor", '@page "/departments"\n<h1>Departments</h1>\n');
   });
+  restraintMutation("blazor-static", "flat entity-prefixed Blazor components", (root) => {
+    write(root, "Components/Pages/EmployeeIndex.razor", '@page "/employees"\n<h1>Employees</h1>\n');
+    write(root, "Components/Pages/DepartmentsEdit.razor", '@page "/departments/edit"\n<h1>Edit department</h1>\n');
+  });
+  restraintMutation("blazor-static", "nested entity-prefixed Blazor components", (root) => {
+    write(root, "Components/Pages/Admin/EmployeesDetails.razor", '@page "/employees/details"\n<h1>Employee details</h1>\n');
+    write(root, "Components/Pages/Admin/DepartmentDelete.razor", '@page "/departments/delete"\n<h1>Delete department</h1>\n');
+  });
   restraintMutation("blazor-static", "Reports adds an unnecessary render mode", (root) =>
     write(root, "Components/Pages/Reports.razor", '@page "/reports"\n@rendermode InteractiveServer\n<h1>Reports</h1>\n'));
+  restraintMutation("blazor-static", "Reports page missing route", (root) =>
+    replace(root, "Components/Pages/Reports.razor", '@page "/reports"', '@* @page "/reports" *@', 1));
+  restraintMutation("blazor-static", "empty Reports page", (root) =>
+    write(root, "Components/Pages/Reports.razor", ""));
+  restraintMutation("blazor-static", "Reports page missing PageTitle", (root) =>
+    replace(root, "Components/Pages/Reports.razor", "<PageTitle>Reports</PageTitle>", "", 1));
+  restraintMutation("blazor-static", "Reports page missing heading", (root) =>
+    replace(root, "Components/Pages/Reports.razor", "<h1>Reports</h1>", "", 1));
+  restraintMutation("blazor-static", "Reports page missing content", (root) =>
+    replace(root, "Components/Pages/Reports.razor", "<p>Select a report to continue.</p>", "", 1));
+  restraintMutation("blazor-static", "Reports navigation removed", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      /\s*<div class="nav-item px-3">\s*<NavLink class="nav-link" href="reports">[\s\S]*?<\/NavLink>\s*<\/div>/,
+      "",
+      1,
+    ));
   restraintMutation("blazor-static", "interactive registrations moved into comments", (root) => {
     replace(
       root,
@@ -294,6 +341,19 @@ function restraintMutations() {
       "app.MapRazorComponents<App>();\n// .AddInteractiveServerRenderMode();",
     );
   });
+
+  const unrelatedRazorNames = cloneForMutation("razor-static", "unrelated-page-names");
+  write(unrelatedRazorNames, "Pages/ProductionNotes.cshtml", '@page\n<h1>Production notes</h1>\n');
+  write(unrelatedRazorNames, "Pages/Admin/CategoricalSummary.cshtml", '@page\n<h1>Summary</h1>\n');
+  const unrelatedResult = restraintValidatorResult("razor-static", unrelatedRazorNames);
+  if (unrelatedResult.status === 0) reportPass("razor-static", "legitimate unrelated page names");
+  else reportUnexpected("razor-static", "legitimate unrelated page names", unrelatedResult, "pass");
+  const unrelatedBlazorNames = cloneForMutation("blazor-static", "unrelated-component-names");
+  write(unrelatedBlazorNames, "Components/Pages/EmploymentStatus.razor", '@page "/employment"\n<h1>Employment status</h1>\n');
+  write(unrelatedBlazorNames, "Components/Pages/DepartmentalNews.razor", '@page "/departmental-news"\n<h1>Departmental news</h1>\n');
+  const unrelatedBlazorResult = restraintValidatorResult("blazor-static", unrelatedBlazorNames);
+  if (unrelatedBlazorResult.status === 0) reportPass("blazor-static", "legitimate unrelated component names");
+  else reportUnexpected("blazor-static", "legitimate unrelated component names", unrelatedBlazorResult, "pass");
 }
 
 function cloneForMutation(contract, name, source = goldenRoots.get(contract)) {
@@ -444,6 +504,50 @@ function testPatchTodoLayout() {
   replace(root, "Endpoints/TodoEndpoints.cs", "group.MapPut", "group.MapPatch");
   replace(root, "TodoApi.http", "\nPUT ", "\nPATCH ");
   expectPass("todo-api", root, "PATCH update layout");
+}
+
+function testTodoHttpLayouts() {
+  const namedResponseRoot = cloneForMutation("todo-api", "named-response-without-jsonpath-root");
+  replace(namedResponseRoot, "TodoApi.http", /\.response\.body\.\$\.id/g, ".response.body.id");
+  expectPass("todo-api", namedResponseRoot, "named response body id layout");
+
+  const handlerVariableRoot = cloneForMutation("todo-api", "response-handler-variable");
+  replace(
+    handlerVariableRoot,
+    "TodoApi.http",
+    /(\{\s*"title": "Verify the Minimal API",\s*"isComplete": false\s*\})/,
+    (match, body) => `${body}
+
+> {%
+  client.global.set("todoId", response.body.id);
+%}`,
+    1,
+  );
+  replace(
+    handlerVariableRoot,
+    "TodoApi.http",
+    /\{\{createTodo\.response\.body\.\$\.id\}\}/g,
+    "{{todoId}}",
+  );
+  expectPass("todo-api", handlerVariableRoot, "response-handler id variable layout");
+
+  const assignedVariableRoot = cloneForMutation("todo-api", "named-response-assigned-variable");
+  replace(
+    assignedVariableRoot,
+    "TodoApi.http",
+    /\{\{createTodo\.response\.body\.\$\.id\}\}/g,
+    "{{todoId}}",
+  );
+  replace(
+    assignedVariableRoot,
+    "TodoApi.http",
+    "@TodoApi_HostAddress = http://localhost:5082",
+    `@TodoApi_HostAddress = http://localhost:5082
+@todoId = {{createTodo.response.body.$.id}}`,
+    1,
+  );
+
+  expectPass("todo-api", assignedVariableRoot, "named response assigned id variable layout");
 }
 
 function testTodoUpdatePatterns() {
@@ -1025,6 +1129,61 @@ function todoMutations() {
     );
     addUnrelatedWarningsBranch(root, endpoints, "UpdateTodoAsync");
   });
+  mutation("todo-api", "bodyless POST request", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /POST (\S+\/api\/todos)\s*Content-Type: application\/json\s*\{\s*"title": "Verify the Minimal API",\s*"isComplete": false\s*\}/,
+      (match, url) => `POST ${url}`,
+      1,
+    ));
+  mutation("todo-api", "bodyless update request", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /PUT (\S+\/api\/todos\/\{\{createTodo\.response\.body\.\$\.id\}\})\s*Content-Type: application\/json\s*\{\s*"title": "Verify the Minimal API",\s*"isComplete": true\s*\}/,
+      (match, url) => `PUT ${url}`,
+      1,
+    ));
+  mutation("todo-api", "POST missing required Title", (root) =>
+    replace(root, "TodoApi.http", /\s*"title": "Verify the Minimal API",/, "", 1));
+  mutation("todo-api", "POST missing required IsComplete", (root) =>
+    replace(root, "TodoApi.http", /,\s*"isComplete": false/, "", 1));
+  mutation("todo-api", "update missing required Title", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /(PUT [^\r\n]+\s*Content-Type: application\/json\s*\{\s*)"title": "Verify the Minimal API",\s*/,
+      (match, prefix) => prefix,
+      1,
+    ));
+  mutation("todo-api", "update missing required IsComplete", (root) =>
+    replace(root, "TodoApi.http", /,\s*"isComplete": true/, "", 1));
+  mutation("todo-api", "POST uses wrong content type", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /(POST [^\r\n]+\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("todo-api", "update uses wrong content type", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /(PUT [^\r\n]+\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("todo-api", "hard-coded dependent request ids", (root) =>
+    replace(root, "TodoApi.http", /\{\{createTodo\.response\.body\.\$\.id\}\}/g, "1"));
+  mutation("todo-api", "whole response used instead of response id", (root) =>
+    replace(
+      root,
+      "TodoApi.http",
+      /\{\{createTodo\.response\.body\.\$\.id\}\}/g,
+      "{{createTodo.response.body.$}}",
+    ));
 }
 
 function testMvcEditLayouts() {
@@ -1945,6 +2104,7 @@ try {
   for (const item of scopeCases) materializeScopeGolden(item);
   scopeMutations();
   testPatchTodoLayout();
+  testTodoHttpLayouts();
   testTodoUpdatePatterns();
   testApiMetadataLayouts();
   testTodoErrorConditionLayouts();

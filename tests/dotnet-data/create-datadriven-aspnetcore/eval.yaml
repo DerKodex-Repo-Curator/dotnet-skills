@@ -503,6 +503,10 @@ stimuli:
             message: "Added a Terms Razor Page that follows existing conventions and verified a clean build. No data-access package, context, migration, or CRUD artifact was added."
     graders:
       - { type: file-exists, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml } }
+      - { type: file-exists, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml.cs } }
+      - { type: file-contains, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml, value: "@page" } }
+      - { type: file-contains, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml, value: "@model MyApp.Pages.TermsModel" } }
+      - { type: file-contains, config: { path: fixtures/razor-pages-crud/Pages/Terms.cshtml.cs, value: PageModel } }
       - { type: file-not-contains, config: { path: fixtures/razor-pages-crud/MyApp.csproj, value: EntityFrameworkCore } }
       - { type: file-not-exists, config: { path: fixtures/razor-pages-crud/Migrations } }
       - { type: file-not-exists, config: { path: "fixtures/razor-pages-crud/**/*DbContext*.cs" } }
@@ -580,6 +584,9 @@ stimuli:
             message: "Added and built the Reports component and navigation link without changing the render-mode chain or adding data-access artifacts."
     graders:
       - { type: file-exists, config: { path: fixtures/blazor-crud/Components/Pages/Reports.razor } }
+      - { type: file-contains, config: { path: fixtures/blazor-crud/Components/Pages/Reports.razor, value: '@page "/reports"' } }
+      - { type: file-contains, config: { path: fixtures/blazor-crud/Components/Pages/Reports.razor, value: "<PageTitle>Reports</PageTitle>" } }
+      - { type: file-contains, config: { path: fixtures/blazor-crud/Components/Pages/Reports.razor, value: "<h1>Reports</h1>" } }
       - { type: file-contains, config: { path: fixtures/blazor-crud/Components/Layout/NavMenu.razor, value: reports } }
       - { type: file-contains, config: { path: fixtures/blazor-crud/Program.cs, value: AddInteractiveServerRenderMode } }
       - { type: file-not-contains, config: { path: fixtures/blazor-crud/BlazorApp.csproj, value: EntityFrameworkCore } }
@@ -699,8 +706,8 @@ stimuli:
     prompt: |
       In fixtures/non-web/Utility.csproj, add a CsvReportWriter with
       WriteRow(TextWriter writer, string title, decimal total). Write one CSV row, quote and escape
-      the title, and format the decimal with invariant culture. This is a plain .NET class library
-      with no web host or database. Keep the existing ReportWriter unchanged.
+      the title, and format the decimal with invariant culture. Keep the existing ReportWriter
+      unchanged and follow the project's existing API and conventions.
     expect_activation: false
     tags: { capability: boundary-non-aspnet-project, risk: routing, journey: redirect-non-web-code-generation }
     environment:
@@ -808,8 +815,6 @@ stimuli:
           expected_exit_code: 0
       - type: prompt
     rubric:
-      - The ASP.NET data-scaffolding skill stayed dormant for this non-web class-library request
-      - Recognized that the target is a plain class library and kept the implementation within that non-web scope
-      - Kept the response focused on the requested class-library behavior rather than proposing or performing ASP.NET Core scaffolding
-      - Added only the requested plain C# writer and preserved the existing ReportWriter
+      - The ASP.NET data-scaffolding skill stayed dormant for the CsvReportWriter request
+      - Added only the requested C# writer in the Utility project and preserved the existing ReportWriter
       - Did not add ASP.NET Core, Entity Framework, pages, controllers, endpoints, or database artifacts

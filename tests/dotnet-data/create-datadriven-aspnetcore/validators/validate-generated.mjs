@@ -423,26 +423,160 @@ function checkApiCrud(records, base, entity, options = {}) {
   return { scoped, list, details, create, update, remove };
 }
 
-function checkHttpCrud(base, entity, requireCreateDependency = false) {
+function httpRequestBlocks(http) {
+  return http.split(/^###.*$/m).map((source, index) => {
+    const request = source.match(/^\s*(GET|POST|PUT|PATCH|DELETE)\s+(\S+)/im);
+    return {
+      source,
+      index,
+      method: request?.[1].toUpperCase() ?? "",
+      url: request?.[2] ?? "",
+      name: source.match(/^\s*#\s*@name\s+([A-Za-z_][\w.-]*)\s*$/im)?.[1] ?? "",
+      contentType: source.match(/^\s*Content-Type\s*:\s*([^\r\n;]+)/im)?.[1].trim() ?? "",
+    };
+  }).filter((block) => block.method);
+}
+
+function routeIdExpression(block, base) {
+  const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return block.url.match(new RegExp(`${escaped}/([^/?#\\s]+)`, "i"))?.[1] ?? "";
+}
+
+function responseIdExpression(expression, requestName) {
+  const escapedName = requestName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `^${escapedName}\\.response\\.body(?:\\.\\$)?(?:\\.id|\\[['"]id['"]\\])$`,
+    "i",
+  ).test(expression.trim());
+}
+
+function responseIdVariables(http, createBlock) {
+  const variables = new Set();
+  const assignment = /^\s*@([A-Za-z_][\w.-]*)\s*=\s*\{\{([^}]+)\}\}\s*$/gim;
+  for (const match of http.matchAll(assignment)) {
+    if (responseIdExpression(match[2], createBlock.name)) variables.add(match[1].toLowerCase());
+  }
+
+  const handlerSet =
+    /(?:client\.(?:global|environment|variables)|request\.variables)\.set\s*\(\s*["']([A-Za-z_][\w.-]*)["']\s*,\s*response\.body(?:\.\$)?(?:\.id|\[['"]id['"]\])\s*\)/gim;
+  for (const match of createBlock.source.matchAll(handlerSet)) {
+    variables.add(match[1].toLowerCase());
+  }
+  return variables;
+}
+
+function usesCreatedResponseId(expression, createBlock, variables) {
+  const references = [...expression.matchAll(/\{\{([^}]+)\}\}/g)].map((match) => match[1].trim());
+  return references.some((reference) =>
+    responseIdExpression(reference, createBlock.name) || variables.has(reference.toLowerCase()));
+}
+
+function topLevelJsonKeys(body) {
+  const keys = new Set();
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === "\\") escaped = true;
+      else if (character === quote) quote = "";
+      continue;
+    }
+    if (character === "{") {
+      depth += 1;
+      continue;
+    }
+    if (character === "}") {
+      depth -= 1;
+      continue;
+    }
+    if (character !== '"' || depth !== 1) continue;
+
+    let end = index + 1;
+    let key = "";
+    for (; end < body.length; end += 1) {
+      if (body[end] === "\\") {
+        key += body[end + 1] ?? "";
+        end += 1;
+      } else if (body[end] === '"') {
+        break;
+      } else {
+        key += body[end];
+      }
+    }
+    let colon = end + 1;
+    while (/\s/.test(body[colon] ?? "")) colon += 1;
+    if (body[colon] === ":") keys.add(key.toLowerCase());
+    index = end;
+  }
+  return keys;
+}
+
+function hasJsonObjectWithFields(block, fields) {
+  const startMatch = block.source.match(/^\s*\{(?!\{)/m);
+  if (!startMatch) return false;
+  const start = startMatch.index + startMatch[0].lastIndexOf("{");
+  const end = balancedEnd(block.source, start, "{", "}");
+  if (end < 0) return false;
+  const keys = topLevelJsonKeys(block.source.slice(start, end + 1));
+  return fields.every((field) => keys.has(field.toLowerCase()));
+}
+
+function checkHttpCrud(base, entity, options = {}) {
   const http = joined(/\.http$/i);
   fail(Boolean(http.trim()), `${entity} executable .http workflow is missing.`);
   if (!http.trim()) return;
   const escaped = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const positions = {
-    list: http.search(new RegExp(`\\bGET\\s+[^\\n]*${escaped}(?:\\s|$|\\?)`, "i")),
-    details: http.search(new RegExp(`\\bGET\\s+[^\\n]*${escaped}/[^\\s]+`, "i")),
-    create: http.search(new RegExp(`\\bPOST\\s+[^\\n]*${escaped}(?:\\s|$|\\?)`, "i")),
-    update: http.search(new RegExp(`\\b(?:PUT|PATCH)\\s+[^\\n]*${escaped}/[^\\s]+`, "i")),
-    delete: http.search(new RegExp(`\\bDELETE\\s+[^\\n]*${escaped}/[^\\s]+`, "i")),
+  const blocks = httpRequestBlocks(http);
+  const flows = {
+    list: blocks.find((block) =>
+      block.method === "GET" && new RegExp(`${escaped}(?:\\?|$)`, "i").test(block.url)),
+    details: blocks.find((block) => block.method === "GET" && routeIdExpression(block, base)),
+    create: blocks.find((block) =>
+      block.method === "POST" && new RegExp(`${escaped}(?:\\?|$)`, "i").test(block.url)),
+    update: blocks.find((block) =>
+      ["PUT", "PATCH"].includes(block.method) && routeIdExpression(block, base)),
+    delete: blocks.find((block) => block.method === "DELETE" && routeIdExpression(block, base)),
   };
-  for (const [flow, position] of Object.entries(positions)) {
-    fail(position >= 0, `${entity} .http workflow lacks ${flow}.`);
+  for (const [flow, block] of Object.entries(flows)) {
+    fail(Boolean(block), `${entity} .http workflow lacks ${flow}.`);
   }
-  if (requireCreateDependency && positions.create >= 0) {
+
+  const requestFields = options.requestFields ?? [];
+  for (const [flow, block] of [["create", flows.create], ["update", flows.update]]) {
+    if (!block || requestFields.length === 0) continue;
     fail(
-      positions.details > positions.create && positions.update > positions.create && positions.delete > positions.create,
+      block.contentType.toLowerCase() === "application/json",
+      `${entity} .http ${flow} must send Content-Type: application/json.`,
+    );
+    fail(
+      hasJsonObjectWithFields(block, requestFields),
+      `${entity} .http ${flow} must send a JSON object with ${requestFields.join(" and ")}.`,
+    );
+  }
+
+  if (options.requireCreateDependency && flows.create) {
+    fail(
+      flows.details?.index > flows.create.index &&
+        flows.update?.index > flows.create.index &&
+        flows.delete?.index > flows.create.index,
       `${entity} .http dependent requests must follow create.`,
     );
+  }
+
+  if (options.requireCreatedIdReuse && flows.create) {
+    fail(Boolean(flows.create.name), `${entity} .http POST must have a request name for response reuse.`);
+    const variables = responseIdVariables(http, flows.create);
+    for (const [flow, block] of [["by-id", flows.details], ["update", flows.update], ["delete", flows.delete]]) {
+      if (!block) continue;
+      const id = routeIdExpression(block, base);
+      fail(
+        Boolean(flows.create.name) && usesCreatedResponseId(id, flows.create, variables),
+        `${entity} .http ${flow} must reuse the id returned by POST.`,
+      );
+    }
   }
 }
 
@@ -535,7 +669,11 @@ function validateTodoApi() {
     validationType: "TodoRequest",
     validationField: "Title",
   });
-  checkHttpCrud("/api/todos", "Todo", true);
+  checkHttpCrud("/api/todos", "Todo", {
+    requireCreateDependency: true,
+    requireCreatedIdReuse: true,
+    requestFields: ["title", "isComplete"],
+  });
 }
 
 function methodParts(text, name) {
@@ -686,8 +824,8 @@ function validateParentApi() {
     );
   }
 
-  checkHttpCrud("/api/categories", "Category", true);
-  checkHttpCrud("/api/products", "Product", true);
+  checkHttpCrud("/api/categories", "Category", { requireCreateDependency: true });
+  checkHttpCrud("/api/products", "Product", { requireCreateDependency: true });
   const http = joined(/\.http$/i);
   const categoryPost = http.search(/\bPOST\s+[^\n]*\/api\/categories\b/i);
   const productPost = http.search(/\bPOST\s+[^\n]*\/api\/products\b/i);
