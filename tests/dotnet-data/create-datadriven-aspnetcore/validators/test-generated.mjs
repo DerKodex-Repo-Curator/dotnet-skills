@@ -521,6 +521,83 @@ function mutationFrom(contract, source, name, mutate) {
   }
 }
 
+function testInactiveEnsureCreatedLayouts() {
+  const source = `internal static class EnsureCreatedExamples
+{
+    private const string Regular = "Database.EnsureCreated();";
+    private const string Verbatim = @"Database.EnsureCreatedAsync();";
+    private const string Raw = """Database.EnsureCreated();""";
+
+    // Database.EnsureCreated();
+    /* Database.EnsureCreatedAsync(); */
+}
+`;
+  for (const { contract } of cases) {
+    const root = cloneForMutation(contract, "inactive-ensure-created-layout");
+    write(root, "EnsureCreatedExamples.cs", source);
+    expectPass(contract, root, "EnsureCreated text in comments and strings");
+  }
+}
+
+function ensureCreatedMutations() {
+  const syncSource = `using Microsoft.EntityFrameworkCore;
+
+internal static class GeneratedDatabaseStartup
+{
+    public static void Initialize(DbContext context)
+    {
+        context.Database.EnsureCreated();
+    }
+}
+`;
+  for (const { contract } of cases) {
+    mutation(contract, "active EnsureCreated outside Program.cs", (root) =>
+      write(root, "GeneratedDatabaseStartup.cs", syncSource));
+  }
+
+  mutation("todo-api", "active EnsureCreatedAsync outside Program.cs", (root) =>
+    write(
+      root,
+      "GeneratedDatabaseStartup.cs",
+      `using Microsoft.EntityFrameworkCore;
+
+internal static class GeneratedDatabaseStartup
+{
+    public static async Task InitializeAsync(DbContext context)
+    {
+        await context.Database.EnsureCreatedAsync();
+    }
+}
+`,
+    ));
+}
+
+function testEndpointHostMappingLayouts() {
+  const todoRoot = cloneForMutation("todo-api", "formatted-host-mapping");
+  replace(
+    todoRoot,
+    "Program.cs",
+    "app.MapTodoEndpoints();",
+    `app
+    .MapTodoEndpoints
+    ();`,
+    1,
+  );
+  expectPass("todo-api", todoRoot, "formatted MapTodoEndpoints host invocation");
+
+  const parentRoot = cloneForMutation("parent-api", "formatted-host-mapping");
+  replace(
+    parentRoot,
+    "Program.cs",
+    "app.MapProductEndpoints();",
+    `app
+    .MapProductEndpoints
+    ();`,
+    1,
+  );
+  expectPass("parent-api", parentRoot, "formatted MapProductEndpoints host invocation");
+}
+
 function testPatchTodoLayout() {
   const root = cloneForMutation("todo-api", "patch-layout");
   replace(root, "Endpoints/TodoEndpoints.cs", "group.MapPut", "group.MapPatch");
@@ -1305,6 +1382,10 @@ function razorMutations() {
 
 function todoMutations() {
   const endpoints = "Endpoints/TodoEndpoints.cs";
+  mutation("todo-api", "remove MapTodoEndpoints host invocation", (root) =>
+    replace(root, "Program.cs", "app.MapTodoEndpoints();", "", 1));
+  mutation("todo-api", "comment MapTodoEndpoints host invocation", (root) =>
+    replace(root, "Program.cs", "app.MapTodoEndpoints();", "// app.MapTodoEndpoints();", 1));
   mutation("todo-api", "Todo route base mismatch", (root) =>
     replace(root, endpoints, 'MapGroup("/api/todos")', 'MapGroup("/api/todos-broken")', 1));
   mutation("todo-api", "remove list flow", (root) =>
@@ -1856,6 +1937,10 @@ function addUnrelatedWarningsBranch(root, relativeFile, methodName) {
 function parentApiMutations() {
   const endpoints = "Endpoints/ProductEndpoints.cs";
   const http = "ParentChildApi.http";
+  mutation("parent-api", "remove MapProductEndpoints host invocation", (root) =>
+    replace(root, "Program.cs", "app.MapProductEndpoints();", "", 1));
+  mutation("parent-api", "comment MapProductEndpoints host invocation", (root) =>
+    replace(root, "Program.cs", "app.MapProductEndpoints();", "// app.MapProductEndpoints();", 1));
   mutation("parent-api", "Product route base mismatch", (root) =>
     replace(root, endpoints, 'MapGroup("/api/products")', 'MapGroup("/api/products-broken")', 1));
   mutation("parent-api", "remove list flow", (root) =>
@@ -2655,6 +2740,9 @@ try {
   for (const item of restraintCases) materializeRestraintGolden(item);
   for (const item of scopeCases) materializeScopeGolden(item);
   scopeMutations();
+  testInactiveEnsureCreatedLayouts();
+  ensureCreatedMutations();
+  testEndpointHostMappingLayouts();
   testPatchTodoLayout();
   testRouteGroupConstantLayouts();
   testEndpointRouteConstantLayouts();

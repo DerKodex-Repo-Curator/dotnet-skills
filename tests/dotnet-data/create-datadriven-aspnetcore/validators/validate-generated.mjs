@@ -72,6 +72,114 @@ function requireFile(pattern, label) {
   return file?.text ?? "";
 }
 
+function activeSource(text) {
+  const mask = (value) => value.replace(/[^\n]/g, " ");
+  let result = "";
+  let index = 0;
+
+  while (index < text.length) {
+    if (text.startsWith("@*", index)) {
+      const end = text.indexOf("*@", index + 2);
+      const next = end < 0 ? text.length : end + 2;
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+    if (text.startsWith("//", index)) {
+      const end = text.indexOf("\n", index + 2);
+      const next = end < 0 ? text.length : end;
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+    if (text.startsWith("/*", index)) {
+      const end = text.indexOf("*/", index + 2);
+      const next = end < 0 ? text.length : end + 2;
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+
+    const character = text[index];
+    if (character === '"') {
+      let quoteCount = 1;
+      while (text[index + quoteCount] === '"') quoteCount += 1;
+      if (quoteCount >= 3) {
+        const delimiter = '"'.repeat(quoteCount);
+        const end = text.indexOf(delimiter, index + quoteCount);
+        const next = end < 0 ? text.length : end + quoteCount;
+        result += mask(text.slice(index, next));
+        index = next;
+        continue;
+      }
+
+      const verbatim =
+        text[index - 1] === "@" ||
+        (text[index - 1] === "$" && text[index - 2] === "@");
+      let next = index + 1;
+      while (next < text.length) {
+        if (verbatim && text[next] === '"' && text[next + 1] === '"') {
+          next += 2;
+          continue;
+        }
+        if (!verbatim && text[next] === "\\") {
+          next += 2;
+          continue;
+        }
+        if (text[next] === '"') {
+          next += 1;
+          break;
+        }
+        next += 1;
+      }
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+    if (character === "'") {
+      let next = index + 1;
+      while (next < text.length) {
+        if (text[next] === "\\") {
+          next += 2;
+          continue;
+        }
+        if (text[next] === "'") {
+          next += 1;
+          break;
+        }
+        next += 1;
+      }
+      result += mask(text.slice(index, next));
+      index = next;
+      continue;
+    }
+
+    result += character;
+    index += 1;
+  }
+
+  return result;
+}
+
+function hasActiveHostExtensionCall(name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const invocation = new RegExp(
+    `\\b(?:app|endpoints)\\b\\s*\\.\\s*${escapedName}\\s*\\(`,
+    "i",
+  );
+  return matching(/\.cs$/i).some((file) => invocation.test(activeSource(file.text)));
+}
+
+function validateNoEnsureCreated() {
+  const activeGeneratedSource = matching(/\.(?:cs|cshtml|razor)$/i)
+    .map((file) => activeSource(file.text))
+    .join("\n");
+  fail(
+    !/\.\s*EnsureCreated(?:Async)?\s*\(/.test(activeGeneratedSource),
+    "Generated sources must not call EnsureCreated or EnsureCreatedAsync.",
+  );
+}
+
 function balancedEnd(text, start, open, close) {
   let depth = 0;
   let quote = "";
@@ -758,6 +866,10 @@ function validateRazorPages() {
 
 function validateTodoApi() {
   checkContext("TodoDbContext", ["TodoItem"], false);
+  fail(
+    hasActiveHostExtensionCall("MapTodoEndpoints"),
+    "The Todo API host does not invoke MapTodoEndpoints().",
+  );
   const records = matching(/\.cs$/i).flatMap((file) => endpointRecords(file.text, cs));
   checkApiCrud(records, "/api/todos", "Todo", {
     validation: true,
@@ -916,6 +1028,10 @@ function validateParentApi() {
   checkContext("StoreDbContext", ["Product", "Category"], false);
   const contextClasses = [...cs.matchAll(/class\s+(\w+)[^{:\n]*(?::[^{\n]*\bDbContext\b|\([^)]*DbContextOptions)/g)].map((match) => match[1]);
   fail(contextClasses.length === 1 && contextClasses[0] === "StoreDbContext", "Parent API must reuse StoreDbContext and must not add another DbContext.");
+  fail(
+    hasActiveHostExtensionCall("MapProductEndpoints"),
+    "The Parent API host does not invoke MapProductEndpoints().",
+  );
 
   const records = matching(/\.cs$/i).flatMap((file) => endpointRecords(file.text, cs));
   const category = checkApiCrud(records, "/api/categories", "Category", {
@@ -2151,6 +2267,8 @@ function validateBlazor() {
     "Blazor navigation does not reach Employees and Departments.",
   );
 }
+
+validateNoEnsureCreated();
 
 switch (contract) {
   case "razor-pages": validateRazorPages(); break;
