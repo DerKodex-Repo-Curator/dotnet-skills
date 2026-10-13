@@ -16,7 +16,7 @@ defaults:
 # with keyset pagination changes the method contract, so that recommendation remains
 # rubric-graded rather than benchmark-graded.
 stimuli:
-  - name: Audit a back-office operations service riddled with query problems
+  - name: Restore back-office operations performance at scale
     prompt: |
       Our internal back-office service uses EF Core and has gotten slow in production: the
       ops-dashboard tiles, order and product lookups, and nightly maintenance jobs have all degraded
@@ -165,7 +165,7 @@ stimuli:
       - "Identifies that ApplyCategoryDiscount saves changes once per product inside the loop, issuing a round-trip per row, and recommends a single set-based update"
       - "Recognizes that CountActiveProducts loads the entire product table into memory before counting, and that the count should be performed by the database"
 
-  - name: Split independent collection loads without changing results
+  - name: Restore GetCustomerDetail performance at high collection cardinality
     prompt: |
       GetCustomerDetail in SalesOperationsService.cs becomes very slow for customers with many
       orders, order lines, and invoices. Optimize only that method, preserve its signature and
@@ -332,7 +332,7 @@ stimuli:
       - Preserved the public method contract and did not replace eager loading with lazy loading
       - Explained that independent collection joins duplicate rows and parent data
 
-  - name: Keep a hot status queue server-side and identify its missing index
+  - name: Restore fulfillment queue performance at scale
     prompt: |
       GetPendingOrders in SalesOperationsService.cs powers a fulfillment queue that refreshes every
       few seconds and now scans millions of rows. Optimize the method without changing its signature
@@ -485,7 +485,7 @@ stimuli:
       - Recommends sequential operations on the shared context or separately owned contexts, preserving both numeric counts instead of substituting existence checks
       - Recognizes GetExportOverviewAsync as safe sequential use and GetRegionComparisonAsync as safe parallel use of two independently created and disposed sessions
 
-  - name: Review order operations query boundaries
+  - name: Review order operations under high tenant volume
     prompt: |
       The order-operations API shows rising memory use and uneven latency for high-volume tenants.
       Review this application's EF Core services and repositories in the supplied source.
