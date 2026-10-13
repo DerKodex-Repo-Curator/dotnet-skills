@@ -1,0 +1,338 @@
+name: find-repeated-build-work
+tags:
+  executionShard: heavy
+description: Evaluates the dotnet-msbuild/find-repeated-build-work skill
+type: capability
+defaults:
+  timeout: 6m
+stimuli:
+  - name: Compute a per-project git lookup once for the whole build
+    prompt: |
+      git-stamp/perf-summary.txt is the performance summary of the CI build that runs git-stamp/build.sh. Cut the build
+      time that is not spent compiling, without changing the informational version stamped into each assembly. You
+      cannot run the build from here, so work from the repository files. Developers also run dotnet build inside a
+      single project directory.
+    tags:
+      capability: invariant-per-project-exec
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./git-stamp
+          dest: git-stamp
+    golden_patch:
+      path: ./references/compute-once-pass-global-property.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-git-stamp"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The Task Performance Summary shows Exec with 38 calls for a solution of 38 projects, about 1970 ms each, so the git lookup in Directory.Build.targets starts a process in every project and gives the same answer each time. That is about 75 s of Exec across 8 cores, roughly 9 s of wall-clock. I could not run the build here, so this is not validated. The commit id is now computed once in build.sh and passed as -p:GitCommit, which every project inherits as a global property. The Exec in Directory.Build.targets only runs when GitCommit is empty, so a single-project dotnet build still gets a stamp. I did not use a flag property or an Exists check to skip the Exec, because properties are per project instance and the worker nodes are separate processes. The informational version still comes from Version and GitCommit.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const t = fs.readFileSync('git-stamp/Directory.Build.targets', 'utf8');
+              const sh = fs.readFileSync('git-stamp/build.sh', 'utf8');
+              if (!/InformationalVersion/.test(t) || !/\$\(GitCommit\)|SourceRevisionId/.test(t)) {
+                throw new Error('the informational version no longer carries the commit id');
+              }
+              const passes = /[-/]p(roperty)?:GitCommit=/i.test(sh);
+              const execInTargets = /git\s+rev-parse/.test(t);
+              const guarded = /Condition="\s*'\$\(GitCommit\)'\s*==\s*''\s*"/.test(t);
+              if (execInTargets && !(guarded && passes)) {
+                throw new Error('every project still runs git: build.sh must pass GitCommit and the Exec must be skipped when it is set');
+              }
+              if (!execInTargets && !passes && !/SourceRevisionId|SourceLink/.test(t)) {
+                throw new Error('nothing supplies the commit id once the Exec is gone');
+              }
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Identified from the Exec call count (38 calls for 38 projects) that the same git lookup runs in every project
+      - Computed the commit id once, for example in build.sh passed as a global property, and made the per-project Exec
+        run only when the property is empty so single-project builds keep a stamp
+      - Did not rely on a flag property or Exists check to dedupe the work across projects
+      - Kept the informational version in the same format
+      - Did not claim the build was run or the saving measured
+
+  - name: Stop a shared project from being built once per caller
+    prompt: |
+      shared-project-instances/perf-summary.txt is the performance summary of the CI build that runs
+      shared-project-instances/build.sh. Most of the time in it is spent in Core. Reduce the build time without changing
+      what Web, Api and Worker produce: each must still get its own component name in its AssemblyTitle. You cannot run
+      the build from here, so work from the repository files.
+    tags:
+      capability: global-property-instances
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./shared-project-instances
+          dest: shared-project-instances
+    golden_patch:
+      path: ./references/remove-property-from-shared-reference.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-shared-project-instances"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Core.csproj shows 3 calls in the Project Performance Summary, about 21 s each, although it is one project. Build.proj passes Properties="ComponentName=%(Component.Filename)" to each component, and every component then builds its reference to Core with that global property inherited. A different global property makes a different project instance, so Core is built once per component even though it never reads ComponentName. I added GlobalPropertiesToRemove="ComponentName" to the Core ProjectReference in Web, Api and Worker, so Core is built with the same properties every time and only once. The components still receive ComponentName for their AssemblyTitle. Not validated: I could not run the build here. Rebuilding with a binlog should show Core.csproj with 1 call.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const rd = f => fs.readFileSync('shared-project-instances/' + f, 'utf8');
+              const proj = rd('Build.proj');
+              const comps = ['Web/Web.csproj', 'Api/Api.csproj', 'Worker/Worker.csproj'].map(rd);
+              const removes = s => /GlobalPropertiesToRemove(\s*=\s*"|>)[^"<]*\bComponentName\b/.test(s);
+              if (/ComponentName\s*=/.test(proj)) {
+                const shared = ['Directory.Build.props', 'Directory.Build.targets']
+                  .filter(f => fs.existsSync('shared-project-instances/' + f)).map(rd);
+                if (!(comps.every(removes) || shared.some(removes))) {
+                  throw new Error('ComponentName still reaches Core, so Core is built once per component');
+                }
+              } else if (comps.some(c => /\$\(ComponentName\)/.test(c) && !/<ComponentName>/.test(c))) {
+                throw new Error('a component still reads ComponentName but nothing defines it anymore');
+              }
+          expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: (?i)(global propert|project instance)
+      - type: prompt
+    rubric:
+      - Identified from Core.csproj having several calls that the same project is built once per distinct set of global
+        properties
+      - Traced the cause to the ComponentName property passed by Build.proj and inherited through the ProjectReference
+      - Kept each component's own AssemblyTitle, for example by removing ComponentName only on the reference to Core with
+        GlobalPropertiesToRemove, instead of deleting the property from the components
+      - Did not claim the build was run or the saving measured
+
+  - name: Generate a shared file before the parallel build starts
+    prompt: |
+      Intermittently the Build step in exists-sentinel-race fails with the error in
+      exists-sentinel-race/failure-log.txt, and a re-run passes. Fix the cause so the failure cannot depend on timing.
+      Everyone builds through exists-sentinel-race/build.sh, and every project must still compile obj/buildinfo.g.cs.
+      You cannot run the build from here, so work from the repository files.
+    tags:
+      capability: racy-run-once-guard
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./exists-sentinel-race
+          dest: exists-sentinel-race
+    golden_patch:
+      path: ./references/generate-before-build.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-exists-sentinel-race"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The target in Directory.Build.targets is meant to generate buildinfo.g.cs once, but its Exists check is evaluated separately in every project, and with -m the projects build in separate worker processes. Several of them see no file at the same moment and each run the generator, which is why Exec shows 9 calls for 24 projects and why one writer sometimes hits Text file busy. A flag property would not help because properties are per project instance. I removed the generation from the per-project target and build.sh now runs tools/make-buildinfo.sh once, before dotnet build, so the file exists before any project compiles. The Compile item still includes it. Not validated: I could not run the build here.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const t = fs.readFileSync('exists-sentinel-race/Directory.Build.targets', 'utf8');
+              const sh = fs.readFileSync('exists-sentinel-race/build.sh', 'utf8');
+              if (!/<Compile\b[^>]*buildinfo\.g\.cs/.test(t)) throw new Error('projects no longer compile buildinfo.g.cs');
+              if (!fs.existsSync('exists-sentinel-race/tools/make-buildinfo.sh')) throw new Error('the generator script was removed');
+              const gen = sh.search(/make-buildinfo/);
+              const build = sh.search(/dotnet\s+(build|msbuild)\b/);
+              if (gen < 0) throw new Error('build.sh never generates the file before building');
+              if (build >= 0 && gen > build) throw new Error('build.sh generates the file after the build starts');
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Explained that the Exists check runs separately in every project and, with -m, in separate worker processes, so
+        several projects can run the generator at the same time
+      - Moved the generation so it happens once before the parallel build, for example a step in build.sh before
+        dotnet build, and did not rely on a flag property or another check-then-write guard inside the per-project target
+      - Kept obj/buildinfo.g.cs compiled by every project
+      - Did not claim the failure was reproduced or the fix verified
+
+  - name: Replace one generator process per file with one process for the list
+    prompt: |
+      per-file-exec/perf-summary.txt shows where the build of Contoso.Schemas spends its time, and
+      per-file-exec/tools/schemagen.md describes the generator it uses. The real schemas directory has about 120 files;
+      three samples are checked in here. Reduce the generation cost. The generated output must stay identical. You cannot
+      run the build from here, so work from the repository files.
+    tags:
+      capability: per-item-exec
+      risk: medium
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./per-file-exec
+          dest: per-file-exec
+    golden_patch:
+      path: ./references/single-exec-input-list.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-per-file-exec"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Exec has 120 calls in one project, about 1400 ms each, so the generator starts once per schema, and its startup cost does not depend on the file. Batching on %(SchemaFile.FullPath) in Schemas.targets causes that. schemagen.md says --input-list takes a list of paths and produces the same output as one run per schema, so the target now writes the list with WriteLinesToFile and runs schemagen once with --input-list and --output-dir. That removes about 119 launches, roughly 2.7 minutes of 3.8 total. I kept Inputs and Outputs on the target, so a build after changing one schema still only regenerates the stale files, because MSBuild passes only the out-of-date items into the target. Not validated: I could not run the build here.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const t = fs.readFileSync('per-file-exec/Schemas.targets', 'utf8');
+              const execs = t.match(/<Exec\b[^>]*>/g) || [];
+              if (!execs.length) throw new Error('no generator invocation found');
+              if (execs.some(e => /%\((SchemaFile\.)?(FullPath|Filename|Identity)\)/.test(e))) {
+                throw new Error('the generator still starts once per schema');
+              }
+              if (!execs.some(e => /--input-list/.test(e))) throw new Error('the generator call does not use --input-list');
+              if (!/Inputs\s*=\s*"[^"]*SchemaFile/.test(t) || !/Outputs\s*=\s*"/.test(t)) {
+                throw new Error('incremental builds were lost: the target needs Inputs and Outputs');
+              }
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Identified from Exec having 120 calls in one project that the generator is started once per schema file and that
+        startup dominates
+      - Replaced the per-item Exec with one invocation that uses the list option documented in schemagen.md
+      - Kept Inputs and Outputs on the target so unchanged schemas are not regenerated
+      - Did not claim the build was run or the saving measured
+
+  - name: Recognize multi-targeting call counts as expected work
+    prompt: |
+      legit-per-project-calls/perf-summary.txt is the performance summary of the CI build. Tell me whether any task runs
+      more often than it should and is worth changing. Do not modify any file.
+    constraints:
+      reject_tools: [edit, create]
+    tags:
+      capability: legitimate-per-project-work
+      risk: medium
+      journey: audit
+    environment:
+      files:
+        - src: ./legit-per-project-calls
+          dest: legit-per-project-calls
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-legit-per-project-calls"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Nothing runs more often than expected. The solution has 12 projects and Directory.Build.props sets three target frameworks, so Csc, ResolveAssemblyReferences, GenerateDepsFile and ResolvePackageAssets each run 12 x 3 = 36 times, once per target framework of each project. Each project shows 4 calls, which is one outer build plus three inner builds. Copy is higher at 211 calls, which is normal because it runs per project for several targets. These counts are legitimate per-project work, so I would not change anything.
+    graders:
+      - type: file-contains
+        config:
+          path: legit-per-project-calls/Directory.Build.props
+          value: net8.0;net9.0;net10.0
+      - type: output-matches
+        config:
+          pattern: (?i)(12\s*[x×*]\s*3|36\s*=\s*12|three target frameworks|3 target frameworks|per target framework|nothing runs more often|no repeated|not repeated|legitimate)
+      - type: prompt
+    rubric:
+      - Compared the 36 calls of Csc and the other tasks with the 12 projects and three target frameworks and concluded the
+        counts are expected
+      - Concluded that no task is repeated unnecessarily
+      - Did not invent a speedup or suggest removing multi-targeting
+
+  - name: Leave a repeated task alone when it costs almost nothing
+    prompt: |
+      negligible-repeat/perf-summary.txt is the performance summary of the nightly build, and
+      negligible-repeat/Directory.Build.targets is the repository's shared build logic. Tell me whether any work in this
+      build is done more often than necessary and whether it is worth changing. Do not modify any file.
+    constraints:
+      reject_tools: [edit, create]
+    tags:
+      capability: negligible-win-stop-condition
+      risk: medium
+      journey: audit
+    environment:
+      files:
+        - src: ./negligible-repeat
+          dest: negligible-repeat
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-negligible-repeat"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The only repeat is the Exec in Directory.Build.targets, which runs 4 times because four deployment-test projects stamp the tool version. It costs 6.1 s in total. Making it run once would save about 4.6 s of task time, and with 16 nodes the wall-clock gain is well under a second on an 18 minute build, which is negligible, far below 1%. Csc and the other tasks run 212 times for 212 projects. I would not change anything: the added complexity is not worth the gain.
+    graders:
+      - type: file-contains
+        config:
+          path: negligible-repeat/perf-summary.txt
+          value: 4 calls     1530 ms avg
+      - type: output-matches
+        config:
+          pattern: (?i)(negligible|not worth|insignificant|well under|below 1|less than 1|under 1\s*%|<\s*1\s*%|0\.\d+\s*%|leave (it|this|them) (alone|as is))
+      - type: prompt
+    rubric:
+      - Found that the Exec runs 4 times for about 6 s in total
+      - Compared the possible saving with the 18 minute wall-clock and the 16 nodes, and concluded it is not worth changing
+      - Did not recommend a change to the Exec or invent other repeated work
+
+  - name: Decline second-build rerun questions
+    prompt: |
+      On a second dotnet build of an unchanged checkout, CoreCompile still runs for every project instead of being skipped.
+      Why does MSBuild not treat the projects as up to date?
+    expect_activation: false
+    tags:
+      capability: dormancy-no-op-rebuild
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-no-op-rebuild-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              CoreCompile is skipped only when every input is older than the outputs it declares. A second build that still compiles means an input is newer than an output or a declared output is missing. Typical causes are a generator that rewrites a source file on every build, a Compile glob that picks up files in obj or bin, a timestamp written to an input, or an Inputs and Outputs list that does not match what the target really reads and writes. Build with a detailed log and look for the message that names the input or output that made the target run again.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(incremental|up-to-date|up to date|timestamp|inputs|outputs|FileWrites)
+      - type: prompt
+    rubric:
+      - The find-repeated-build-work skill stayed dormant because the question is about a target rerunning on a second
+        unchanged build, not about work repeated inside a single build
+      - Explained the incremental build mechanism, such as inputs and outputs, timestamps, or files that change on every build
+      - Did not suggest computing a value once outside the projects or removing global properties

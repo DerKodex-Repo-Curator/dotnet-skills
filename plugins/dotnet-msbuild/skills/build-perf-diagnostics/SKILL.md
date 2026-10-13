@@ -109,7 +109,7 @@ Step-by-step workflow using text log replay:
    ```bash
    grep "Target Performance Summary\|Task Performance Summary" -A 50 full.log
    ```
-   This shows all targets and tasks sorted by cumulative time — equivalent to finding expensive targets/tasks.
+   This shows all targets and tasks sorted by cumulative time — equivalent to finding expensive targets/tasks. Compare the `N calls` of non-compile tasks such as `Exec` with the number of projects; a much larger count means the same work repeats (see `find-repeated-build-work`).
 3. **Find per-project build times**:
    ```bash
    grep "done building project\|Project Performance Summary" full.log

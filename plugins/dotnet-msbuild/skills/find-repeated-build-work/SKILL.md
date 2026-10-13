@@ -1,0 +1,97 @@
+---
+name: find-repeated-build-work
+description: "Remove work MSBuild repeats inside one build. USE FOR: same Exec or task in every project (git stamp), performance summary calls above project count, shared project rebuilt via global properties, per-item Exec, racy run-once guards. DO NOT USE FOR: no-op rebuild reruns, restores, slow evaluation."
+license: MIT
+---
+
+# Find Repeated Build Work
+
+MSBuild runs targets once per project instance. Work that does not depend on the project, but sits in `Directory.Build.targets` or a shared target, therefore runs once per project: a `git rev-parse` in 40 projects is 40 process launches. A project built with different global properties is a different instance, so a shared library can compile several times in one build. The binlog's `N calls` column shows both. This skill finds the repeats, separates them from work that is legitimately per project, and removes only what is safe to remove.
+
+## When to Use
+
+- The same `Exec` or task (version stamping, tool probes, file generation) runs in every project
+- Target or Task Performance Summary shows a call count far above the number of projects that need the work
+- One project appears many times in the Project Performance Summary with different global properties
+- An `Exec` spawns one process per item in a list
+- A "run once per build" guard (`Exists` check, flag property) still runs repeatedly or fails with file-in-use errors under `-m`
+
+## When Not to Use
+
+- Targets that run again on a second, unchanged build: use `incremental-build`
+- Slow evaluation before any target runs: use `eval-performance`
+- Idle nodes or a serial dependency chain: use `build-parallelism`
+- Repeated restores across build steps: use `eliminate-redundant-restores`
+- Unranked "why is my build slow": start with `build-perf-baseline`, then `build-perf-diagnostics`
+
+## Workflow
+
+### Step 1: Count executions
+
+Replay the binlog with a performance summary (or use the binlog MCP tools if available) and read the `N calls` column of the Target and Task Performance Summaries and the Project Performance Summary:
+
+```bash
+dotnet msbuild build.binlog -noconlog "-flp:v=diag;logfile=full.log;performancesummary"
+```
+
+Expected calls are one per project, times the target frameworks for TFM-dependent work. `Csc`, `ResolveAssemblyReferences` and copy-local work are legitimately per project. A non-compile task whose count is well above the project count, or a project path listed several times, is a candidate.
+
+### Step 2: Classify each candidate
+
+| Pattern | Signal | Fix | Never |
+|---|---|---|---|
+| Invariant per-project `Exec` or task (commit hash, tool version, generated file) | `Exec` calls equal the project count and the command line is identical | Compute it once outside the per-project targets: the build script passes `-p:Name=value`, or a pre-build step or orchestrator target runs first | A flag property or `Exists(stamp)` guard: properties are per project instance and `-m` worker nodes are separate processes, so the guard does not dedupe and races |
+| Same project built several times | One project path with N calls and different global properties (for example `Properties="ComponentName=%(Component.Filename)"` on an `MSBuild` task). Any extra global property, even an unused one, creates a new instance | Stop passing the property, or add `GlobalPropertiesToRemove` metadata on the shared `ProjectReference` (`RemoveProperties` on the `MSBuild` task) | Removing a property the project actually reads |
+| One process per item (`Exec` batched on `%(Item.Identity)`) | `Exec` calls equal the item count | One invocation that takes a list or response file, after checking the tool supports it; keep `Inputs`/`Outputs` (with a 1:1 transform MSBuild still passes only the stale items into the target) | Dropping `Inputs`/`Outputs` while merging |
+| Legitimate per-project or per-TFM work | Count equals projects times target frameworks | Leave it alone | Changing it to look tidy |
+
+### Step 3: Size the win
+
+Avoidable time is `(calls - expected) x average ms`. Wall-clock saving is roughly that divided by the number of busy nodes, and close to zero if the work is off the critical path. If it is below about 1% of build wall-clock, report it as not worth changing.
+
+### Step 4: Fix without changing behavior
+
+1. Keep the value available before its first consumer.
+2. A fallback `Condition="'$(X)' == ''"` is valid only when the value arrives as a global property (command line or an orchestrator), because those are inherited by every project. It keeps single-project and IDE builds working.
+3. Define the computation in one place.
+
+```xml
+<!-- Before: every project launches git -->
+<Target Name="StampCommit" BeforeTargets="CoreCompile">
+  <Exec Command="git rev-parse HEAD" ConsoleToMSBuild="true">
+    <Output TaskParameter="ConsoleOutput" PropertyName="GitCommit" />
+  </Exec>
+</Target>
+
+<!-- After: the build script computes the hash once and passes -p:GitCommit=<hash> -->
+<Target Name="StampCommit" BeforeTargets="CoreCompile">
+  <Exec Command="git rev-parse HEAD" ConsoleToMSBuild="true" Condition="'$(GitCommit)' == ''">
+    <Output TaskParameter="ConsoleOutput" PropertyName="GitCommit" />
+  </Exec>
+</Target>
+```
+
+If the value is only a commit id for the informational version, source link already sets `SourceRevisionId` without an `Exec`.
+
+### Step 5: Validate and report truthfully
+
+1. Capture a new binlog of the same invocation. Calls must have dropped to the expected count.
+2. Confirm outputs are unchanged (the stamped value, generated file contents).
+3. Report timing as the median of at least three runs; if you could not run the build, say "not validated".
+
+## Output
+
+| Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+|---|---|---|---|---|---|---|
+
+`Verdict: removed N repeated executions, saving about X s` or `Verdict: no repeated work worth changing`.
+
+## Common Pitfalls
+
+| Pitfall | Solution |
+|---|---|
+| Treating `Csc` or copy-local counts as waste | Compare with projects times target frameworks first |
+| Guarding with `Exists(file)` or a flag property | Move the work out of the per-project path |
+| Fallback condition on a property that is not a global property | Pass it as a global property, or the fallback never applies |
+| Claiming a saving from total task time | Divide by busy nodes and check the critical path |
+| Merging per-item `Exec` and losing incrementality | Keep `Inputs` and `Outputs` on the target |

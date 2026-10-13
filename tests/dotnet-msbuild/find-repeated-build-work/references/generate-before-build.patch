@@ -1,0 +1,25 @@
+diff --git a/exists-sentinel-race/Directory.Build.targets b/exists-sentinel-race/Directory.Build.targets
+index ce10029..080d63c 100644
+--- a/exists-sentinel-race/Directory.Build.targets
++++ b/exists-sentinel-race/Directory.Build.targets
+@@ -1,9 +1,5 @@
+ <Project>
+-  <!-- Generates obj/buildinfo.g.cs once, then every project compiles it. -->
+-  <Target Name="GenerateBuildInfo" BeforeTargets="CoreCompile" Condition="!Exists('$(MSBuildThisFileDirectory)obj/buildinfo.g.cs')">
+-    <Exec Command="sh tools/make-buildinfo.sh obj/buildinfo.g.cs" WorkingDirectory="$(MSBuildThisFileDirectory)" />
+-  </Target>
+-
++  <!-- build.sh generates obj/buildinfo.g.cs once before the build; every project compiles it. -->
+   <ItemGroup>
+     <Compile Include="$(MSBuildThisFileDirectory)obj/buildinfo.g.cs" Link="buildinfo.g.cs" />
+   </ItemGroup>
+diff --git a/exists-sentinel-race/build.sh b/exists-sentinel-race/build.sh
+index 63ec76f..70dcb0a 100644
+--- a/exists-sentinel-race/build.sh
++++ b/exists-sentinel-race/build.sh
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env bash
+ set -euo pipefail
+ 
++sh tools/make-buildinfo.sh obj/buildinfo.g.cs
+ dotnet build Contoso.slnx -c Release -m
