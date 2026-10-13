@@ -35,25 +35,50 @@ stimuli:
     graders:
       - type: run-command
         config:
-          command: node
+          command: python
           args:
-            - -e
+            - -c
             - |
-              const fs = require('fs');
-              const t = fs.readFileSync('git-stamp/Directory.Build.targets', 'utf8');
-              const sh = fs.readFileSync('git-stamp/build.sh', 'utf8');
-              if (!/InformationalVersion/.test(t) || !/\$\(GitCommit\)|SourceRevisionId/.test(t)) {
-                throw new Error('the informational version no longer carries the commit id');
-              }
-              const passes = /[-/]p(roperty)?:GitCommit=/i.test(sh);
-              const execInTargets = /git\s+rev-parse/.test(t);
-              const guarded = /Condition="\s*'\$\(GitCommit\)'\s*==\s*''\s*"/.test(t);
-              if (execInTargets && !(guarded && passes)) {
-                throw new Error('every project still runs git: build.sh must pass GitCommit and the Exec must be skipped when it is set');
-              }
-              if (!execInTargets && !passes && !/SourceRevisionId|SourceLink/.test(t)) {
-                throw new Error('nothing supplies the commit id once the Exec is gone');
-              }
+              import os, pathlib, re, shutil, subprocess, tempfile, uuid
+              import xml.etree.ElementTree as ET
+              root = ET.parse('git-stamp/Directory.Build.targets').getroot()
+              assert root.findtext('.//InformationalVersion') == '$(Version)+$(GitCommit)', 'the stamped version format changed'
+              fallbacks = [
+                  (target, task) for target in root.findall('Target') for task in target.findall('Exec')
+                  if task.get('Command') == 'git rev-parse --short HEAD'
+              ]
+              assert len(fallbacks) == 1, 'single-project builds need a commit lookup fallback'
+              target, task = fallbacks[0]
+              guarded = lambda element: re.fullmatch(r"\s*'\$\(GitCommit\)'\s*==\s*''\s*", element.get('Condition', ''))
+              assert guarded(target) or guarded(task), 'the per-project git lookup must be skipped when GitCommit is supplied'
+              assert any(o.get('TaskParameter') == 'ConsoleOutput' and o.get('PropertyName') == 'GitCommit'
+                         for o in task.findall('Output')), 'the fallback must supply GitCommit'
+              bash = shutil.which('bash')
+              assert bash, 'Bash is required to check build.sh with mocked git and dotnet'
+              with tempfile.TemporaryDirectory() as tmp:
+                  bin_dir = pathlib.Path(tmp)
+                  mocks = {
+                      'git': '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$MOCK_BIN/git-calls"\nprintf "%s\\n" "$EXPECTED_COMMIT"\n',
+                      'dotnet': '#!/usr/bin/env bash\nprintf "%s\\n" "$@" >> "$MOCK_BIN/dotnet-args"\n',
+                  }
+                  for name, text in mocks.items():
+                      path = bin_dir / name
+                      path.write_text(text, encoding='utf-8', newline='\n')
+                      path.chmod(0o755)
+                  for _ in range(2):
+                      commit = uuid.uuid4().hex[:7]
+                      for name in ['git-calls', 'dotnet-args']:
+                          (bin_dir / name).unlink(missing_ok=True)
+                      env = dict(os.environ, MOCK_BIN=tmp, EXPECTED_COMMIT=commit)
+                      subprocess.run(
+                          [bash, '-c', 'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"; export PATH="$MOCK_BIN:$PATH"; bash build.sh'],
+                          cwd='git-stamp', env=env, check=True, timeout=20,
+                      )
+                      assert (bin_dir / 'git-calls').read_text().splitlines() == ['rev-parse --short HEAD'], 'compute the current short commit exactly once'
+                      args = (bin_dir / 'dotnet-args').read_text().splitlines()
+                      assert args[:2] == ['build', 'Contoso.slnx'], 'the solution must still be built'
+                      values = [a.split(':', 1)[1] for a in args if re.match(r'[-/]p(?:roperty)?:', a, re.I)]
+                      assert any('GitCommit=' + commit in v.split(';') for v in values), 'pass the actual git result, not an empty, fixed or undefined value'
           expected_exit_code: 0
       - type: prompt
     rubric:
@@ -93,24 +118,39 @@ stimuli:
     graders:
       - type: run-command
         config:
-          command: node
+          command: python
           args:
-            - -e
+            - -c
             - |
-              const fs = require('fs');
-              const rd = f => fs.readFileSync('shared-project-instances/' + f, 'utf8');
-              const proj = rd('Build.proj');
-              const comps = ['Web/Web.csproj', 'Api/Api.csproj', 'Worker/Worker.csproj'].map(rd);
-              const removes = s => /GlobalPropertiesToRemove(\s*=\s*"|>)[^"<]*\bComponentName\b/.test(s);
-              if (/ComponentName\s*=/.test(proj)) {
-                const shared = ['Directory.Build.props', 'Directory.Build.targets']
-                  .filter(f => fs.existsSync('shared-project-instances/' + f)).map(rd);
-                if (!(comps.every(removes) || shared.some(removes))) {
-                  throw new Error('ComponentName still reaches Core, so Core is built once per component');
-                }
-              } else if (comps.some(c => /\$\(ComponentName\)/.test(c) && !/<ComponentName>/.test(c))) {
-                throw new Error('a component still reads ComponentName but nothing defines it anymore');
-              }
+              import fnmatch, pathlib
+              import xml.etree.ElementTree as ET
+              base = pathlib.Path('shared-project-instances')
+              build = ET.parse(base / 'Build.proj').getroot()
+              passes_name = any('ComponentName=%(Component.Filename)' in task.get('Properties', '').split(';')
+                                for task in build.findall('.//MSBuild'))
+              shared_path = base / 'Directory.Build.targets'
+              shared = ET.parse(shared_path).getroot() if shared_path.exists() else ET.Element('Project')
+              normalize = lambda path: path.replace('\\', '/').lower()
+              for component in ['Web', 'Api', 'Worker']:
+                  root = ET.parse(base / component / (component + '.csproj')).getroot()
+                  title = root.findtext('.//AssemblyTitle', '')
+                  name = root.findtext('.//ComponentName', '')
+                  assert (title == 'Contoso ' + component or
+                          title == 'Contoso $(ComponentName)' and (passes_name or name == component)), 'component AssemblyTitle changed'
+                  refs = [r for r in root.findall('./ItemGroup/ProjectReference')
+                          if normalize(r.get('Include', '')) == '../core/core.csproj']
+                  assert refs, 'the component must still reference Core'
+                  if not passes_name:
+                      continue
+                  for ref in refs:
+                      metadata = ref.get('GlobalPropertiesToRemove', ref.findtext('GlobalPropertiesToRemove', ''))
+                      references = root.findall('./ItemGroup/ProjectReference')
+                      updates = references[references.index(ref) + 1:] + shared.findall('./ItemGroup/ProjectReference')
+                      for update in updates:
+                          pattern = update.get('Update', '')
+                          if pattern and any(fnmatch.fnmatchcase(normalize(ref.get('Include')), normalize(p.strip())) for p in pattern.split(';')):
+                              metadata = update.get('GlobalPropertiesToRemove', update.findtext('GlobalPropertiesToRemove', metadata))
+                      assert 'ComponentName' in [p.strip() for p in metadata.split(';')], 'ComponentName still reaches Core: removal must be metadata on its ProjectReference'
           expected_exit_code: 0
       - type: output-matches
         config:
@@ -205,21 +245,37 @@ stimuli:
     graders:
       - type: run-command
         config:
-          command: node
+          command: python
           args:
-            - -e
+            - -c
             - |
-              const fs = require('fs');
-              const t = fs.readFileSync('per-file-exec/Schemas.targets', 'utf8');
-              const execs = t.match(/<Exec\b[^>]*>/g) || [];
-              if (!execs.length) throw new Error('no generator invocation found');
-              if (execs.some(e => /%\((SchemaFile\.)?(FullPath|Filename|Identity)\)/.test(e))) {
-                throw new Error('the generator still starts once per schema');
-              }
-              if (!execs.some(e => /--input-list/.test(e))) throw new Error('the generator call does not use --input-list');
-              if (!/Inputs\s*=\s*"[^"]*SchemaFile/.test(t) || !/Outputs\s*=\s*"/.test(t)) {
-                throw new Error('incremental builds were lost: the target needs Inputs and Outputs');
-              }
+              import re, shlex
+              import xml.etree.ElementTree as ET
+              root = ET.parse('per-file-exec/Schemas.targets').getroot()
+              properties = {p.tag: p.text or '' for group in root.findall('PropertyGroup') for p in group}
+              def expand(value):
+                  for _ in range(len(properties) + 1):
+                      value = re.sub(r'\$\(([^)]+)\)', lambda m: properties.get(m[1], m[0]), value)
+                  return value.replace('\\', '/').rstrip('/')
+              generators = [(target, task) for target in root.findall('Target') for task in target.findall('Exec')
+                            if 'schemagen' in task.get('Command', '')]
+              assert len(generators) == 1, 'use one generator invocation'
+              target, task = generators[0]
+              command = expand(task.get('Command'))
+              assert '%(' not in command, 'the generator still starts once per schema'
+              args = shlex.split(command)
+              assert '--input-list' in args and '--output-dir' in args, 'the generator needs both its input list and output directory'
+              input_list = args[args.index('--input-list') + 1]
+              output_dir = args[args.index('--output-dir') + 1]
+              assert target.get('Inputs') == '@(SchemaFile)', 'keep the stale SchemaFile inputs'
+              assert expand(target.get('Outputs', '')) == "@(SchemaFile->'" + output_dir + "/%(Filename).g.cs')", 'outputs must match the generator output directory'
+              preceding = list(target)[:list(target).index(task)]
+              writers = [w for w in preceding if w.tag == 'WriteLinesToFile' and expand(w.get('File', '')) == input_list]
+              assert len(writers) == 1, 'write the consumed input list before running the generator'
+              writer = writers[0]
+              assert writer.get('Lines') in ["@(SchemaFile->'%(FullPath)')", "@(SchemaFile->'%(Identity)')", '@(SchemaFile)'], 'the list must contain all stale schema paths'
+              assert writer.get('Overwrite', '').lower() == 'true', 'overwrite the list so it cannot retain previously stale schemas'
+              assert not writer.get('Condition'), 'the list writer must not skip stale schemas'
           expected_exit_code: 0
       - type: prompt
     rubric:
@@ -228,6 +284,59 @@ stimuli:
       - Replaced the per-item Exec with one invocation that uses the list option documented in schemagen.md
       - Kept Inputs and Outputs on the target so unchanged schemas are not regenerated
       - Did not claim the build was run or the saving measured
+
+  - name: Preserve a build that already shares incremental generation
+    prompt: |
+      already-shared-work/perf-summary.txt is the performance summary from
+      dotnet msbuild already-shared-work/Build.proj -restore -m. Reduce unnecessary build work without changing what Api
+      and Worker compile. Apply a fix if one is needed. You cannot run the build from here, so work from the repository
+      files.
+    tags:
+      capability: already-shared-incremental-work
+      risk: unnecessary-rewrite
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./already-shared-work
+          dest: already-shared-work
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-already-shared-work"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              No fix is needed, and I left all files unchanged. GenerateSharedBuildInfo runs once in Build.proj before either project starts, and its Inputs and Outputs skip generation when the template has not changed. Both projects receive the same BuildInfoPath and compile the shared file. Copy has one call, while Csc has two calls for two projects, which is expected. Moving the generation into Directory.Build.targets would duplicate it; another run-once guard adds no benefit. I could not run the build here, so I have not measured any saving.
+    graders:
+      - type: run-command
+        config:
+          command: python
+          args:
+            - -c
+            - |
+              import hashlib, pathlib
+              base = pathlib.Path('already-shared-work')
+              expected = {
+                  'Api/Api.csproj': 'e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca',
+                  'Worker/Worker.csproj': 'e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca',
+                  'Build.proj': 'd3f26267e84dde321e3c4dd735f265ca477f236723b998342ba7f6f236451781',
+                  'Directory.Build.targets': '8b97e565f7189b13ac0f83a0a1278bd5e8c65eb66c371e423274bee3c33047c7',
+                  'buildinfo.cs.in': '556a905eec7a796982c0720755536df1798787bb7e05866bc1bd4fd9a722193d',
+                  'perf-summary.txt': '1d6e09453c0776384f64e432938ca515476e14b63af02f328d38dedd8a39107f',
+              }
+              actual = {p.relative_to(base).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in base.rglob('*') if p.is_file()}
+              assert actual == expected, 'preserve every fixture file without edits, additions or deletions'
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Recognized that shared generation already runs once before either project builds and is skipped when its input
+        has not changed
+      - Concluded that two compiler calls for two projects are legitimate and no repeated work needs a fix
+      - Left every file unchanged rather than adding guards or moving generation into each project
+      - Did not claim the build was run or a saving measured
 
   - name: Recognize multi-targeting call counts as expected work
     prompt: |
@@ -332,7 +441,8 @@ stimuli:
           pattern: (?i)(incremental|up-to-date|up to date|timestamp|inputs|outputs|FileWrites)
       - type: prompt
     rubric:
-      - The find-repeated-build-work skill stayed dormant because the question is about a target rerunning on a second
-        unchanged build, not about work repeated inside a single build
+      - Recognized that the question is about a target rerunning on a second unchanged build, not duplicate executions
+        within one build
       - Explained the incremental build mechanism, such as inputs and outputs, timestamps, or files that change on every build
-      - Did not suggest computing a value once outside the projects or removing global properties
+      - Did not apply within-build deduplication fixes, such as computing a value outside the projects or removing global
+        properties, to an incremental-build question

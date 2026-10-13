@@ -21,7 +21,7 @@ MSBuild runs targets once per project instance. Work that does not depend on the
 - Targets that run again on a second, unchanged build: use `incremental-build`
 - Slow evaluation before any target runs: use `eval-performance`
 - Idle nodes or a serial dependency chain: use `build-parallelism`
-- Repeated restores across build steps: use `eliminate-redundant-restores`
+- Repeated restores across build steps: use `build-perf-diagnostics`
 - Unranked "why is my build slow": start with `build-perf-baseline`, then `build-perf-diagnostics`
 
 ## Workflow
