@@ -31,7 +31,13 @@ stimuli:
           - step_id: 1
             source: agent
             message: |-
-              The Task Performance Summary shows Exec with 38 calls for a solution of 38 projects, about 1970 ms each, so the git lookup in Directory.Build.targets starts a process in every project and gives the same answer each time. That is about 75 s of Exec across 8 cores, roughly 9 s of wall-clock. I could not run the build here, so this is not validated. The commit id is now computed once in build.sh and passed as -p:GitCommit, which every project inherits as a global property. The Exec in Directory.Build.targets only runs when GitCommit is empty, so a single-project dotnet build still gets a stamp. I did not use a flag property or an Exists check to skip the Exec, because properties are per project instance and the worker nodes are separate processes. The informational version still comes from Version and GitCommit.
+              The Task Performance Summary shows Exec with 38 calls for a solution of 38 projects, about 1970 ms each, so the git lookup in Directory.Build.targets starts a process in every project and gives the same answer each time. Removing 37 calls could avoid about 72.89 s of aggregate task time; the summary does not show actual overlap, so eight cores alone do not establish a wall-clock saving. I could not run the build here, so this is not validated. The commit id is now computed once in build.sh and passed as -p:GitCommit, which every project inherits as a global property. The Exec in Directory.Build.targets only runs when GitCommit is empty, so a single-project dotnet build still gets a stamp. The version assignment remains unconditional. I did not use a flag property or an Exists check to skip the Exec, because properties are per project instance and the worker nodes are separate processes. The informational version remains 3.2.0 plus the same short commit id.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Git lookup | 38 | 1 | 72890 estimated | Build-invariant command in every project | Compute once and pass GitCommit; keep fallback | unknown |
+
+              Verdict: proposed removal of 37 repeated executions; estimated task-time saving 72.89 s; wall-clock not validated
     graders:
       - type: run-command
         config:
@@ -42,7 +48,19 @@ stimuli:
               import os, pathlib, re, shutil, subprocess, tempfile, uuid
               import xml.etree.ElementTree as ET
               root = ET.parse('git-stamp/Directory.Build.targets').getroot()
-              assert root.findtext('.//InformationalVersion') == '$(Version)+$(GitCommit)', 'the stamped version format changed'
+              informational = [p for p in root.iter() if p.tag.lower() == 'informationalversion']
+              assert informational and all(p.text == '$(Version)+$(GitCommit)' for p in informational), 'the stamped version format changed'
+              props = ET.parse('git-stamp/Directory.Build.props').getroot()
+              versions = [p.text for group in props.findall('PropertyGroup') if not group.get('Condition')
+                          for p in group if p.tag.lower() == 'version' and not p.get('Condition')]
+              assert versions and versions[-1] == '3.2.0', 'preserve the stamped base version'
+              assert all(p.text == '3.2.0' for document in [props, root] for p in document.iter() if p.tag.lower() == 'version'), 'no assignment may change the base version'
+              assignments = [p for t in root.findall('Target') if not t.get('Condition')
+                             and 'GetAssemblyAttributes' in t.get('BeforeTargets', '').split(';')
+                             for group in t.findall('PropertyGroup') if not group.get('Condition')
+                             for p in group if p.tag.lower() == 'informationalversion' and not p.get('Condition')
+                             and p.text == '$(Version)+$(GitCommit)']
+              assert assignments, 'the version assignment must still execute when GitCommit is supplied'
               fallbacks = [
                   (target, task) for target in root.findall('Target') for task in target.findall('Exec')
                   if task.get('Command') == 'git rev-parse --short HEAD'
@@ -79,7 +97,16 @@ stimuli:
                       assert args[:2] == ['build', 'Contoso.slnx'], 'the solution must still be built'
                       values = [a.split(':', 1)[1] for a in args if re.match(r'[-/]p(?:roperty)?:', a, re.I)]
                       assert any('GitCommit=' + commit in v.split(';') for v in values), 'pass the actual git result, not an empty, fixed or undefined value'
+                      assignments = [p for value in values for p in value.split(';')]
+                      assert all(p.partition('=')[2] == '3.2.0' for p in assignments if p.partition('=')[0].lower() == 'version'), 'the build must not override the base version'
+                      assert all(p.partition('=')[2] == '3.2.0+' + commit for p in assignments if p.partition('=')[0].lower() == 'informationalversion'), 'the build must not override the stamped version'
           expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Identified from the Exec call count (38 calls for 38 projects) that the same git lookup runs in every project
@@ -115,6 +142,12 @@ stimuli:
             source: agent
             message: |-
               Core.csproj shows 3 calls in the Project Performance Summary, about 21 s each, although it is one project. Build.proj passes Properties="ComponentName=%(Component.Filename)" to each component, and every component then builds its reference to Core with that global property inherited. A different global property makes a different project instance, so Core is built once per component even though it never reads ComponentName. I added GlobalPropertiesToRemove="ComponentName" to the Core ProjectReference in Web, Api and Worker, so Core is built with the same properties every time and only once. The components still receive ComponentName for their AssemblyTitle. Not validated: I could not run the build here. Rebuilding with a binlog should show Core.csproj with 1 call.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Core project | 3 | 1 | 42060 estimated | ComponentName creates distinct global-property instances | Remove ComponentName only on Core references | unknown |
+
+              Verdict: proposed removal of 2 repeated executions; estimated project-time saving 42.06 s; wall-clock not validated
     graders:
       - type: run-command
         config:
@@ -165,6 +198,16 @@ stimuli:
               assert expected_roots <= set().union(*(roots for _, roots in tasks)), 'Web, Api and Worker must all remain build roots'
               shared_path = base / 'Directory.Build.targets'
               shared = ET.parse(shared_path).getroot() if shared_path.exists() else ET.Element('Project')
+              def references(project):
+                  return [r for group in project.findall('ItemGroup') if not group.get('Condition')
+                          for r in group.findall('ProjectReference') if not r.get('Condition')]
+              def removal_metadata(reference, default=''):
+                  if 'GlobalPropertiesToRemove' in reference.attrib:
+                      return reference.get('GlobalPropertiesToRemove')
+                  child = reference.find('GlobalPropertiesToRemove')
+                  if child is None or child.get('Condition'):
+                      return default
+                  return child.text or ''
               for component in ['Web', 'Api', 'Worker']:
                   component_path = normalize(f'{component}/{component}.csproj')
                   passes_name = False
@@ -182,24 +225,30 @@ stimuli:
                   name = root.findtext('.//ComponentName', '')
                   assert (title == 'Contoso ' + component or
                           title == 'Contoso $(ComponentName)' and (passes_name or name == component)), 'component AssemblyTitle changed'
-                  refs = [r for r in root.findall('./ItemGroup/ProjectReference')
+                  refs = [r for r in references(root)
                           if normalize(r.get('Include', '')) == '../core/core.csproj']
                   assert refs, 'the component must still reference Core'
                   if not passes_name:
                       continue
                   for ref in refs:
-                      metadata = ref.get('GlobalPropertiesToRemove', ref.findtext('GlobalPropertiesToRemove', ''))
-                      references = root.findall('./ItemGroup/ProjectReference')
-                      updates = references[references.index(ref) + 1:] + shared.findall('./ItemGroup/ProjectReference')
+                      metadata = removal_metadata(ref)
+                      applicable = references(root)
+                      updates = applicable[applicable.index(ref) + 1:] + references(shared)
                       for update in updates:
                           pattern = update.get('Update', '')
                           if pattern and any(fnmatch.fnmatchcase(normalize(ref.get('Include')), normalize(p.strip())) for p in pattern.split(';')):
-                              metadata = update.get('GlobalPropertiesToRemove', update.findtext('GlobalPropertiesToRemove', metadata))
+                              metadata = removal_metadata(update, metadata)
                       assert 'ComponentName' in [p.strip() for p in metadata.split(';')], 'ComponentName still reaches Core: removal must be metadata on its ProjectReference'
           expected_exit_code: 0
       - type: output-matches
         config:
           pattern: (?i)(global propert|project instance)
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Identified from Core.csproj having several calls that the same project is built once per distinct set of global
@@ -235,24 +284,66 @@ stimuli:
             source: agent
             message: |-
               The target in Directory.Build.targets is meant to generate buildinfo.g.cs once, but its Exists check is evaluated separately in every project, and with -m the projects build in separate worker processes. Several of them see no file at the same moment and each run the generator, which is why Exec shows 9 calls for 24 projects and why one writer sometimes hits Text file busy. A flag property would not help because properties are per project instance. I removed the generation from the per-project target and build.sh now runs tools/make-buildinfo.sh once, before dotnet build, so the file exists before any project compiles. The Compile item still includes it. Not validated: I could not run the build here.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Shared file generation | 9 | 1 | 3480 estimated | Per-project check-then-write race | Generate once and finish before the parallel build | unknown |
+
+              Verdict: proposed removal of 8 repeated executions; estimated task-time saving 3.48 s; wall-clock not validated
     graders:
       - type: run-command
         config:
-          command: node
+          command: python
           args:
-            - -e
+            - -c
             - |
-              const fs = require('fs');
-              const t = fs.readFileSync('exists-sentinel-race/Directory.Build.targets', 'utf8');
-              const sh = fs.readFileSync('exists-sentinel-race/build.sh', 'utf8').replace(/^\s*#.*$/gm, '');
-              if (!/<Compile\b[^>]*buildinfo\.g\.cs/.test(t)) throw new Error('projects no longer compile buildinfo.g.cs');
-              if (!fs.existsSync('exists-sentinel-race/tools/make-buildinfo.sh')) throw new Error('the generator script was removed');
-              const gen = sh.search(/make-buildinfo/);
-              const build = sh.search(/(?:^|[;&])\s*(?:exec\s+)?dotnet\s+(build|msbuild)\b/m);
-              if (gen < 0) throw new Error('build.sh never generates the file before building');
-              if (build < 0) throw new Error('build.sh no longer builds the projects');
-              if (gen > build) throw new Error('build.sh generates the file after the build starts');
+              import os, pathlib, shutil, subprocess, tempfile, uuid
+              import xml.etree.ElementTree as ET
+              base = pathlib.Path('exists-sentinel-race')
+              root = ET.parse(base / 'Directory.Build.targets').getroot()
+              assert any(c.get('Include') == '$(MSBuildThisFileDirectory)obj/buildinfo.g.cs' and not c.get('Condition')
+                         for group in root.findall('ItemGroup') if not group.get('Condition')
+                         for c in group.findall('Compile')), 'every project must still compile buildinfo.g.cs'
+              assert (base / 'tools/make-buildinfo.sh').is_file(), 'preserve the generator'
+              bash = shutil.which('bash')
+              assert bash, 'Bash is required to exercise build.sh'
+              with tempfile.TemporaryDirectory() as tmp:
+                  work = pathlib.Path(tmp) / 'work'
+                  shutil.copytree(base, work)
+                  bin_dir = pathlib.Path(tmp) / 'bin'
+                  bin_dir.mkdir()
+                  generator = work / 'tools/make-buildinfo.sh'
+                  generator.write_text(
+                      '#!/usr/bin/env sh\nset -eu\n'
+                      'printf "generator-start\\n" >> "$MOCK_BIN/events"\n'
+                      '[ "$#" -eq 1 ] && [ "$1" = "obj/buildinfo.g.cs" ]\n'
+                      'sleep 1\nmkdir -p obj\nprintf "%s\\n" "$EXPECTED_CONTENT" > "$1"\n'
+                      'printf "generator-done\\n" >> "$MOCK_BIN/events"\n',
+                      encoding='utf-8', newline='\n',
+                  )
+                  dotnet = bin_dir / 'dotnet'
+                  dotnet.write_text(
+                      '#!/usr/bin/env sh\nset -eu\n'
+                      'printf "build\\n" >> "$MOCK_BIN/events"\n'
+                      '[ "$1" = build ] || [ "$1" = msbuild ]\n'
+                      '[ "$2" = Contoso.slnx ]\n'
+                      '[ "$(cat obj/buildinfo.g.cs)" = "$EXPECTED_CONTENT" ]\n',
+                      encoding='utf-8', newline='\n',
+                  )
+                  dotnet.chmod(0o755)
+                  env = dict(os.environ, MOCK_BIN=str(bin_dir), EXPECTED_CONTENT=uuid.uuid4().hex)
+                  subprocess.run(
+                      [bash, '-c', 'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"; export PATH="$MOCK_BIN:$PATH"; bash build.sh'],
+                      cwd=work, env=env, check=True, timeout=20,
+                  )
+                  assert (bin_dir / 'events').read_text().splitlines() == ['generator-start', 'generator-done', 'build'], 'generate exactly once and await its required output before building'
           expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Explained that the Exists check runs separately in every project and, with -m, in separate worker processes, so
@@ -288,6 +379,12 @@ stimuli:
             source: agent
             message: |-
               Exec has 120 calls in one project, about 1400 ms each, so the generator starts once per schema, and its startup cost does not depend on the file. Batching on %(SchemaFile.FullPath) in Schemas.targets causes that. schemagen.md says --input-list takes a list of paths and produces the same output as one run per schema, so the target now writes the list with WriteLinesToFile and runs schemagen once with --input-list and --output-dir. That removes about 119 launches, roughly 2.7 minutes of 3.8 total. I kept Inputs and Outputs on the target, so a build after changing one schema still only regenerates the stale files, because MSBuild passes only the out-of-date items into the target. Not validated: I could not run the build here.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | schemagen startup | 120 | 1 | 166838 estimated | Sequential per-item Exec on one node | Write stale paths to a list and invoke once | yes, before compilation |
+
+              Verdict: proposed removal of 119 repeated executions; estimated task-time saving 166.84 s; wall-clock not validated
     graders:
       - type: run-command
         config:
@@ -311,6 +408,7 @@ stimuli:
                             if 'schemagen' in task.get('Command', '')]
               assert len(generators) == 1, 'use one generator invocation'
               target, task = generators[0]
+              assert not task.get('Condition'), 'the generator invocation must not be disabled'
               targets = {t.get('Name'): t for t in root.findall('Target') if not t.get('Condition')}
               pending = [name for name, t in targets.items()
                          if {'BeforeCompile', 'CoreCompile'} & {n.strip() for n in t.get('BeforeTargets', '').split(';')}]
@@ -338,7 +436,19 @@ stimuli:
               assert writer.get('Lines') in ["@(SchemaFile->'%(FullPath)')", "@(SchemaFile->'%(Identity)')", '@(SchemaFile)'], 'the list must contain all stale schema paths'
               assert writer.get('Overwrite', '').lower() == 'true', 'overwrite the list so it cannot retain previously stale schemas'
               assert not writer.get('Condition'), 'the list writer must not skip stale schemas'
+              before_writer = preceding[:preceding.index(writer)]
+              created = [expand(d.strip()) for step in before_writer if step.tag == 'MakeDir' and not step.get('Condition')
+                         for d in step.get('Directories', '').split(';') if d.strip()]
+              for directory in [str(pathlib.PurePosixPath(input_list).parent), output_dir]:
+                  assert ((pathlib.Path('per-file-exec') / directory).is_dir() or
+                          any(d == directory or d.startswith(directory + '/') for d in created)), 'create the list/output directory before writing on a clean build'
           expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Identified from Exec having 120 calls in one project that the generator is started once per schema file and that
@@ -371,6 +481,13 @@ stimuli:
             source: agent
             message: |-
               No fix is needed, and I left all files unchanged. GenerateSharedBuildInfo runs once in Build.proj before either project starts, and its Inputs and Outputs skip generation when the template has not changed. Both projects receive the same BuildInfoPath and compile the shared file. Copy has one call, while Csc has two calls for two projects, which is expected. Moving the generation into Directory.Build.targets would duplicate it; another run-once guard adds no benefit. I could not run the build here, so I have not measured any saving.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Shared generation | 1 | 1 | 0 | Already shared and incremental | Leave unchanged | yes, before both projects |
+              | Csc | 2 | 2 | 0 | One compilation per project | Leave unchanged | unknown |
+
+              Verdict: no repeated work worth changing
     graders:
       - type: run-command
         config:
@@ -392,6 +509,12 @@ stimuli:
                         for p in base.rglob('*') if p.is_file()}
               assert actual == expected, 'preserve every fixture file without edits, additions or deletions'
           expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Recognized that shared generation already runs once before either project builds and is skipped when its input
@@ -424,6 +547,13 @@ stimuli:
             source: agent
             message: |-
               Nothing runs more often than expected. The solution has 12 projects and Directory.Build.props sets three target frameworks, so Csc, ResolveAssemblyReferences, GenerateDepsFile and ResolvePackageAssets each run 12 x 3 = 36 times, once per target framework of each project. Each project shows 4 calls, which is one outer build plus three inner builds. Copy is higher at 211 calls, which is normal because it runs per project for several targets. These counts are legitimate per-project work, so I would not change anything.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Per-TFM tasks | 36 | 36 | 0 | 12 projects times 3 TFMs | Leave unchanged | unknown |
+              | Calls per project | 4 | 4 | 0 | One outer plus three inner builds | Leave unchanged | unknown |
+
+              Verdict: no repeated work worth changing
     graders:
       - type: file-contains
         config:
@@ -432,6 +562,12 @@ stimuli:
       - type: output-matches
         config:
           pattern: (?i)(12\s*[x×*]\s*3|36\s*=\s*12|three target frameworks|3 target frameworks|per target framework|nothing runs more often|no repeated|not repeated|legitimate)
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Compared the 36 calls of Csc and the other tasks with the 12 projects and three target frameworks and concluded the
@@ -463,7 +599,13 @@ stimuli:
           - step_id: 1
             source: agent
             message: |-
-              The only repeat is the Exec in Directory.Build.targets, which runs 4 times because four deployment-test projects stamp the tool version. It costs 6.1 s in total. Making it run once would save about 4.6 s of task time, and with 16 nodes the wall-clock gain is well under a second on an 18 minute build, which is negligible, far below 1%. Csc and the other tasks run 212 times for 212 projects. I would not change anything: the added complexity is not worth the gain.
+              The only repeat is the Exec in Directory.Build.targets, which runs 4 times because four deployment-test projects stamp the tool version. It costs 6.1 s in total. Making it run once could avoid about 4.59 s of task time. Even if all of that reduced wall-clock time, it is at most 0.43% of an 18 minute build; the 16-node count alone does not establish actual overlap. Csc and the other tasks run 212 times for 212 projects. I would not change anything: the added complexity is not worth the gain.
+
+              | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
+              |---|---|---|---|---|---|---|
+              | Tool-version probe | 4 | 1 | 4590 estimated | Invariant per-project probe | Leave unchanged: upper bound below 1% | unknown |
+
+              Verdict: no repeated work worth changing
     graders:
       - type: file-contains
         config:
@@ -471,11 +613,18 @@ stimuli:
           value: 4 calls     1530 ms avg
       - type: output-matches
         config:
-          pattern: (?i)(negligible|not worth|insignificant|well under|below 1|less than 1|under 1\s*%|<\s*1\s*%|0\.\d+\s*%|leave (it|this|them) (alone|as is))
+          pattern: (?im)^Verdict:[ \t]*no repeated work worth changing[.!]?[ \t]*$
+      - type: output-matches
+        config:
+          pattern: '(?m)^\|\s*Work\s*\|\s*Calls\s*\|\s*Expected\s*\|\s*Avoidable ms\s*\|\s*Cause\s*\|\s*Fix\s*\|\s*On critical path\?\s*\|\r?\n\|(?:\s*:?-+:?\s*\|){7}\r?\n\|(?:[^|\r\n]*\|){7}\s*$'
+      - type: output-matches
+        config:
+          pattern: '(?m)^Verdict:[ \t]*\S[^\r\n]*$'
       - type: prompt
     rubric:
       - Found that the Exec runs 4 times for about 6 s in total
-      - Compared the possible saving with the 18 minute wall-clock and the 16 nodes, and concluded it is not worth changing
+      - Compared the aggregate saving upper bound with the 18 minute wall-clock and concluded it is not worth changing
+        without assuming every busy node divides that saving
       - Did not recommend a change to the Exec or invent other repeated work
 
   - name: Decline second-build rerun questions
@@ -508,3 +657,64 @@ stimuli:
       - Explained the incremental build mechanism, such as inputs and outputs, timestamps, or files that change on every build
       - Did not apply within-build deduplication fixes, such as computing a value outside the projects or removing global
         properties, to an incremental-build question
+
+  - name: Decline repeated restore questions across CI commands
+    prompt: |
+      Our CI runs dotnet restore, dotnet build and dotnet test for the same solution. The logs show NuGet restore three
+      times. How can we avoid the unnecessary restore work without skipping required package downloads?
+    expect_activation: false
+    tags:
+      capability: dormancy-repeated-restores
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-restore-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              This is NuGet restore repeated across separate CI commands, not duplicate task execution inside one build. Restore once for the required project graph, frameworks, runtimes and configuration, then use dotnet build --no-restore and dotnet test --no-restore with matching inputs. Keep restore when package or project inputs change or assets are missing. The restore guidance belongs to build-perf-diagnostics; changing per-project targets or removing global properties is not needed here.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(--no-restore|separate.*restore|restore once)
+      - type: prompt
+    rubric:
+      - Recognized implicit NuGet restores across separate commands rather than repeated custom work inside one build
+      - Recommended reusing a valid restore with matching project, framework, runtime and configuration inputs
+      - Redirected restore analysis to the restore-performance guidance
+      - Did not apply per-project deduplication fixes or remove global properties
+
+  - name: Decline slow evaluation before target execution
+    prompt: |
+      dotnet build spends about 35 seconds before the first target starts, then compilation finishes in two seconds.
+      Directory.Build.props has recursive globs and the repository imports many props and targets files. How should I
+      investigate that startup delay?
+    expect_activation: false
+    tags:
+      capability: dormancy-slow-evaluation
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-evaluation-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Time before targets start points to project evaluation, not repeated target or task execution. Capture a binlog of the original build and inspect evaluation durations and import/glob costs with the binlog MCP evaluation and imports tools; use eval-performance for that investigation. Preprocessing can show the expanded import structure, but measure first before rewriting globs or imports. Per-project task deduplication and run-once guards are not needed here.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(evaluation|imports|globs)
+      - type: prompt
+    rubric:
+      - Distinguished evaluation before target execution from time spent compiling or running targets
+      - Recommended measuring evaluation and inspecting expensive imports or glob traversal before editing build files
+      - Redirected the startup-delay investigation to evaluation-performance analysis
+      - Did not apply task deduplication or run-once guards to an evaluation problem

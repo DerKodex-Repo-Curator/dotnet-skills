@@ -38,7 +38,7 @@ If MCP is unavailable or its tools do not expose execution counts, replay the ca
 dotnet msbuild build.binlog -noconlog "-flp:v=diag;logfile=full.log;performancesummary"
 ```
 
-Expected calls are one per project, times the target frameworks for TFM-dependent work. `Csc`, `ResolveAssemblyReferences` and copy-local work are legitimately per project. A non-compile task whose count is well above the project count, or a project path listed several times, is a candidate.
+Compare each count with the project instances that genuinely need the operation. TFM-dependent work such as `Csc` normally runs once per project and target framework; copy-local work may also run in several targets. A multi-targeted project can legitimately show one outer build plus one inner build per TFM, so four project calls for three TFMs are not automatically duplicates. Build-invariant work is different: an identical git lookup needs one computation for the build, so 38 calls in 38 projects can still be waste. Confirm that inputs, working directories and relevant properties do not change the result; identical command text alone does not prove invariance. Investigate extra instances only after accounting for required TFMs and global properties.
 
 ### Step 2: Classify each candidate
 
@@ -51,7 +51,7 @@ Expected calls are one per project, times the target frameworks for TFM-dependen
 
 ### Step 3: Size the win
 
-Avoidable time is `(calls - expected) x average ms`. Wall-clock saving is roughly that divided by the number of busy nodes, and close to zero if the work is off the critical path. If it is below about 1% of build wall-clock, report it as not worth changing.
+Avoidable aggregate task time is `(calls - expected) x average ms`. Wall-clock saving depends on actual overlap and the critical path. Batched per-item `Exec` calls in one target run sequentially on one node, so removing their startup costs can save nearly the full aggregate time. Only divide by effective parallelism when the duplicate calls actually overlap across nodes; unrelated busy nodes do not reduce a sequential saving. Use the binlog timeline to establish overlap, and mark wall-clock savings unknown when that evidence is missing. Work off the critical path can yield no wall-clock gain. For performance-only changes, if even the aggregate upper bound is below about 1% of build wall-clock, report it as not worth changing. Correctness races still need a fix regardless of the timing gain.
 
 ### Step 4: Fix without changing behavior
 
@@ -85,10 +85,16 @@ If the value is only a commit id for the informational version, source link alre
 
 ## Output
 
+For on-target requests, emit a findings table with at least one row and a `Verdict:` line. Use `unknown` for unavailable timing or critical-path evidence; distinguish estimated aggregate task time from measured wall-clock savings.
+
 | Work | Calls | Expected | Avoidable ms | Cause | Fix | On critical path? |
 |---|---|---|---|---|---|---|
 
-`Verdict: removed N repeated executions, saving about X s` or `Verdict: no repeated work worth changing`.
+After verification: `Verdict: removed N repeated executions, measured wall-clock saving X s`.
+
+Without verification: `Verdict: proposed removal of N repeated executions; estimated task-time saving X s; wall-clock not validated`.
+
+When no change is worthwhile: `Verdict: no repeated work worth changing`.
 
 ## Common Pitfalls
 
@@ -97,5 +103,5 @@ If the value is only a commit id for the informational version, source link alre
 | Treating `Csc` or copy-local counts as waste | Compare with projects times target frameworks first |
 | Guarding with `Exists(file)` or a flag property | Move the work out of the per-project path |
 | Fallback condition on a property that is not a global property | Pass it as a global property, or the fallback never applies |
-| Claiming a saving from total task time | Divide by busy nodes and check the critical path |
+| Claiming a saving from total task time | Check actual overlap and the critical path; do not divide sequential work by unrelated busy nodes |
 | Merging per-item `Exec` and losing incrementality | Keep `Inputs` and `Outputs` on the target |
