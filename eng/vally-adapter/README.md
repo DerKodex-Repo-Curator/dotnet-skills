@@ -103,6 +103,24 @@ The implementation is split across these main components:
 | [`consolidate.mjs`](./consolidate.mjs) | Combines model/shard result sets and produces the decision-first PR comment |
 | [`check_eval_quality.py`](../eval-quality/check_eval_quality.py) | Blocks structurally invalid or newly underpowered eval instruments before they run |
 
+### Redistributable workflow packages
+
+The native SDK lane also accepts individual `agentic-workflows/<package>/aw.yml`
+manifests. Discovery includes package source/resource changes, shared grader
+changes, and `tests/agentic-workflows/` scenarios on PRs; schedules include the
+collection. Dispatch `plugin: agentic-workflows` to evaluate only that collection.
+The reusable `evaluation-run.yml` dispatch additionally accepts a package name
+as its `skill` input. Missing package evals fail discovery explicitly.
+
+Workflow evidence uses `skillKind: workflow` and
+`evaluationLane: workflow-prompt-sdk`, retaining the same accounting,
+distinct-stimulus policy, activation, completion, and retry semantics.
+It evaluates real imported prompts and installed resources against offline
+collector/service fixtures and proposed `result.json` actions. It does not run
+Actions bootstrap jobs or publish safe outputs. Runtime gh-aw trace graders,
+package compilation, helper regression tests, and consumer integration runs
+are complementary evidence, not substitutes for these scenario evals.
+
 ## Trust boundaries
 
 Evaluation can execute content from the commit being tested. The workflow must
@@ -357,7 +375,7 @@ LLM graders, so it cannot safely prove objective completion regression.
 | --- | --- | --- | --- |
 | `VALID_PASS` | Improved | Complete, adequately powered, statistically significant, at least a 20% task-level net win, and all explicit dormancy contracts passed | Passes the result |
 | `VALID_NO_CHANGE` with `activation_contract_failed` | Activation contract failed | Preference evidence may be positive, but the isolated target skill activated on an explicit dormancy case | Blocks a pass and reports the routing defect |
-| `VALID_NO_CHANGE` | Not proven improved | Measurement is valid, but improvement did not satisfy the full decision rule | Does not claim improvement |
+| `VALID_NO_CHANGE` | Cause-specific no-clear-winner label | Measurement is valid, but the evidence is all ties, mixed, directional but unproven, or credible but below the practical floor | Does not claim improvement; directs investigation to the actual evidence shape |
 | `VALID_NO_CHANGE` with reverse preference | Preference loss, report-only | The comparison judge credibly preferred baseline | Diagnostic only; it is not objective completion proof |
 | `INVALID_INCONCLUSIVE` | Invalid or underpowered | Result identity, accounting, judge health, or task breadth is not trustworthy | Fails closed; repair or rerun |
 | `VALID_REGRESSION` | Objective regression | Reserved for a future deterministic completion gate | Not emitted today |
@@ -365,6 +383,12 @@ LLM graders, so it cannot safely prove objective completion regression.
 The PR report keeps **Overfit** separate from the verdict. A result can improve
 and still be too tailored to known eval wording. A result can also have low
 overfit and fail because it did not improve.
+
+For newly generated `VALID_NO_CHANGE` results, the adapter emits
+`noChangeDiagnosis` as the canonical renderer key. PR comments and newly
+generated dashboard evidence use that field rather than reimplementing the
+evidence classification independently. Retained dashboard evidence created
+before this field was introduced keeps the generic `Not proven improved` label.
 
 ## Metrics that matter
 
@@ -480,7 +504,7 @@ Historical authoring defects included:
   equivalent to baseline;
 - duplicate stimulus names, which made comparison identity ambiguous.
 
-**Fix:** run the authoring gate before dispatch. It blocks eleven structural
+**Fix:** run the authoring gate before dispatch. It blocks 22 structural
 defect classes and checks the underpowered-eval debt ledger. See
 [Eval authoring quality](../eval-quality/README.md) for each pattern and repair.
 
