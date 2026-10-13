@@ -153,7 +153,11 @@ Apply the mechanical and semantic rewrites in one edit pass when the inventory m
 - For `ICollectionFixture<T>` in default collections mode, preserve both sharing
   and member serialization, including when `DisableParallelization` is absent.
   A static `Lazy<T>` shares an instance but does not serialize tests or dispose
-  it. Preserve one initialization and one disposal after the last member,
+  it. Never make cleanup depend on every declared member class running: filters
+  may select only one. Verify disposal in full and single-member filtered runs.
+  A lazy run-end cleanup fallback is valid only for an explicitly accepted
+  sole-collection assembly; otherwise report the unsupported lifetime mapping.
+  Preserve one initialization and one disposal after the last selected member,
   including async lifecycle. Under class-level MSTest parallelization,
   `[DoNotParallelize]` on member classes is a conservative serialization option,
   not exact collection scheduling: disclose that it also prevents overlap with

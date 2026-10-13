@@ -26,18 +26,60 @@ report_spec = importlib.util.spec_from_file_location(
 )
 report = importlib.util.module_from_spec(report_spec)
 report_spec.loader.exec_module(report)
+LIFETIME_REPORT = (
+    " Lazy creation and assembly cleanup are a fallback for this assembly's sole collection, "
+    "not a general multi-collection lifetime mapping."
+)
 RESOURCE_REPORT = (
     "Both members share one resource and serialize on the same exclusive key. "
     "MSTest permits unrelated classes to run in parallel, so this avoids the "
     "broader assembly serialization; the resource is disposed after both members finish."
-)
+) + LIFETIME_REPORT
 DEFERRED_REPORT = (
     "Unrelated classes may run in parallel with each other, but cannot overlap "
     "these deferred members. This is coarser scheduling than xUnit collections."
-)
+) + LIFETIME_REPORT
 
 
 class DefaultCollectionTests(unittest.TestCase):
+    def test_unlike_prefix_preserves_mstest_claim(self):
+        statements = {
+            "assembly-serial": "Unlike xUnit, MSTest serializes unrelated classes under this assembly policy.",
+            "deferred-members": "Unlike xUnit, MSTest does not allow unrelated classes to overlap these deferred members.",
+            "shared-resource": "Unlike xUnit, MSTest allows unrelated classes to overlap these members.",
+        }
+        for policy, text in statements.items():
+            with self.subTest(policy=policy):
+                report.validate_report(policy, text)
+        for text in (
+            "Unlike xUnit, MSTest allows unrelated classes to overlap these members.",
+            "Unlike xUnit, MSTest serializes unrelated classes. MSTest allows unrelated classes to overlap these members.",
+        ):
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                report.validate_report("assembly-serial", text)
+
+    def test_leading_comparison_retains_current_framework_claims(self):
+        contrasts = (
+            "Unlike xUnit, unrelated classes cannot overlap these deferred members, "
+            "but can run in parallel with each other.",
+            "Unlike xUnit, MSTest ensures unrelated classes cannot overlap these deferred members.",
+        )
+        for response in contrasts:
+            report.validate_report("deferred-members", response)
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                report.validate_report("deferred-members", response.replace("cannot overlap", "can overlap"))
+        report.validate_report(
+            "deferred-members",
+            "In xUnit unrelated classes can overlap, MSTest does not allow unrelated "
+            "classes to overlap these deferred members.",
+        )
+
+    def test_shared_resource_report_must_address_collection_members(self):
+        peers = "Unrelated classes can overlap each other."
+        with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+            report.validate_report("shared-resource", peers)
+        report.validate_report("shared-resource", peers + " Unrelated classes may overlap these members.")
+
     def workspace(self, parent):
         root = Path(tempfile.mkdtemp(prefix="default-collection-", dir=parent))
         replay.materialize(SPEC, CASE, root)
@@ -54,7 +96,8 @@ class DefaultCollectionTests(unittest.TestCase):
             root = self.workspace(parent)
             source = (root / "CollectionTests.cs").read_text(encoding="utf-8")
             self.assertIn("Lazy<SharedResource>", source)
-            self.assertIn("completedMembers) == 2", source)
+            self.assertIn("[AssemblyCleanup]", source)
+            self.assertNotIn("completedMembers", source)
             self.assertNotIn("using Xunit;", source)
             self.assertIn(
                 'Include="MSTest.TestFramework" Version="4.4.1"',
@@ -65,6 +108,11 @@ class DefaultCollectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="collection-contract-") as parent:
             root = self.workspace(parent)
             replay.run_graders(CASE, root)
+            evidence = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in root.glob(".eval/results/*/evidence.json")
+            ]
+            self.assertEqual([1, 1, 2], sorted(len(item["cases"]) for item in evidence))
             with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                 replay.run_graders(
                     CASE, root,
@@ -97,6 +145,15 @@ class DefaultCollectionTests(unittest.TestCase):
             source.write_text(parallel.replace("[DoNotParallelize]\n", "", 1), encoding="utf-8")
             replay.run_graders(CASE, root)
 
+            source.write_text(parallel.replace("Workers = 2", "Workers = 1").replace(
+                "[DoNotParallelize]\n", ""
+            ), encoding="utf-8")
+            replay.run_graders(
+                CASE, root,
+                "One assembly worker serializes unrelated classes as well as these members; "
+                "this is conservative scheduling." + LIFETIME_REPORT,
+            )
+
             resource_locks = parallel.replace(
                 "[DoNotParallelize]", '[ResourceLock("Shared")]'
             )
@@ -125,12 +182,18 @@ class DefaultCollectionTests(unittest.TestCase):
                 replay.run_graders(CASE, root)
 
             source.write_text(
-                golden.replace("completedMembers) == 2", "completedMembers) == 1"),
+                golden.replace(
+                    "    private SharedResource resource => SharedCollection.Resource;",
+                    "    private SharedResource resource => SharedCollection.Resource;\n"
+                    "    [ClassCleanup]\n"
+                    "    public static void DisposeEarly() => SharedCollection.Resource.Dispose();",
+                    1,
+                ),
                 encoding="utf-8",
             )
             with self.assertRaises(AssertionError) as failure:
                 replay.run_graders(CASE, root)
-            self.assertIn('events[-1]["event"] == "disposed"', str(failure.exception))
+            self.assertIn('count("disposed") == 1', str(failure.exception))
             events = [
                 json.loads(line)
                 for line in max(
@@ -138,33 +201,60 @@ class DefaultCollectionTests(unittest.TestCase):
                     key=lambda path: path.stat().st_mtime_ns,
                 ).read_text(encoding="utf-8").splitlines()
             ]
-            self.assertEqual(
-                ["created", "entered", "exited", "disposed", "entered", "exited"],
-                [event["event"] for event in events],
-            )
+            self.assertEqual(2, sum(event["event"] == "disposed" for event in events))
             self.assertEqual(
                 {"FirstCase", "SecondCase"},
                 {event["case"] for event in events if event["event"] == "entered"},
             )
 
             source.write_text(
-                golden.replace(
-                    "public static void Cleanup() => SharedCollection.CompleteMember();",
-                    "public static void Cleanup() { }",
-                ) + """
+                golden + """
 [TestClass]
-public class CollectionAssemblySetup
+public class UnrelatedTests
 {
-    [AssemblyInitialize]
-    public static void Initialize(TestContext context) => _ = SharedCollection.Resource;
-    [AssemblyCleanup]
-    public static void Cleanup() => SharedCollection.Resource.Dispose();
+    [TestMethod]
+    public void UnrelatedCase() { }
 }
 """,
                 encoding="utf-8",
             )
             with self.assertRaisesRegex(AssertionError, "Collection lifetime contract"):
                 replay.run_graders(CASE, root)
+
+    def test_hardcoded_member_count_leaks_in_filtered_run(self):
+        with tempfile.TemporaryDirectory(prefix="collection-filter-mutation-") as parent:
+            root = self.workspace(parent)
+            source = root / "CollectionTests.cs"
+            text = source.read_text(encoding="utf-8")
+            text = text.replace("[AssemblyCleanup]", "private static int completedMembers;")
+            text = text.replace("if (resource.IsValueCreated)", "if (++completedMembers == 2 && resource.IsValueCreated)")
+            text = text.replace(
+                "    private SharedResource resource => SharedCollection.Resource;",
+                "    private SharedResource resource => SharedCollection.Resource;\n"
+                "    [ClassCleanup]\n"
+                "    public static void Cleanup() => SharedCollection.CompleteRun();",
+            )
+            source.write_text(text, encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "disposed"):
+                replay.run_graders(CASE, root)
+            results = [
+                json.loads(path.read_text(encoding="utf-8"))
+                for path in root.glob(".eval/results/*/evidence.json")
+            ]
+            self.assertEqual(1, len(results))
+            self.assertEqual(2, len(results[0]["cases"]))
+
+    def test_assertion_weakening_preserves_names_but_fails_source_contract(self):
+        with tempfile.TemporaryDirectory(prefix="collection-assertion-mutation-") as parent:
+            root = self.workspace(parent)
+            source = root / "CollectionTests.cs"
+            text = source.read_text(encoding="utf-8")
+            for before, after in (("Assert.AreEqual(5, 2 + 3)", "Assert.AreEqual(5, 5)"),
+                                  ("Assert.AreEqual(1, -2 + 3)", "Assert.IsTrue(true)")):
+                with self.subTest(assertion=before):
+                    source.write_text(text.replace(before, after), encoding="utf-8")
+                    with self.assertRaisesRegex(AssertionError, "Source invariant changed"):
+                        replay.run_graders(CASE, root)
 
     def test_original_xunit_fixture_is_healthy_and_shares_one_resource(self):
         with tempfile.TemporaryDirectory(prefix="collection-baseline-") as parent:

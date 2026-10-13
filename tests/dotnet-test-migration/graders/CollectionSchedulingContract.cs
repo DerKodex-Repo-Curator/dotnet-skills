@@ -11,17 +11,31 @@ internal static class CollectionSchedulingContract
     internal static void Verify()
     {
         var assembly = typeof(CollectionSchedulingContract).Assembly;
-        if (assembly.GetTypes().SelectMany(type => type.GetMethods(
-                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
-            .Any(method => method.IsDefined(typeof(AssemblyInitializeAttribute)) ||
-                method.IsDefined(typeof(AssemblyCleanupAttribute))))
+        var allMethods = assembly.GetTypes().SelectMany(type => type.GetMethods(
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance)).ToArray();
+        if (allMethods.Any(method => method.IsDefined(typeof(AssemblyInitializeAttribute))))
         {
             throw new InvalidOperationException(
-                "Collection lifetime contract: collection-only fixtures must not use assembly lifecycle.");
+                "Collection lifetime contract: resources must be created lazily for selected members.");
+        }
+        if (allMethods.Any(method => method.IsDefined(typeof(AssemblyCleanupAttribute))))
+        {
+            if (allMethods.Any(method => method.IsDefined(typeof(TestMethodAttribute)) &&
+                method.DeclaringType != typeof(FirstMember) && method.DeclaringType != typeof(SecondMember)))
+            {
+                throw new InvalidOperationException(
+                    "Collection lifetime contract: run-scoped cleanup cannot include unrelated tests.");
+            }
+            RecordLifetime("sole-collection-run");
+        }
+        else
+        {
+            RecordLifetime("member-lifecycle");
         }
 
+        var parallel = assembly.GetCustomAttribute<ParallelizeAttribute>();
         if (assembly.IsDefined(typeof(DoNotParallelizeAttribute)) ||
-            assembly.GetCustomAttribute<ParallelizeAttribute>() is null)
+            parallel is null || parallel.Workers == 1)
         {
             RecordPolicy("assembly-serial");
             return;
@@ -67,5 +81,12 @@ internal static class CollectionSchedulingContract
         {
             File.WriteAllText(Path.ChangeExtension(lifecycle, ".scheduling.json"), policy);
         }
+    }
+
+    private static void RecordLifetime(string lifetime)
+    {
+        var lifecycle = Environment.GetEnvironmentVariable("MIGRATION_PROBE");
+        if (!string.IsNullOrEmpty(lifecycle))
+            File.WriteAllText(Path.ChangeExtension(lifecycle, ".lifetime.json"), lifetime);
     }
 }

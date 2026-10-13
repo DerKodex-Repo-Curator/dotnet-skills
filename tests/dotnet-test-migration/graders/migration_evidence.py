@@ -5,7 +5,9 @@ import copy
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+import re
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -55,6 +57,101 @@ def verify_cases(actual, expected, skip_reasons):
         assert reason in actual[name]["message"], (name, actual[name])
 
 
+def invariant_source(source, profile):
+    tokens = []
+    pattern = re.compile(
+        r'(?P<comment>//[^\r\n]*|/\*.*?\*/)|'
+        r'(?P<string>(?:\$@|@\$|@)"(?:[^"]|"")*"|\$?"(?:\\.|[^"\\])*"|'
+        r"'(?:\\.|[^'\\])*')|(?P<space>\s+)|"
+        r'(?P<token>[A-Za-z_]\w*|\d+(?:\.\d+)?|=>|==|!=|<=|>=|\+\+|--|&&|\|\||\?\?|\S)',
+        re.S,
+    )
+    for match in pattern.finditer(source):
+        if match.lastgroup not in {"comment", "space"}:
+            tokens.append(match[0])
+    replacements = [
+        (("[", name, "(", ")", "]"), ("[", name, "]"))
+        for name in ("TestClass", "TestMethod", "DataTestMethod", "ClassInitialize", "ClassCleanup")
+    ] + [
+        (("Assert", ".", "ThrowsExactly"), ("Assert", ".", "ThrowsException")),
+        (("[", "DataTestMethod", "]"), ("[", "TestMethod", "]")),
+    ]
+    if profile == "mstest-upgrade":
+        replacements += [
+            (("[", "ClassCleanup", "(", "ClassCleanupBehavior", ".", "EndOfClass", ")", "]"),
+             ("[", "ClassCleanup", "]")),
+            (("TestTimeout", ".", "Infinite"), ("int", ".", "MaxValue")),
+        ]
+    elif profile == "collection-tests":
+        replacements.append((("Assert", ".", "Equal"), ("Assert", ".", "AreEqual")))
+    else:
+        assert profile == "staged-orders", f"Unknown source contract: {profile}"
+    for before, after in replacements:
+        index = 0
+        while index <= len(tokens) - len(before):
+            if tuple(tokens[index:index + len(before)]) == before:
+                tokens[index:index + len(before)] = after
+                index += len(after)
+            else:
+                index += 1
+    if profile == "collection-tests":
+        bodies = []
+        for name in ("FirstCase", "SecondCase"):
+            prefix = (name, "(", ")", "{")
+            matches = [i for i in range(len(tokens) - 3)
+                       if tuple(tokens[i:i + 4]) == prefix]
+            assert len(matches) == 1, f"Missing or duplicate test body: {name}"
+            start = matches[0] + 3
+            depth = 1
+            end = start + 1
+            while end < len(tokens) and depth:
+                depth += (tokens[end] == "{") - (tokens[end] == "}")
+                end += 1
+            assert depth == 0, f"Unclosed test body: {name}"
+            bodies.append((name, tokens[start:end]))
+        tokens = bodies
+    return hashlib.sha256(json.dumps(tokens, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def verify_sources(root, contracts):
+    verified = {}
+    for contract in contracts:
+        profile, expected, filename = contract.split(":", 2)
+        path = root / filename
+        assert path.is_file() and not path.is_symlink(), f"Missing invariant source: {filename}"
+        actual = invariant_source(path.read_text(encoding="utf-8"), profile)
+        assert actual == expected, f"Source invariant changed: {filename} ({profile})"
+        verified[filename] = {"profile": profile, "normalized_sha256": actual}
+    return verified
+
+
+def validate_checkpoint(root):
+    assert root.is_dir() and not root.is_symlink(), f"Invalid checkpoint root: {root}"
+    for path in root.rglob("*"):
+        assert not path.is_symlink(), f"Checkpoint symlink: {path}"
+        if not path.is_file() or path.suffix not in {".csproj", ".props", ".targets"}:
+            continue
+        if {"obj", "bin", ".eval", ".git"}.intersection(path.relative_to(root).parts):
+            continue
+        for item in ET.parse(path).getroot().iter():
+            tag = item.tag.rsplit("}", 1)[-1]
+            key = "Project" if tag == "Import" else "Include"
+            if tag not in {"Compile", "ProjectReference", "Import"} or key not in item.attrib:
+                continue
+            for value in item.attrib[key].split(";"):
+                value = value.strip().replace("\\", "/")
+                assert value and not any(marker in value for marker in ("$(", "@(", "%(")), (
+                    f"Checkpoint reference must be literal and self-contained: {path}: {value}"
+                )
+                assert not PureWindowsPath(value).drive and not Path(value).is_absolute(), (
+                    f"External checkpoint reference: {path}: {value}"
+                )
+                resolved = (path.parent / value).resolve()
+                assert resolved.is_relative_to(root.resolve()), (
+                    f"External checkpoint reference: {path}: {value}"
+                )
+
+
 def execute(command, root, evidence, name, environment=None, expected_exit=0):
     result = subprocess.run(
         command, cwd=root, env=environment, capture_output=True, text=True,
@@ -98,6 +195,7 @@ def verify_runner(effective, native, runner):
 
 def run(args, root=None):
     root = Path.cwd() if root is None else root
+    source_invariants = verify_sources(root, args.source_contract)
     preserved = {}
     for item in args.unchanged_file:
         expected, filename = item.split(":", 1)
@@ -187,6 +285,7 @@ def run(args, root=None):
     expected = dict(value.rsplit("=", 1) for value in args.expect)
     reasons = dict(value.split("=", 1) for value in args.skip_reason)
     verify_cases(cases, expected, reasons)
+    verify_sources(root, args.source_contract)
     if args.lifecycle:
         events = [
             json.loads(line) for line in (evidence / "lifecycle.jsonl").read_text(
@@ -219,6 +318,7 @@ def run(args, root=None):
         "packages": package_projects[str(project)], "package_projects": package_projects,
         "cases": cases,
         "preserved_files": preserved,
+        "source_invariants": source_invariants,
         "reports": {str(report): sha256(report) for report in reports},
     }
     (evidence / "evidence.json").write_text(
@@ -230,6 +330,8 @@ def run(args, root=None):
 
 def run_checkpoints(args):
     root = Path.cwd()
+    assert not (root / "checkpoints").is_symlink(), "Checkpoint parent must not be a symlink"
+    (root / ".eval" / "results").mkdir(parents=True, exist_ok=True)
     checkpoints = (
         ("v3-vstest", root / "checkpoints" / "v3", "vstest", "3"),
         ("v4-vstest", root / "checkpoints" / "v4", "vstest", "4"),
@@ -242,7 +344,30 @@ def run_checkpoints(args):
         stage.runner = runner
         stage.mstest_major = major
         stage.mstest_version = None
-        evidence[name] = run(stage, directory)
+        if directory == root:
+            evidence[name] = run(stage, directory)
+            continue
+        validate_checkpoint(directory)
+        with tempfile.TemporaryDirectory(prefix="isolated-migration-checkpoint-") as temporary:
+            isolated = Path(temporary) / "snapshot"
+            assert not isolated.resolve().is_relative_to(root.resolve()), (
+                "Checkpoint replay requires a temporary directory outside the delivered workspace"
+            )
+            shutil.copytree(directory, isolated, ignore=shutil.ignore_patterns("bin", "obj", ".eval", ".git"))
+            result = run(stage, isolated)
+            destination = Path(tempfile.mkdtemp(
+                prefix=f"{name}-", dir=root / ".eval" / "results",
+            ))
+            evidence_root = next(iter(result["reports"]))
+            shutil.copytree(Path(evidence_root).parent, destination, dirs_exist_ok=True)
+            result["reports"] = {
+                str(destination / Path(path).name): digest
+                for path, digest in result["reports"].items()
+            }
+            result["checkpoint_source"] = str(directory)
+            result["isolated_workspace_retained"] = False
+            (destination / "evidence.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+            evidence[name] = result
     print(json.dumps({"verified_checkpoints": evidence}))
 
 
@@ -268,6 +393,7 @@ def main():
     test.add_argument("--exit-code", type=int, default=0)
     test.add_argument("--runner-arg", action="append", default=[])
     test.add_argument("--unchanged-file", action="append", default=[])
+    test.add_argument("--source-contract", action="append", default=[])
     args = parser.parse_args()
     if args.operation == "preserve":
         preserve(args.root, {

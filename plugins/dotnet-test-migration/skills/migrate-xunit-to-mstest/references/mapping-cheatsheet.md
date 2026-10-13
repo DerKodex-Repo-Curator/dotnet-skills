@@ -280,7 +280,11 @@ Map deliberately:
 A shared `Lazy<T>` is not a lifecycle or synchronization policy. Initialize once,
 dispose once after the final member and preserve async cleanup. Do not dispose
 the shared instance from every member's cleanup or silently extend its lifetime
-to the whole assembly. If exact fixture scope or concurrency grouping needs an
+to the assembly. Counting all declared member classes also leaks when a filter
+selects only one; validate both full and single-member filtered runs. A lazy
+assembly/run-end cleanup fallback requires an explicitly accepted sole-collection
+assembly scope, not a claim of generic collection lifetime.
+If exact fixture scope or concurrency grouping needs an
 unsupported scheduler/lifecycle mechanism, report manual work or obtain agreement
 to a conservative alternative instead of claiming exact parity.
 

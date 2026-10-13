@@ -13,6 +13,11 @@ stimuli:
       scheduler. Keep both existing test classes and cases. Run the migrated
       tests and explain any scheduling or fixture-scope trade-off, including
       what the chosen policy would mean for unrelated classes.
+      This assembly contains only this collection. A lazy run-scoped cleanup
+      fallback is acceptable for this fixture if its sole-collection assumption
+      is explicit; do not claim it generalizes to multiple collections.
+      Validate the full run and filters selecting either member individually.
+      Keep the test bodies unchanged apart from framework assertion syntax.
     environment:
       files:
         - src: fixtures/handle-icollectionfixture-explicitly-do-not-silently-widen-scope/TestProject.csproj
@@ -41,17 +46,18 @@ stimuli:
             source: agent
             message: |
               Migrated both members to MSTest v4, preserving net8.0 and VSTest.
-              CollectionTests.cs uses one lazy shared resource, with ClassCleanup
-              tracking both collection members and disposing after the last member,
+              CollectionTests.cs uses one lazy shared resource, with AssemblyCleanup
+              disposing it at the end of this assembly's sole collection run,
               and DoNotParallelize on FirstMember and SecondMember.
               `dotnet test TestProject.csproj --logger trx` passed both FirstCase
-              and SecondCase (2 passed, 0 failed, 0 skipped). Lifecycle evidence
-              records one created instance and one disposal after both cases.
+              and SecondCase (2 passed, 0 failed, 0 skipped). Each one-member
+              filtered run also passed. Every run records one created instance
+              and one disposal after its selected cases.
 
               This is conservative scheduling, not exact collection equivalence:
-              unrelated classes cannot overlap with these members. Resource
-              lifetime remains bounded to the collection members rather than
-              assembly initialization/cleanup.
+              unrelated classes cannot overlap with these members. Lazy creation
+              and assembly cleanup are a scoped fallback for the sole collection,
+              not a general lifetime mapping for assemblies with other collections.
     graders:
       - type: program
         config:
@@ -61,7 +67,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='d457ba6dfd7054c540d277f3ad0f9334fe157765809c47ab09de90eaaf3480c6','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3080da6855955e0db50e76b193f1f03423d3f689e87134d924721b135b080236','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches
@@ -80,14 +86,16 @@ stimuli:
             this is conservative serialization, not a failure to serialize.
             Serial assembly policy also suffices for this two-member fixture.
             A supported common exclusive ResourceLock can preserve narrower
-            scheduling. Require a collection-only shared helper whose lifetime
-            ends after the last member, not assembly initialization or cleanup;
-            disclosure does not excuse widening fixture lifetime. Require accurate
+            scheduling. Require one resource disposed after the selected members,
+            including one-member filtered runs. A lazy run-scoped cleanup
+            fallback is explicitly accepted only for this sole-collection fixture;
+            it must not be presented as a general collection lifetime mapping. Require accurate
             disclosure of the scheduling scope and its effect on unrelated
             classes; do not require custom locks.
     rubric:
       - Both collection members serialize even though the source has no DisableParallelization flag.
-      - The two members share one collection-scoped resource created before use and disposed exactly once when the last member completes, without assembly-wide initialization or cleanup; both original cases execute.
+      - Selected members share one lazily created resource disposed once after last use in full and single-member filtered runs; original assertion bodies remain.
+      - Any run-scoped cleanup fallback is explicitly limited to this sole-collection assembly, not advertised as generic collection lifetime.
       - Explains the chosen framework scheduling and resource lifetime, including its effect on unrelated classes, without claiming conservative serialization is exact collection-level concurrency parity.
 
   - name: Migrate basic xUnit v2 project to MSTest v4 preserving VSTest

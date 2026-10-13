@@ -36,7 +36,15 @@ class ReplayTests(unittest.TestCase):
             "Verified MSTest v3 to v4 package update with build and test",
             "OrderServiceTests.cs",
             '    [DataRow(-2, 3, 1, DisplayName = "sum-negative")]\n', "",
-            "sum-negative",
+            "Source invariant changed",
+        )
+
+    def test_upgrade_cannot_turn_an_assertion_into_a_tautology(self):
+        self.broken_golden(
+            "migrate-mstest-v3-to-v4",
+            "Verified MSTest v3 to v4 package update with build and test",
+            "OrderServiceTests.cs", "Assert.AreEqual(42, orderId)",
+            "Assert.AreEqual(orderId, orderId)", "Source invariant changed",
         )
 
     def test_native_solution_cannot_drop_a_module(self):
@@ -110,7 +118,29 @@ class ReplayTests(unittest.TestCase):
             "Deliver staged MSTest v2 to v4 and native MTP migration",
             "OrderTests/OrderServiceTests.cs",
             '    [DataRow(-1, DisplayName = "invalid-negative")]\n', "",
-            "invalid-negative",
+            "Source invariant changed",
+        )
+
+    def test_every_stage_preserves_assertions_not_only_case_names(self):
+        for prefix in ("checkpoints/v3/", "checkpoints/v4/", ""):
+            with self.subTest(stage=prefix or "final"):
+                self.broken_golden(
+                    "agent.test-migration",
+                    "Deliver staged MSTest v2 to v4 and native MTP migration",
+                    prefix + "OrderTests/OrderServiceTests.cs",
+                    '        Assert.AreEqual("item-1", order.ItemId);\n', "",
+                    "Source invariant changed",
+                )
+
+    def test_checkpoint_cannot_link_final_workspace_source(self):
+        self.broken_golden(
+            "agent.test-migration",
+            "Deliver staged MSTest v2 to v4 and native MTP migration",
+            "checkpoints/v3/OrderTests/OrderTests.csproj",
+            "</Project>",
+            '<ItemGroup><Compile Remove="OrderServiceTests.cs" />'
+            '<Compile Include="../../../OrderTests/OrderServiceTests.cs" /></ItemGroup></Project>',
+            "External checkpoint reference",
         )
 
     def test_final_only_workspace_cannot_claim_validated_checkpoints(self):
@@ -133,7 +163,7 @@ class ReplayTests(unittest.TestCase):
                     "Deliver staged MSTest v2 to v4 and native MTP migration",
                     f"checkpoints/{directory}/OrderTests/OrderServiceTests.cs",
                     '    [DataRow(-1, DisplayName = "invalid-negative")]\n', "",
-                    "invalid-negative",
+                    "Source invariant changed",
                 )
 
     def test_v3_checkpoint_cannot_be_a_copy_of_final_native_output(self):

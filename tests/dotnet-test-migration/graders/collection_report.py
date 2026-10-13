@@ -22,6 +22,7 @@ def validate_report(policy, response):
     assert isinstance(response, str) and response.strip(), "Missing final report"
     normalized = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
     normalized = re.sub(r"\s+", " ", normalized)
+    normalized = re.sub(r"\bunlike\s+xunit(?:\.net)?\s*,\s*", "", normalized, flags=re.I)
     unrelated = r"\b(?:unrelated|other)\s+(?:(?:test\s+)?(?:classes|tests)|collections)\b"
     members = (
         r"\b(?:(?:these|those|the)\s+(?:(?:deferred|serialized|shared|collection|two)\s+)?"
@@ -41,7 +42,7 @@ def validate_report(policy, response):
         historical = False
         # Keep coordinated overlap targets together, but separate their predicates.
         separator = (
-            r"\b(?:but|yet|however|while)\b|"
+            r",(?=\s*(?:MSTest|xUnit)\b)|\b(?:but|yet|however|while)\b|"
             rf"\band(?=\s+(?:{continuation}|{unrelated}|{members}\s+(?:can|cannot|may|are)\b))"
         )
         for clause in re.split(separator, sentence, flags=re.I):
@@ -74,7 +75,9 @@ def validate_report(policy, response):
             claims.update((target, permitted) for target in targets or ["unspecified"])
 
     if policy == "shared-resource":
-        assert claims and all(permitted for _, permitted in claims), (
+        assert claims & {("members", True), ("unspecified", True)} and all(
+            permitted for _, permitted in claims
+        ), (
             "Scheduling disclosure contradicts shared-resource policy: "
             "unrelated classes remain eligible for parallel execution"
         )
@@ -97,36 +100,53 @@ def main():
     grading = json.loads(Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
     guard = verified_bytes(
         workspace / ".eval" / "CollectionSchedulingContract.txt",
-        "2df439f5385a56840ed2130264e76b393b7509bc85fa8a53f1599bb012807a18",
+        "30247d6be5c87c8a6326012fb74b7746c4c1ce4dbdf4adc598b8eb72095c595c",
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "3e5e83a1e07b15fb974eb0ccc5b92ed8f5b9c8e2df8bb6b46b75935036cb4ded",
+        "e861feb4ed83629033066c5ff856f64d1d3a3cecbb2501213baf2f0ce27f465c",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
-    result = subprocess.run(
-        [
+    runs = []
+    for selected in (("FirstCase", "SecondCase"), ("FirstCase",), ("SecondCase",)):
+        command = [
             sys.executable, ".eval/migration_evidence.py", "run",
             "--project", "TestProject.csproj", "--runner", "vstest",
             "--mstest-major", "4", "--lifecycle",
-            "--expect", "FirstCase=Passed", "--expect", "SecondCase=Passed",
             "--unchanged-file",
             "bbadd2d5430f817f830d9a34899bc1bc9d99aae2dcd20815a4d1615b28c2f7b5:LifecycleProbe.cs",
-        ],
-        cwd=workspace, capture_output=True, text=True, encoding="utf-8",
-        errors="replace", timeout=210,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    evidence = json.loads(result.stdout)
-    reports = list(evidence["reports"])
-    assert len(reports) == 1, reports
-    policy_path = Path(reports[0]).parent / "lifecycle.scheduling.json"
-    policy = policy_path.read_text(encoding="utf-8")
-    validate_report(policy, grading["trajectory"]["output"])
+            "--source-contract", "collection-tests:feb5a8647f8474c997768b5dfc61e8eb8f8130e2e3e02d9f1702156c7cf63c20:CollectionTests.cs",
+        ]
+        for name in selected:
+            command += ["--expect", name + "=Passed"]
+        if len(selected) == 1:
+            command += ["--runner-arg=--filter", "--runner-arg=Name=" + selected[0]]
+        result = subprocess.run(
+            command, cwd=workspace, capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=210,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        evidence = json.loads(result.stdout)
+        reports = list(evidence["reports"])
+        assert len(reports) == 1, reports
+        directory = Path(reports[0]).parent
+        policy = (directory / "lifecycle.scheduling.json").read_text(encoding="utf-8")
+        lifetime = (directory / "lifecycle.lifetime.json").read_text(encoding="utf-8")
+        validate_report(policy, grading["trajectory"]["output"])
+        if lifetime == "sole-collection-run":
+            response = grading["trajectory"]["output"]
+            assert re.search(r"(?:sole|only).{0,80}collection", response, re.I | re.S), (
+                "Run-scoped lifetime disclosure must identify the sole-collection assumption"
+            )
+            assert re.search(r"(?:assembly|run[- ]scoped|run.end).{0,60}(?:cleanup|dispos)", response, re.I | re.S), (
+                "Run-scoped lifetime must not be described as a general collection mapping"
+            )
+        runs.append({"selected": selected, "policy": policy, "lifetime": lifetime, "reports": reports})
     print(json.dumps({
         "name": "collection-policy-report", "kind": "code",
         "passed": True, "score": 1,
-        "evidence": f"Runtime lifecycle and report match scheduling policy: {policy}",
+        "evidence": f"Assertions, full/filtered lifecycle and report match scheduling policy: {policy}",
+        "metadata": {"runs": runs},
     }))
 
 
