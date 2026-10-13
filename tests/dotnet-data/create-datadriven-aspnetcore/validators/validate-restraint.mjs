@@ -85,7 +85,7 @@ forbidText(joined, /\b(?:DbContext|DbSet)\b|AddDbContext(?:Factory)?\s*<|UseSqli
 
 if (contract === "razor-static") {
   forbidPath(
-    /(?:^|\/)Pages\/(?:Products?|Categor(?:y|ies))(?:\/|$)/i,
+    /(?:^|\/)Pages\/(?:[^/]+\/)*(?:Products?|Categor(?:y|ies))(?:\/|$)/i,
     "Product or Category CRUD pages are forbidden",
   );
   if (files.some((file) => hasEntityPrefixedRazorPage(file.rel))) {
@@ -107,7 +107,10 @@ if (contract === "razor-static") {
     failures.push("Terms.cshtml.cs must define TermsModel as a PageModel");
   }
 } else {
-  forbidPath(/(?:^|\/)Components\/Pages\/(?:Employees?|Departments?)(?:[./]|\/|$)/i, "Employee or Department CRUD components are forbidden");
+  forbidPath(
+    /(?:^|\/)Components\/Pages\/(?:[^/]+\/)*(?:Employees?|Departments?)(?:\/|$)/i,
+    "Employee or Department CRUD components are forbidden",
+  );
   if (files.some((file) => hasEntityPrefixedBlazorComponent(file.rel))) {
     failures.push("Employee or Department entity-prefixed Blazor component files are forbidden");
   }

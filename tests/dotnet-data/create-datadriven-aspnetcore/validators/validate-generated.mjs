@@ -215,7 +215,8 @@ function endpointRecords(text, supportingText = text) {
     const openParen = text.indexOf("(", match.index);
     const closeParen = balancedEnd(text, openParen, "(", ")");
     const call = closeParen < 0 ? statement : text.slice(openParen + 1, closeParen);
-    const route = call.match(/^\s*"([^"]*)"/)?.[1] ?? "";
+    const routeArgument = splitTopLevelArguments(call)[0] ?? "";
+    const routeTemplate = staticStringValue(text, routeArgument, match.index);
     const handler = call.match(/,\s*([A-Za-z_]\w*)\s*$/)?.[1];
     let behavior = statement;
     let handlerSignature = call;
@@ -229,7 +230,9 @@ function endpointRecords(text, supportingText = text) {
     records.push({
       verb: match[2].toUpperCase(),
       receiver: match[1],
-      route: `${group?.base ?? ""}${route}`.replace(/\/+/g, "/"),
+      route: routeTemplate === null
+        ? null
+        : `${group?.base ?? ""}${routeTemplate}`.replace(/\/+/g, "/"),
       statement,
       behavior,
       handlerSignature,
@@ -367,7 +370,9 @@ function checkMetadata(records, label) {
 }
 
 function recordsForBase(records, base) {
-  return records.filter((record) => record.route.toLowerCase().startsWith(base.toLowerCase()));
+  return records.filter((record) =>
+    typeof record.route === "string" &&
+    record.route.toLowerCase().startsWith(base.toLowerCase()));
 }
 
 function checkApiCrud(records, base, entity, options = {}) {
@@ -504,57 +509,87 @@ function usesCreatedResponseId(expression, createBlock, variables) {
     responseIdExpression(reference, createBlock.name) || variables.has(reference.toLowerCase()));
 }
 
-function topLevelJsonKeys(body) {
-  const keys = new Set();
-  let depth = 0;
-  let quote = "";
-  let escaped = false;
-  for (let index = 0; index < body.length; index += 1) {
-    const character = body[index];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === quote) quote = "";
-      continue;
-    }
-    if (character === "{") {
-      depth += 1;
-      continue;
-    }
-    if (character === "}") {
-      depth -= 1;
-      continue;
-    }
-    if (character !== '"' || depth !== 1) continue;
+function requestJsonObject(block) {
+  const startMatch = block.source.match(/^\s*\{(?!\{)/m);
+  if (!startMatch) return "";
+  const start = startMatch.index + startMatch[0].lastIndexOf("{");
+  const end = balancedEnd(block.source, start, "{", "}");
+  return end < 0 ? "" : block.source.slice(start, end + 1);
+}
 
-    let end = index + 1;
+function topLevelJsonFields(body) {
+  const fields = new Map();
+  let index = 1;
+  while (index < body.length - 1) {
+    while (/[\s,]/.test(body[index] ?? "")) index += 1;
+    if (body[index] !== '"') {
+      index += 1;
+      continue;
+    }
+
     let key = "";
-    for (; end < body.length; end += 1) {
-      if (body[end] === "\\") {
-        key += body[end + 1] ?? "";
-        end += 1;
-      } else if (body[end] === '"') {
+    index += 1;
+    while (index < body.length) {
+      if (body[index] === "\\") {
+        key += body[index + 1] ?? "";
+        index += 2;
+      } else if (body[index] === '"') {
+        index += 1;
         break;
       } else {
-        key += body[end];
+        key += body[index];
+        index += 1;
       }
     }
-    let colon = end + 1;
-    while (/\s/.test(body[colon] ?? "")) colon += 1;
-    if (body[colon] === ":") keys.add(key.toLowerCase());
-    index = end;
+    while (/\s/.test(body[index] ?? "")) index += 1;
+    if (body[index] !== ":") continue;
+    index += 1;
+    while (/\s/.test(body[index] ?? "")) index += 1;
+
+    const valueStart = index;
+    let nesting = 0;
+    let quote = "";
+    let escaped = false;
+    for (; index < body.length; index += 1) {
+      const character = body[index];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (character === "\\") escaped = true;
+        else if (character === quote) quote = "";
+        continue;
+      }
+      if (character === '"' || character === "'") {
+        quote = character;
+        continue;
+      }
+      if (character === "{" || character === "[") {
+        nesting += 1;
+        continue;
+      }
+      if (character === "}" || character === "]") {
+        if (nesting > 0) {
+          nesting -= 1;
+          continue;
+        }
+        break;
+      }
+      if (character === "," && nesting === 0) break;
+    }
+    fields.set(key.toLowerCase(), body.slice(valueStart, index).trim());
   }
-  return keys;
+  return fields;
 }
 
 function hasJsonObjectWithFields(block, fields) {
-  const startMatch = block.source.match(/^\s*\{(?!\{)/m);
-  if (!startMatch) return false;
-  const start = startMatch.index + startMatch[0].lastIndexOf("{");
-  const end = balancedEnd(block.source, start, "{", "}");
-  if (end < 0) return false;
-  const keys = topLevelJsonKeys(block.source.slice(start, end + 1));
-  return fields.every((field) => keys.has(field.toLowerCase()));
+  const json = requestJsonObject(block);
+  if (!json) return false;
+  const values = topLevelJsonFields(json);
+  return fields.every((field) => values.has(field.toLowerCase()));
+}
+
+function jsonFieldValue(block, field) {
+  const json = requestJsonObject(block);
+  return json ? topLevelJsonFields(json).get(field.toLowerCase()) ?? "" : "";
 }
 
 function checkHttpCrud(base, entity, options = {}) {
@@ -573,6 +608,9 @@ function checkHttpCrud(base, entity, options = {}) {
       ["PUT", "PATCH"].includes(block.method) && routeIdExpression(block, base)),
     delete: blocks.find((block) => block.method === "DELETE" && routeIdExpression(block, base)),
   };
+  const dependentBlocks = blocks.filter((block) =>
+    ["GET", "PUT", "PATCH", "DELETE"].includes(block.method) &&
+    Boolean(routeIdExpression(block, base)));
   for (const [flow, block] of Object.entries(flows)) {
     fail(Boolean(block), `${entity} .http workflow lacks ${flow}.`);
   }
@@ -592,9 +630,7 @@ function checkHttpCrud(base, entity, options = {}) {
 
   if (options.requireCreateDependency && flows.create) {
     fail(
-      flows.details?.index > flows.create.index &&
-        flows.update?.index > flows.create.index &&
-        flows.delete?.index > flows.create.index,
+      dependentBlocks.every((block) => block.index > flows.create.index),
       `${entity} .http dependent requests must follow create.`,
     );
   }
@@ -602,15 +638,15 @@ function checkHttpCrud(base, entity, options = {}) {
   if (options.requireCreatedIdReuse && flows.create) {
     fail(Boolean(flows.create.name), `${entity} .http POST must have a request name for response reuse.`);
     const variables = responseIdVariables(http, flows.create);
-    for (const [flow, block] of [["by-id", flows.details], ["update", flows.update], ["delete", flows.delete]]) {
-      if (!block) continue;
+    for (const block of dependentBlocks) {
       const id = routeIdExpression(block, base);
       fail(
         Boolean(flows.create.name) && usesCreatedResponseId(id, flows.create, variables),
-        `${entity} .http ${flow} must reuse the id returned by POST.`,
+        `${entity} .http ${block.method} by-id request must reuse the id returned by POST.`,
       );
     }
   }
+  return { blocks, flows };
 }
 
 function validateRazorPages() {
@@ -857,18 +893,30 @@ function validateParentApi() {
     );
   }
 
-  checkHttpCrud("/api/categories", "Category", { requireCreateDependency: true });
-  checkHttpCrud("/api/products", "Product", { requireCreateDependency: true });
+  const categoryHttp = checkHttpCrud("/api/categories", "Category", {
+    requireCreateDependency: true,
+    requireCreatedIdReuse: true,
+    requestFields: ["name"],
+  });
+  const productHttp = checkHttpCrud("/api/products", "Product", {
+    requireCreateDependency: true,
+    requireCreatedIdReuse: true,
+    requestFields: ["name", "price", "categoryId"],
+  });
   const http = joined(/\.http$/i);
   const categoryPost = http.search(/\bPOST\s+[^\n]*\/api\/categories\b/i);
   const productPost = http.search(/\bPOST\s+[^\n]*\/api\/products\b/i);
   fail(categoryPost >= 0 && productPost > categoryPost, "The .http workflow must create a Category before a Product.");
-  const categoryIdLine = http.match(/["']?categoryId["']?\s*:\s*([^\n,}]+)/i)?.[1] ?? "";
-  fail(
-    /response\.body(?:\.\$)?(?:\.|\[['"]?)id\b/i.test(categoryIdLine) &&
-      !/response\.body(?:\.\$)?\s*}}?\s*$/i.test(categoryIdLine),
-    "Product creation must capture the returned Category id, not the whole response object.",
-  );
+  const categoryCreate = categoryHttp?.flows.create;
+  const productCreate = productHttp?.flows.create;
+  if (categoryCreate && productCreate) {
+    const categoryVariables = responseIdVariables(http, categoryCreate);
+    fail(
+      Boolean(categoryCreate.name) &&
+        usesCreatedResponseId(jsonFieldValue(productCreate, "categoryId"), categoryCreate, categoryVariables),
+      "Product creation must reuse the Category id returned by POST.",
+    );
+  }
 }
 
 function parameterNameForType(signature, type) {

@@ -277,6 +277,10 @@ function restraintMutations() {
     write(root, "Pages/Product/Index.cshtml", '@page\n<h1>Product</h1>\n');
     write(root, "Pages/Category/Index.cshtml", '@page\n<h1>Category</h1>\n');
   });
+  restraintMutation("razor-static", "nested Product and Category CRUD directories", (root) => {
+    write(root, "Pages/Admin/Products/Index.cshtml", '@page\n<h1>Products</h1>\n');
+    write(root, "Pages/Management/Categories/Edit.cshtml", '@page\n<h1>Edit category</h1>\n');
+  });
   restraintMutation("razor-static", "flat entity-prefixed Razor pages", (root) => {
     write(root, "Pages/ProductIndex.cshtml", '@page\n<h1>Product</h1>\n');
     write(root, "Pages/CategoryEdit.cshtml.cs",
@@ -308,6 +312,10 @@ function restraintMutations() {
   restraintMutation("blazor-static", "singular Employee and Department CRUD directories", (root) => {
     write(root, "Components/Pages/Employee/Index.razor", '@page "/employees"\n<h1>Employees</h1>\n');
     write(root, "Components/Pages/Department/Index.razor", '@page "/departments"\n<h1>Departments</h1>\n');
+  });
+  restraintMutation("blazor-static", "nested Employee and Department CRUD directories", (root) => {
+    write(root, "Components/Pages/Admin/Employees/Index.razor", '@page "/employees"\n<h1>Employees</h1>\n');
+    write(root, "Components/Pages/Management/Departments/Edit.razor", '@page "/departments/edit"\n<h1>Edit department</h1>\n');
   });
   restraintMutation("blazor-static", "flat entity-prefixed Blazor components", (root) => {
     write(root, "Components/Pages/EmployeeIndex.razor", '@page "/employees"\n<h1>Employees</h1>\n');
@@ -355,12 +363,16 @@ function restraintMutations() {
   const unrelatedRazorNames = cloneForMutation("razor-static", "unrelated-page-names");
   write(unrelatedRazorNames, "Pages/ProductionNotes.cshtml", '@page\n<h1>Production notes</h1>\n');
   write(unrelatedRazorNames, "Pages/Admin/CategoricalSummary.cshtml", '@page\n<h1>Summary</h1>\n');
+  write(unrelatedRazorNames, "Pages/Admin/Production/Index.cshtml", '@page\n<h1>Production</h1>\n');
+  write(unrelatedRazorNames, "Pages/Admin/Categorical/Index.cshtml", '@page\n<h1>Categorical</h1>\n');
   const unrelatedResult = restraintValidatorResult("razor-static", unrelatedRazorNames);
   if (unrelatedResult.status === 0) reportPass("razor-static", "legitimate unrelated page names");
   else reportUnexpected("razor-static", "legitimate unrelated page names", unrelatedResult, "pass");
   const unrelatedBlazorNames = cloneForMutation("blazor-static", "unrelated-component-names");
   write(unrelatedBlazorNames, "Components/Pages/EmploymentStatus.razor", '@page "/employment"\n<h1>Employment status</h1>\n');
   write(unrelatedBlazorNames, "Components/Pages/DepartmentalNews.razor", '@page "/departmental-news"\n<h1>Departmental news</h1>\n');
+  write(unrelatedBlazorNames, "Components/Pages/Admin/Employment/Index.razor", '@page "/employment/index"\n<h1>Employment</h1>\n');
+  write(unrelatedBlazorNames, "Components/Pages/Admin/Departmental/Index.razor", '@page "/departmental/index"\n<h1>Departmental</h1>\n');
   const unrelatedBlazorResult = restraintValidatorResult("blazor-static", unrelatedBlazorNames);
   if (unrelatedBlazorResult.status === 0) reportPass("blazor-static", "legitimate unrelated component names");
   else reportUnexpected("blazor-static", "legitimate unrelated component names", unrelatedBlazorResult, "pass");
@@ -550,6 +562,53 @@ function testRouteGroupConstantLayouts() {
   expectPass("parent-api", parentRoot, "var and aliased route-group layouts");
 }
 
+function testEndpointRouteConstantLayouts() {
+  const todoRoot = cloneForMutation("todo-api", "constant-endpoint-route-layout");
+  replace(
+    todoRoot,
+    "Endpoints/TodoEndpoints.cs",
+    '        var group = endpoints.MapGroup("/api/todos").WithTags("Todos");',
+    `        var group = endpoints.MapGroup("/api/todos").WithTags("Todos");
+        const string byIdRoute = "/{id:int}";
+        var updateByIdRoute = byIdRoute;
+        var deleteByIdRoute = updateByIdRoute;`,
+    1,
+  );
+  replace(todoRoot, "Endpoints/TodoEndpoints.cs", 'group.MapGet("/{id:int}",', "group.MapGet(byIdRoute,", 1);
+  replace(todoRoot, "Endpoints/TodoEndpoints.cs", 'group.MapPut("/{id:int}",', "group.MapPut(updateByIdRoute,", 1);
+  replace(todoRoot, "Endpoints/TodoEndpoints.cs", 'group.MapDelete("/{id:int}",', "group.MapDelete(deleteByIdRoute,", 1);
+  expectPass("todo-api", todoRoot, "const and aliased endpoint route templates");
+
+  const parentRoot = cloneForMutation("parent-api", "aliased-endpoint-route-layout");
+  replace(
+    parentRoot,
+    "Endpoints/ProductEndpoints.cs",
+    '        var categories = endpoints.MapGroup("/api/categories").WithTags("Categories");',
+    `        var categories = endpoints.MapGroup("/api/categories").WithTags("Categories");
+        const string categoryByIdRoute = "/{id:int}";
+        var categoryUpdateRoute = categoryByIdRoute;
+        var categoryDeleteRoute = categoryUpdateRoute;`,
+    1,
+  );
+  replace(
+    parentRoot,
+    "Endpoints/ProductEndpoints.cs",
+    '        var products = endpoints.MapGroup("/api/products").WithTags("Products");',
+    `        var products = endpoints.MapGroup("/api/products").WithTags("Products");
+        var productByIdRoute = "/{id:int}";
+        var productUpdateRoute = productByIdRoute;
+        var productDeleteRoute = productUpdateRoute;`,
+    1,
+  );
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'categories.MapGet("/{id:int}",', "categories.MapGet(categoryByIdRoute,", 1);
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'categories.MapPut("/{id:int}",', "categories.MapPut(categoryUpdateRoute,", 1);
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'categories.MapDelete("/{id:int}",', "categories.MapDelete(categoryDeleteRoute,", 1);
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'products.MapGet("/{id:int}",', "products.MapGet(productByIdRoute,", 1);
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'products.MapPut("/{id:int}",', "products.MapPut(productUpdateRoute,", 1);
+  replace(parentRoot, "Endpoints/ProductEndpoints.cs", 'products.MapDelete("/{id:int}",', "products.MapDelete(productDeleteRoute,", 1);
+  expectPass("parent-api", parentRoot, "const, var, and aliased endpoint route templates");
+}
+
 function testTodoHttpLayouts() {
   const namedResponseRoot = cloneForMutation("todo-api", "named-response-without-jsonpath-root");
   replace(namedResponseRoot, "TodoApi.http", /\.response\.body\.\$\.id/g, ".response.body.id");
@@ -592,6 +651,73 @@ function testTodoHttpLayouts() {
   );
 
   expectPass("todo-api", assignedVariableRoot, "named response assigned id variable layout");
+}
+
+function testParentApiHttpLayouts() {
+  const namedResponseRoot = cloneForMutation("parent-api", "named-response-without-jsonpath-root");
+  replace(namedResponseRoot, "ParentChildApi.http", /\.response\.body\.\$\.id/g, ".response.body.id");
+  expectPass("parent-api", namedResponseRoot, "named response body id layout");
+
+  const handlerVariableRoot = cloneForMutation("parent-api", "response-handler-variables");
+  replace(
+    handlerVariableRoot,
+    "ParentChildApi.http",
+    /(\{\s*"name": "Hardware"\s*\})/,
+    (match, body) => `${body}
+
+> {%
+  client.global.set("categoryId", response.body.id);
+%}`,
+    1,
+  );
+  replace(
+    handlerVariableRoot,
+    "ParentChildApi.http",
+    /(\{\s*"name": "Mechanical keyboard",\s*"price": 89\.99,\s*"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}\s*\})/,
+    (match, body) => `${body}
+
+> {%
+  client.global.set("productId", response.body.$.id);
+%}`,
+    1,
+  );
+  replace(
+    handlerVariableRoot,
+    "ParentChildApi.http",
+    /\{\{createCategory\.response\.body\.\$\.id\}\}/g,
+    "{{categoryId}}",
+  );
+  replace(
+    handlerVariableRoot,
+    "ParentChildApi.http",
+    /\{\{createProduct\.response\.body\.\$\.id\}\}/g,
+    "{{productId}}",
+  );
+  expectPass("parent-api", handlerVariableRoot, "response-handler id variable layout");
+
+  const assignedVariableRoot = cloneForMutation("parent-api", "named-response-assigned-variables");
+  replace(
+    assignedVariableRoot,
+    "ParentChildApi.http",
+    /\{\{createCategory\.response\.body\.\$\.id\}\}/g,
+    "{{categoryId}}",
+  );
+  replace(
+    assignedVariableRoot,
+    "ParentChildApi.http",
+    /\{\{createProduct\.response\.body\.\$\.id\}\}/g,
+    "{{productId}}",
+  );
+  replace(
+    assignedVariableRoot,
+    "ParentChildApi.http",
+    "@ParentChildApi_HostAddress = http://localhost:5083",
+    `@ParentChildApi_HostAddress = http://localhost:5083
+@categoryId = {{createCategory.response.body.$.id}}
+@productId = {{createProduct.response.body.$.id}}`,
+    1,
+  );
+  expectPass("parent-api", assignedVariableRoot, "named response assigned id variable layout");
 }
 
 function testTodoUpdatePatterns() {
@@ -1237,6 +1363,15 @@ function todoMutations() {
         var group = endpoints.MapGroup(basePath).WithTags("Todos");`,
       1,
     ));
+  mutation("todo-api", "dynamic endpoint route template", (root) =>
+    replace(
+      root,
+      endpoints,
+      '        group.MapGet("/{id:int}", GetTodoByIdAsync)',
+      `        var byIdRoute = $"/{{{nameof(TodoItem.Id).ToLowerInvariant()}:int}}";
+        group.MapGet(byIdRoute, GetTodoByIdAsync)`,
+      1,
+    ));
 }
 
 function testMvcEditLayouts() {
@@ -1568,6 +1703,7 @@ function addUnrelatedWarningsBranch(root, relativeFile, methodName) {
 
 function parentApiMutations() {
   const endpoints = "Endpoints/ProductEndpoints.cs";
+  const http = "ParentChildApi.http";
   mutation("parent-api", "remove list flow", (root) =>
     replace(root, endpoints, ".ToListAsync()", ".ToList()", 1));
   mutation("parent-api", "remove by-id flow", (root) =>
@@ -1762,8 +1898,136 @@ function parentApiMutations() {
     );
     addUnrelatedWarningsBranch(root, endpoints, "UpdateCategoryAsync");
   });
-  mutation("parent-api", "whole response CategoryId capture", (root) =>
-    replace(root, "ParentChildApi.http", "{{createCategory.response.body.$.id}}", "{{createCategory.response.body.$}}"));
+  mutation("parent-api", "bodyless Category POST request", (root) =>
+    replace(root, http, /\n\{\s*"name": "Hardware"\s*\}/, "", 1));
+  mutation("parent-api", "bodyless Category update request", (root) =>
+    replace(root, http, /\n\{\s*"name": "Computer hardware"\s*\}/, "", 1));
+  mutation("parent-api", "bodyless Product POST request", (root) =>
+    replace(
+      root,
+      http,
+      /\n\{\s*"name": "Mechanical keyboard",\s*"price": 89\.99,\s*"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}\s*\}/,
+      "",
+      1,
+    ));
+  mutation("parent-api", "bodyless Product update request", (root) =>
+    replace(
+      root,
+      http,
+      /\n\{\s*"name": "Mechanical keyboard",\s*"price": 79\.99,\s*"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}\s*\}/,
+      "",
+      1,
+    ));
+  mutation("parent-api", "Category POST missing required name", (root) =>
+    replace(root, http, /\s*"name": "Hardware"\s*/, "\n", 1));
+  mutation("parent-api", "Category update missing required name", (root) =>
+    replace(root, http, /\s*"name": "Computer hardware"\s*/, "\n", 1));
+  mutation("parent-api", "Product POST missing required name", (root) =>
+    replace(root, http, /\s*"name": "Mechanical keyboard",/, "", 1));
+  mutation("parent-api", "Product POST missing required price", (root) =>
+    replace(root, http, /\s*"price": 89\.99,/, "", 1));
+  mutation("parent-api", "Product POST missing required categoryId", (root) =>
+    replace(root, http, /,\s*"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}/, "", 1));
+  mutation("parent-api", "Product update missing required name", (root) =>
+    replace(
+      root,
+      http,
+      /(PUT [^\r\n]+\/api\/products\/[^\r\n]+\s*Content-Type: application\/json\s*\{\s*)"name": "Mechanical keyboard",/,
+      (match, prefix) => prefix,
+      1,
+    ));
+  mutation("parent-api", "Product update missing required price", (root) =>
+    replace(
+      root,
+      http,
+      /(PUT [^\r\n]+\/api\/products\/[^\r\n]+\s*Content-Type: application\/json\s*\{\s*"name": "Mechanical keyboard",)\s*"price": 79\.99,/,
+      (match, prefix) => prefix,
+      1,
+    ));
+  mutation("parent-api", "Product update missing required categoryId", (root) =>
+    replace(
+      root,
+      http,
+      /(PUT [^\r\n]+\/api\/products\/[^\r\n]+\s*Content-Type: application\/json\s*\{\s*"name": "Mechanical keyboard",\s*"price": 79\.99),\s*"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}/,
+      (match, prefix) => prefix,
+      1,
+    ));
+  mutation("parent-api", "Category POST uses wrong content type", (root) =>
+    replace(
+      root,
+      http,
+      /(POST [^\r\n]+\/api\/categories\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("parent-api", "Category update uses wrong content type", (root) =>
+    replace(
+      root,
+      http,
+      /(PUT [^\r\n]+\/api\/categories\/[^\r\n]+\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("parent-api", "Product POST uses wrong content type", (root) =>
+    replace(
+      root,
+      http,
+      /(POST [^\r\n]+\/api\/products\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("parent-api", "Product update uses wrong content type", (root) =>
+    replace(
+      root,
+      http,
+      /(PUT [^\r\n]+\/api\/products\/[^\r\n]+\s*)Content-Type: application\/json/,
+      (match, prefix) => `${prefix}Content-Type: text/plain`,
+      1,
+    ));
+  mutation("parent-api", "hard-coded Category dependent request ids", (root) =>
+    replace(
+      root,
+      http,
+      /(\/api\/categories\/)\{\{createCategory\.response\.body\.\$\.id\}\}/g,
+      (match, prefix) => `${prefix}1`,
+    ));
+  mutation("parent-api", "hard-coded Product dependent request ids", (root) =>
+    replace(
+      root,
+      http,
+      /(\/api\/products\/)\{\{createProduct\.response\.body\.\$\.id\}\}/g,
+      (match, prefix) => `${prefix}1`,
+    ));
+  mutation("parent-api", "hard-coded Product POST CategoryId", (root) =>
+    replace(
+      root,
+      http,
+      /"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}/,
+      '"categoryId": 1',
+      1,
+    ));
+  mutation("parent-api", "whole Category response used as dependent request id", (root) =>
+    replace(
+      root,
+      http,
+      /(\/api\/categories\/)\{\{createCategory\.response\.body\.\$\.id\}\}/g,
+      "$1{{createCategory.response.body.$}}",
+    ));
+  mutation("parent-api", "whole Product response used as dependent request id", (root) =>
+    replace(
+      root,
+      http,
+      /(\/api\/products\/)\{\{createProduct\.response\.body\.\$\.id\}\}/g,
+      "$1{{createProduct.response.body.$}}",
+    ));
+  mutation("parent-api", "whole Category response used for Product POST", (root) =>
+    replace(
+      root,
+      http,
+      /"categoryId": \{\{createCategory\.response\.body\.\$\.id\}\}/,
+      '"categoryId": {{createCategory.response.body.$}}',
+      1,
+    ));
 }
 
 function blazorMutations() {
@@ -2158,7 +2422,9 @@ try {
   scopeMutations();
   testPatchTodoLayout();
   testRouteGroupConstantLayouts();
+  testEndpointRouteConstantLayouts();
   testTodoHttpLayouts();
+  testParentApiHttpLayouts();
   testTodoUpdatePatterns();
   testApiMetadataLayouts();
   testTodoErrorConditionLayouts();
