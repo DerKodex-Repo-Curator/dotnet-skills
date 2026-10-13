@@ -25,32 +25,36 @@ Resolve the scripts relative to this skill's `SKILL.md`:
 `Compute-CrapScores.ps1` emits aggregate line/branch coverage, method counts,
 flagged counts, and sorted hotspots. `Extract-MethodCoverage.ps1` emits every
 below-threshold method represented by the report. Use both for explicit
-project-wide risk work. Use only the parameters shown above; the bundled
-scripts expose legacy output, not a versioned uncertainty envelope.
+project-wide risk work. Default output remains legacy. For an explicitly
+requested uncertainty-aware result, both scripts accept `-OutputFormat json-v1`.
 
-### Evidence limits of the bundled scripts
+### Output compatibility and evidence limits
 
-Check the source report as well as the command's result before ranking risk:
+JSON v1 emits one object with `schema_version`, `tool`, `tool_version`, `status`,
+`scope`, `inputs`, `diagnostics` and `data`. Inspect status and diagnostics before
+using `data.summary`, `data.methods` or CRAP `data.hotspots`. Exit 0 is complete,
+3 is partial and 2 is an analyzer error; host/parameter-binding failures can
+occur before an envelope exists. Legacy mode refuses unrepresentable partial
+results rather than inventing metrics. Do not silently change a caller's format.
 
-- The scripts substitute complexity one when the report omits complexity and
-  can emit zero coverage when method line data is absent. Those fallback
-  numbers are not measurements. Report missing inputs as unknown rather than
-  presenting the computed score as evidence.
-- `Extract-MethodCoverage.ps1` adds covered branch counters from overlapping
-  reports, capped at the total. Without stable branch identities, that does
-  not establish which branches were covered; do not claim exact merged branch
-  coverage or threshold clearance from those counters.
+- Missing method coverage or complexity stays null/unknown, not zero or one.
+  Check `LineCoverageStatus`, `BranchCoverageStatus` and `ComplexityStatus`;
+  unknown `CrapScore` rows remain in methods but are excluded from hotspots.
+- Overlapping branch counters without stable identities produce bounds
+  (`CoveredBranchesLower`/`Upper`, `BranchCoverageLower`/`Upper`), not an exact
+  union. A threshold inside those bounds remains unresolved.
 - Aggregate and method denominators are different. Fully covered reported
   methods do not prove that the entire module is covered. Verify overlapping
   report inputs and scope before interpreting aggregate totals.
-- The legacy output does not attest completeness or source revision. Retain
-  the command, source report paths and known revision association separately.
+- Input hashes in v1 bind report bytes, not source-revision attestation;
+  `scope.source_revision` is null. Retain the command and known report/revision
+  association separately.
   A successful exit or an empty result is not proof that no risky code exists.
 
 Keep unsupported or missing metrics visible as unresolved evidence, not
 low-risk results. Do not invent precision, silently switch output formats or
-reuse an unrelated eval recorder's schema. Versioned output and stronger
-uncertainty handling must be documented together with their executable support.
+reuse an unrelated eval recorder's schema. Preserve analyzer exit codes through
+outer launchers and keep partial/unknown metrics visible in the final report.
 
 CRAP is:
 

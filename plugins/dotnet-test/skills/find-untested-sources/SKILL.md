@@ -31,8 +31,8 @@ analyzed project.
 ## Two engines — pick one
 
 This skill ships two analyzers with **different legacy schemas**. Pick the
-engine first and use its matching keys and documented options. There is no
-shared versioned output mode in the bundled analyzers.
+engine first and use its matching keys. Both also support the explicitly
+selected `--output-format json-v1` shared envelope; defaults remain legacy.
 
 | Engine | Script | Use when |
 |--------|--------|----------|
@@ -74,21 +74,26 @@ Default output stays legacy: Roslyn uses `repo`, `counts`, `untested` and
 optional `tested_sources`. Do not feed one engine's legacy JSON to the other's
 consumer or silently change its output mode.
 
-Only the Python engine accepts `--include-tested`; Roslyn supplies
-`source_to_tests` without that flag. Do not pass unsupported format switches.
-Declaration semantics also differ between engines, so their counts are not
-interchangeable.
+For JSON v1, pass `--output-format json-v1` to the analyzer (after `--` when
+launching the C# file-based app). The envelope contains `schema_version: "1"`,
+`tool`, `tool_version`, `status`, `scope`, `inputs`, `diagnostics` and `data`.
+Both engines expose `data.repo_root`, `summary`, `untested_sources`,
+`orphan_tests`, `unassessed_files` and optional `tested_sources` with
+`--include-tested`. Roslyn legacy output always includes `source_to_tests`;
+Python legacy includes `tested_sources` only when requested. Declaration
+semantics remain engine-specific; matching keys do not make counts equivalent.
 
-Neither legacy schema supplies versioned completeness, input hashes or source
-revision attestation. In particular, the Python analyzer can warn about a
-parse failure on stderr and still exit successfully with incomplete data.
-Surface those warnings and unresolved files rather than treating the output
-as a complete inventory. Empty or non-JSON launcher output is not a successful
-empty analysis; do not install dependencies automatically after a failure.
+Exit 0 means complete, 3 partial, and 2 an analyzer error in v1. Legacy mode
+fails without a success-shaped payload when incomplete results cannot be
+represented. Surface diagnostics and unassessed files, including ambiguous or
+unreadable project classification, rather than calling them paired or unpaired.
+Host/SDK launch failures may have no envelope; empty/non-JSON output is not a
+successful empty analysis. Do not automatically install dependencies after failure.
 
-Record the root, language filters and any `--top`/`--limit-untested` bound used:
-a limited list is not the whole inventory. Stronger completeness reporting and
-a common output contract must ship together with their analyzer implementation.
+Input hashes bind bytes read, not a commit; `scope.source_revision` is null.
+Respect the root, language filters and explicit truncation metadata in `scope`;
+a limited list is not the whole inventory. Rust inline `test_regions` can share
+a physical file with source declarations, so source/test counts overlap.
 
 ## When to Use
 
@@ -268,7 +273,7 @@ stderr; JSON goes to stdout.
    | JS/TS/TSX | path contains `__tests__`, `tests`, `test`, `spec`, `e2e`; or filename contains `.test.`/`.spec.`. |
    | Go | filename ends `_test.go`. |
    | Java | path contains `test`/`tests`; or filename ends `Test.java`/`Tests.java`. |
-   | Rust | path contains `tests/`/`benches/`; inline `#[cfg(test)]` modules in production files are not classified as separate test regions by this version. |
+   | Rust | path contains `tests/`/`benches/`, or inline `#[cfg(test)]` regions in source files; mixed files retain their production declarations. |
    | C# | path contains `tests/`; or project segment ends `.Tests`/`.Test`/`.UnitTests`/`.IntegrationTests`; or filename ends `Tests`/`Test`. |
    | Ruby | path contains `spec/`/`test/`; or filename ends `_spec.rb`/`_test.rb`. |
    | Kotlin | path contains `test/`/`tests/`/`spec/`; or filename ends `Test.kt`/`Tests.kt`/`Spec.kt`. |
@@ -282,9 +287,9 @@ stderr; JSON goes to stdout.
 5. **Pairing** — for each test file, union **import resolution** (per language,
    e.g. Python `from pkg.mod import x` → `pkg/mod.py`; Java `import a.b.C;` →
    `a/b/C.java`; C# `using` is namespace-not-file, so a no-op) with **identifier
-   overlap** from word-like tokens in test source. These tokens can include
-   comments and strings, so a match is heuristic reference evidence, not proof
-   that a test reaches or asserts a particular behavior.
+   overlap** from parsed code tokens, excluding comments and string contents.
+   TS/TSX imports and Rust inline test regions contribute reference evidence,
+   not proof that a test reaches or asserts a particular behavior.
 6. **JSON emit** — `untested_sources` ordered by declaration count descending.
 
 ## Limitations (be honest with the agent)
@@ -304,12 +309,9 @@ behavioral coverage. Known gaps:
 - **Monorepo path aliases** (TS path mapping, Java module-info) are not
   resolved; a suffix-match fallback may pick the wrong source if two files share
   a trailing path segment.
-- **Rust inline tests** in `src/` can be missed because the bundled analyzer
-  classifies test files by path. An unpaired result does not prove that such a
-  source file has no tests.
-- **Import/token approximations** can miss TS/TSX references or credit mentions
-  in comments/strings. Parser warnings and unsupported constructs reduce
-  confidence; do not claim resolved symbol identity from token overlap.
+- **Import/token approximations** are not semantic symbol resolution. Parser
+  diagnostics and unsupported constructs reduce completeness; do not claim
+  resolved symbol identity or behavioral coverage from token overlap.
 
 Report these limitations in a static-only request. Actual coverage requires a
 separately authorized execution workflow (`coverage-analysis` for .NET, native
