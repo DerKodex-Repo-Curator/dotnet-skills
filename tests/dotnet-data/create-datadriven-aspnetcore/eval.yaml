@@ -7,12 +7,12 @@ defaults:
   timeout: 10m
   runs: 1
 stimuli:
-  - name: Add Razor Pages CRUD for a child and required parent
+  - name: Add product and category management to a Razor Pages app
     prompt: |
-      In fixtures/razor-pages-crud/MyApp.csproj, add complete Razor Pages CRUD for Product.
-      Product has a required Category foreign key, so users must also be able to create and manage
-      categories before products. Use a new AppDbContext with SQLite, create an EF Core migration,
-      and do not use command-line scaffolding, EnsureCreated, or startup seeding.
+      The app at fixtures/razor-pages-crud/MyApp.csproj needs complete management pages for products.
+      A product cannot exist without a category, and a new installation starts with an empty SQLite
+      database. Make the full product and category workflow usable from the UI and keep the project
+      buildable from a clean checkout.
     tags: { capability: razor-pages-parent-child-crud, risk: high, journey: add-razor-pages-crud }
     environment:
       files:
@@ -53,12 +53,11 @@ stimuli:
       - Added navigation so a user can create Category records before Product records
       - Preserved model validation and avoided EnsureCreated, startup seeding, and command-line scaffolding
 
-  - name: Add Minimal API CRUD with executable requests and OpenAPI
+  - name: Make a TodoItem API usable end to end
     prompt: |
-      Add complete Minimal API CRUD for TodoItem in fixtures/minimal-api/TodoApi.csproj.
-      Put the mappings in TodoEndpoints, use a new TodoDbContext with SQLite, create a migration,
-      enable descriptive OpenAPI metadata, and add an executable .http workflow for all operations.
-      Do not use command-line scaffolding or EnsureCreated.
+      Turn fixtures/minimal-api/TodoApi.csproj into a complete SQLite-backed API for TodoItem.
+      A developer should be able to discover every operation in OpenAPI, exercise the full lifecycle
+      from an executable .http file, and start with an empty database on a clean checkout.
     tags: { capability: minimal-api-openapi-crud, risk: high, journey: add-minimal-api-crud }
     environment:
       files:
@@ -92,13 +91,12 @@ stimuli:
       - Added an executable request file whose URLs and payloads match the routes
       - Built successfully without command-line scaffolding or EnsureCreated
 
-  - name: Reuse an existing MVC DbContext and add parent navigation
+  - name: Add book and author management to an existing MVC catalog
     prompt: |
-      The project at fixtures/mvc-existing-dbcontext/CatalogMvc.csproj already has CatalogDbContext.
-      Add an MVC BooksController with complete views for Book and complete Author CRUD because Book
-      requires an Author. Reuse the existing context, add navigation to both resources, create an EF
-      Core migration, and do not create a second context, use command-line scaffolding, EnsureCreated,
-      or startup seeding.
+      The catalog at fixtures/mvc-existing-dbcontext/CatalogMvc.csproj already has its data layer,
+      but users cannot manage books or authors. Add a complete MVC workflow for both resources,
+      including author selection for books and navigation that makes both areas reachable. A clean
+      checkout with an empty SQLite database must build and be ready to initialize.
     tags: { capability: mvc-existing-context-crud, risk: high, journey: extend-existing-mvc-data-ui }
     environment:
       files:
@@ -131,13 +129,12 @@ stimuli:
       - Matched the existing UI framework and added navigation to both resources
       - Created a migration and built without EnsureCreated, startup seeding, or command-line scaffolding
 
-  - name: Add required-parent Minimal API routes and ordered requests
+  - name: Make the product catalog API work from an empty database
     prompt: |
-      In fixtures/minimal-api-parent-fk/ParentChildApi.csproj, add complete Product and Category
-      Minimal API CRUD. Product requires Category. Reuse StoreDbContext with SQLite, place mappings
-      in ProductEndpoints, add descriptive OpenAPI metadata, create a migration, and add a .http
-      workflow that creates a category first and reuses its returned id when creating a product.
-      Do not use command-line scaffolding or EnsureCreated.
+      Complete the Product and Category API in
+      fixtures/minimal-api-parent-fk/ParentChildApi.csproj. A Product requires a valid Category, and
+      a developer starting with an empty SQLite database should be able to use the OpenAPI document
+      and an executable .http workflow to complete the full lifecycle for both resources.
     tags: { capability: minimal-api-required-parent-flow, risk: high, journey: add-parent-child-api }
     environment:
       files:
@@ -233,12 +230,12 @@ stimuli:
       - Created a migration and a dependency-ordered request workflow using the real parent id
       - Built successfully without command-line scaffolding or EnsureCreated
 
-  - name: Add Blazor CRUD without breaking interactive render mode
+  - name: Add employee and department management to a Blazor app
     prompt: |
-      Add complete Blazor CRUD components for Employee in fixtures/blazor-crud/BlazorApp.csproj.
-      Use a new AppDbContext with SQLite, create a migration, include any required Department flow,
-      and add navigation. Preserve the project's existing interactive server configuration and use
-      safe initial form models. Do not use command-line scaffolding or EnsureCreated.
+      The app at fixtures/blazor-crud/BlazorApp.csproj needs a complete UI for managing employees
+      and their required departments. Make every lifecycle action reachable through navigation,
+      persist the data in SQLite from an empty installation, and keep the app's existing interactive
+      behavior working.
     tags: { capability: blazor-crud-render-mode-preservation, risk: high, journey: add-blazor-data-ui }
     environment:
       files:
@@ -306,11 +303,10 @@ stimuli:
       - Preserved interactive server configuration and safely initialized form-bound models
       - Matched existing Blazor conventions and built without command-line scaffolding or EnsureCreated
 
-  - name: Add an empty Razor Page without data-access side effects
+  - name: Add a static Terms page to a Razor Pages app
     prompt: |
-      Add a simple empty Terms Razor Page to fixtures/razor-pages-crud/MyApp.csproj. Match the
-      existing page conventions. This page has no model or database behavior, so do not add Entity
-      Framework packages, a DbContext, migrations, or generated CRUD files.
+      Add a static Terms page to fixtures/razor-pages-crud/MyApp.csproj. Match the existing page
+      conventions and keep the app's current hosting and data behavior unchanged.
     tags: { capability: empty-razor-page-restraint, risk: medium, journey: add-static-razor-page }
     environment:
       files:
@@ -335,11 +331,11 @@ stimuli:
       - Did not add Entity Framework, a DbContext, migrations, or unrelated CRUD code
       - Kept the project buildable
 
-  - name: Add an empty Blazor page while preserving host configuration
+  - name: Add a static Reports page to a Blazor app
     prompt: |
       Add a Reports page at /reports to fixtures/blazor-crud/BlazorApp.csproj and link it from the
-      existing navigation. Match the existing component and Bootstrap conventions. It is static,
-      so do not add Entity Framework, a DbContext, migrations, or a new render mode.
+      existing navigation. Match the existing component and Bootstrap conventions, keep the page
+      static, and preserve the app's current hosting behavior.
     tags: { capability: empty-blazor-page-preservation, risk: medium, journey: add-static-blazor-page }
     environment:
       files:
@@ -372,12 +368,12 @@ stimuli:
       - Preserved the existing interactive server host configuration
       - Did not add data-access packages, contexts, migrations, or unnecessary render modes
 
-  - name: Leave complete Minimal API CRUD unchanged
+  - name: Review a TodoItem API for production readiness
     prompt: |
       Review CompleteTodoEndpoints.cs for these requirements: list/by-id/create/update/delete
       routes, server-assigned IDs, non-empty title validation, async EF Core calls, correct status
-      codes, and useful OpenAPI metadata. Fix only a gap in those requirements. If they are already
-      complete, explain why and leave the file unchanged.
+      codes, and useful OpenAPI metadata. Address only gaps you can substantiate and explain the
+      result of the review.
     tags: { capability: idempotent-complete-api-review, risk: low, journey: verify-existing-api }
     environment:
       files:
@@ -417,7 +413,7 @@ stimuli:
       - Recognized that async EF calls, response paths, and endpoint metadata satisfy the request
       - Left the file byte-for-byte unchanged instead of generating duplicate routes or types
 
-  - name: Stay dormant for a non-web class library
+  - name: Add CSV report output to a utility library
     prompt: |
       In fixtures/non-web/Utility.csproj, add a CsvReportWriter with
       WriteRow(TextWriter writer, string title, decimal total). Write one CSV row, quote and escape

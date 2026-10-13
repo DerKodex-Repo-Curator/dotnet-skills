@@ -7,7 +7,7 @@ defaults:
   timeout: 8m
   runs: 1
 stimuli:
-  - name: Collapse per-customer query loops into one database query
+  - name: Speed up the annual customer sales dashboard
     prompt: |
       The dashboard method GetCustomerSales in SalesOperationsService.cs gets much slower as
       customer count grows. Optimize that method in place without changing its signature or
@@ -69,7 +69,7 @@ stimuli:
       - Replaced the year function on the date column with an equivalent half-open date range
       - Explained both the round-trip reduction and database-side aggregation without requiring one exact implementation
 
-  - name: Split independent collection loads without changing results
+  - name: Speed up customer detail for large accounts
     prompt: |
       GetCustomerDetail in SalesOperationsService.cs becomes very slow for customers with many
       orders, order lines, and invoices. Optimize only that method, preserve its signature and
@@ -110,11 +110,11 @@ stimuli:
       - Preserved the public method contract and did not replace eager loading with lazy loading
       - Explained that independent collection joins duplicate rows and parent data
 
-  - name: Keep filtering and projection in SQL
+  - name: Reduce memory use in large order searches
     prompt: |
       GetOrdersOverTotal in SalesOperationsService.cs uses too much memory and time when the orders
       table is large. Optimize that method in place, preserve its signature and results, and explain
-      where the filtering and projection should execute. Do not edit anything under perf/.
+      the cause of the excess work. Do not edit anything under perf/.
     tags:
       capability: move-client-filter-to-database
       risk: high
@@ -145,11 +145,11 @@ stimuli:
       - Avoided loading all Order entities before filtering
       - Preserved the method signature and result set
 
-  - name: Project narrow product cards before materialization
+  - name: Reduce data transfer on the product grid
     prompt: |
-      ListActiveProducts in SalesOperationsService.cs reads wide Product rows even though the page
-      only needs a card with id, name, and price. Optimize that method without changing its public
-      contract or results. Do not edit anything under perf/.
+      ListActiveProducts in SalesOperationsService.cs has become slow as the catalog has grown, and
+      profiles show far more data moving through the application than the grid renders. Optimize the
+      method without changing its public contract or results. Do not edit anything under perf/.
     tags:
       capability: project-before-materialization
       risk: medium
@@ -180,12 +180,13 @@ stimuli:
       - Avoided reading the wide description and image columns
       - Preserved filtering, signature, and returned values
 
-  - name: Keep a hot status queue server-side and identify its missing index
+  - name: Speed up the frequently refreshed fulfillment queue
     prompt: |
       GetPendingOrders in SalesOperationsService.cs powers a fulfillment queue that refreshes every
       few seconds and now scans millions of rows. Optimize the method without changing its signature
-      or returned rows. The database schema is managed by a DBA rather than EF migrations, so also
-      state the supporting index the DBA should review. Do not edit anything under perf/.
+      or returned rows. The database schema is managed by a DBA rather than this application, so
+      identify any separate schema-side follow-up the DBA should consider. Do not edit anything
+      under perf/.
     tags:
       capability: server-filter-with-index-recommendation
       risk: high
@@ -219,12 +220,12 @@ stimuli:
       - Recommended a supporting index led by Status and then CreatedAt, while leaving the externally managed schema unchanged
       - Distinguished the query rewrite from the separate DBA-owned index change
 
-  - name: Remove repeated translation from a hot lookup
+  - name: Reduce application CPU in a high-volume product lookup
     prompt: |
-      GetProductForCard in SalesOperationsService.cs is a minimal indexed lookup, but it runs
-      thousands of times per second on reused pooled contexts and query translation is now visible
-      in profiles. Optimize this hot path without changing its signature or returned data. Do not
-      edit anything under perf/.
+      GetProductForCard in SalesOperationsService.cs is a small indexed lookup that returns three
+      fields, but it runs thousands of times per second on reused pooled contexts. Database time is
+      already low while application CPU remains significant. Optimize this hot path without changing
+      its signature or returned data. Do not edit anything under perf/.
     tags:
       capability: compile-hot-query-shape
       risk: medium
@@ -258,11 +259,11 @@ stimuli:
       - Kept the projection narrow and preserved the public method contract
       - Did not claim that tracking or an additional index was the measured bottleneck
 
-  - name: Replace per-row saves with one set-based update
+  - name: Speed up category-wide nightly discounts
     prompt: |
       ApplyCategoryDiscount in SalesOperationsService.cs takes minutes for large categories. Make
-      it perform the same price and timestamp update with one database operation, keep the method
-      signature unchanged, and do not edit anything under perf/.
+      it scale to large categories while preserving the method signature and the exact final price
+      and timestamp outcomes. Do not edit anything under perf/.
     tags:
       capability: use-set-based-bulk-update
       risk: high
@@ -299,7 +300,7 @@ stimuli:
       - Updated both price and timestamp for exactly the selected category
       - Preserved the method signature and final database values
 
-  - name: Count matching rows in the database
+  - name: Reduce allocations in the active-product count
     prompt: |
       CountActiveProducts in SalesOperationsService.cs allocates heavily as the catalog grows.
       Optimize only that method while keeping the same signature and result. Do not edit anything
@@ -334,11 +335,12 @@ stimuli:
       - Avoided materializing Product entities
       - Preserved the method signature and integer result
 
-  - name: Preserve a page-number contract that cannot use keyset pagination
+  - name: Assess deep order-page latency without changing the API
     prompt: |
-      Review GetOrderPage in SalesOperationsService.cs. Deep pages are slow, but callers must keep
-      supplying pageIndex and pageSize and the public API cannot change in this release. Explain the
-      real long-term fix and whether an in-place rewrite can deliver it. Do not edit any files.
+      GetOrderPage in SalesOperationsService.cs becomes progressively slower on deep pages. Callers
+      must keep supplying pageIndex and pageSize, and the public API cannot change in this release.
+      Explain the viable options and whether a safe in-place change can solve the underlying issue.
+      Do not edit any files.
     tags:
       capability: recognize-pagination-contract-limit
       risk: high
@@ -377,11 +379,11 @@ stimuli:
       - Recognized that the frozen page-number signature prevents an honest in-place keyset rewrite
       - Left all files unchanged
 
-  - name: Stay dormant for a Dapper repository
+  - name: Improve a slow Dapper product search
     prompt: |
       DapperRepository.cs uses Dapper over SQL Server. Its product search is slow when the name
       filter starts with a wildcard. Review it and recommend the smallest safe performance fix.
-      Do not replace Dapper or introduce Entity Framework.
+      The repository must remain on its current Dapper data-access stack.
     expect_activation: false
     tags:
       capability: boundary-non-ef-data-access
