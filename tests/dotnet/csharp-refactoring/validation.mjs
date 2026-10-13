@@ -15,6 +15,19 @@ function assert(condition, message) {
   }
 }
 
+function methodBody(source, signature) {
+  const match = source.match(signature);
+  if (!match) return "";
+  const open = source.indexOf("{", match.index);
+  if (open < 0) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    if (source[i] === "}" && --depth === 0) return source.slice(open + 1, i);
+  }
+  return "";
+}
+
 function fixtureIntegrity() {
   const expected = "<TargetFrameworks>net8.0;net10.0</TargetFrameworks>";
   assert(read("src/Billing/Billing.csproj").includes(expected), "source project target frameworks changed");
@@ -33,7 +46,7 @@ function publicRename() {
   assert(shim?.groups?.body.includes("ParseIntegerSetting"), "legacy method is not a forwarding shim");
   assert(compatibilityTest?.groups?.body.includes("ParseIntSetting("), "compatibility test no longer calls the legacy method");
   assert(!ordinaryTests.includes("ParseIntSetting("), "ordinary callers still use the legacy method");
-  assert(/\[Obsolete\([^\]]*\)\]\s*public\s+static\s+int\s+ParseIntSetting\s*\(/s.test(source), "legacy method is not marked obsolete");
+  assert(/\[(?:System\.)?Obsolete(?:\([^\]]*\))?\](?:\s*\[[^\]]+\])*\s*public\s+static\s+int\s+ParseIntSetting\s*\(/s.test(source), "legacy method is not marked obsolete");
 }
 
 function configReader() {
@@ -51,9 +64,8 @@ function configReader() {
 
 function subtotalExtraction() {
   const source = read("src/Billing/OrderProcessor.cs");
-  const method = source.includes("public Invoice DoStuff") && source.includes("private static decimal CalculateSubtotal")
-    ? source.split("public Invoice DoStuff", 2)[1].split("private static decimal CalculateSubtotal", 1)[0]
-    : "";
+  const method = methodBody(source, /public\s+Invoice\s+DoStuff\s*\(/);
+  assert(/private\s+(?:static\s+)?decimal\s+CalculateSubtotal\s*\(/.test(source), "subtotal helper was not created");
   assert(!method.includes("foreach") && method.includes("CalculateSubtotal(lines)"), "subtotal loop was not extracted");
 }
 
@@ -67,8 +79,8 @@ function wrapperCompatibility() {
   assert(compatibilityTest?.groups?.body.includes("LegacyCurrencyFormatter.FormatCurrency("), "compatibility test no longer uses the legacy wrapper");
   assert(ordinaryCaller?.groups?.body.includes("CurrencyFormatter.Format"), "ordinary caller was not migrated");
   assert(!ordinaryCaller?.groups?.body.includes("LegacyCurrencyFormatter.FormatCurrency"), "ordinary caller still uses the legacy wrapper");
-  const obsoleteMethod = /\[Obsolete\([^\]]*\)\]\s*public\s+static\s+string\s+FormatCurrency\s*\(/s.test(source);
-  const obsoleteLegacyType = /\[Obsolete\([^\]]*\)\]\s*public\s+static\s+class\s+LegacyCurrencyFormatter\b/s.test(source);
+  const obsoleteMethod = /\[(?:System\.)?Obsolete(?:\([^\]]*\))?\](?:\s*\[[^\]]+\])*\s*public\s+static\s+string\s+FormatCurrency\s*\(/s.test(source);
+  const obsoleteLegacyType = /\[(?:System\.)?Obsolete(?:\([^\]]*\))?\](?:\s*\[[^\]]+\])*\s*public\s+static\s+class\s+LegacyCurrencyFormatter\b/s.test(source);
   assert(obsoleteMethod || obsoleteLegacyType, "legacy wrapper surface is not marked obsolete");
 }
 
@@ -88,8 +100,9 @@ function discountExtraction() {
   const source = read("src/Billing/OrderProcessor.cs");
   assert(source.includes("ApplyTierDiscount(subtotal, tier)"), "invoice path does not pass subtotal");
   assert(source.includes("ApplyTierDiscount(quoteBase, tier)"), "quote path does not pass quoteBase");
-  assert((source.match(/tier == "gold"/g) ?? []).length === 1, "gold tier logic was not consolidated");
-  assert((source.match(/tier == "silver"/g) ?? []).length === 1, "silver tier logic was not consolidated");
+  const helper = methodBody(source, /(?:private|internal)\s+(?:static\s+)?decimal\s+ApplyTierDiscount\s*\(/);
+  assert((helper.match(/"gold"/g) ?? []).length === 1, "gold tier logic was not consolidated");
+  assert((helper.match(/"silver"/g) ?? []).length === 1, "silver tier logic was not consolidated");
 }
 
 function prepareNoop(root) {

@@ -435,7 +435,7 @@ stimuli:
       - type: file-contains
         config:
           path: src/Billing/OrderProcessor.cs
-          value: private static decimal CalculateSubtotal
+          value: CalculateSubtotal
       - type: run-command
         config:
           command: >-

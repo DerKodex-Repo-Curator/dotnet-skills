@@ -588,3 +588,256 @@ stimuli:
     rubric:
       - Recognized that the project does not use SDK-style dotnet commands
       - The project-local SDK workflow stayed dormant
+
+  - name: Choose the channel for a release candidate daily build
+    prompt: I need the .NET 11 RC 2 bits before RC 2 ships, as a project-local SDK in my repo. Which channel and quality do I give dotnet-install, and how can I check which build that channel currently has without downloading it?
+    tags:
+      capability: choose-daily-channel
+      risk: wrong-lane-installed
+      journey: try-prerelease
+    constraints:
+      reject_tools:
+        - bash
+        - powershell
+        - web_fetch
+    graders:
+      - type: output-matches
+        config:
+          pattern: '11\.0\.1xx-rc2'
+      - type: output-matches
+        config:
+          pattern: '(--quality\s+daily|-Quality\s+daily|quality.{0,20}daily)'
+      - type: output-matches
+        config:
+          pattern: '(aka\.ms/dotnet|dotnet-install[\s\S]{0,160}(--dry-run|-DryRun))'
+      - type: output-matches
+        config:
+          pattern: '(--dry-run|-DryRun|dry run|HEAD|redirect|url_effective|Location header)'
+      - type: output-not-matches
+        config:
+          pattern: '(dotnet-install: (Downloading|Extracting)|Installation finished successfully|Downloaded file size)'
+      - type: prompt
+    rubric:
+      - The agent named a channel that identifies the RC 2 lane rather than the generic 11.0 channel, which resolves to the newest released preview
+      - The agent explained how to learn the build a daily channel currently serves without downloading it
+      - The agent did not download or install anything
+
+  - name: Diagnose a workload install failure on a daily SDK
+    prompt: 'I installed a daily .NET 11 SDK into ./.dotnet in my repo and ran ./.dotnet/dotnet workload install maui. It printed "No workload update found" and then failed with: Version 10.0.13 of package microsoft.netcore.app.runtime.aot.osx-arm64.cross.iossimulator-x64 is not found in NuGet feeds https://api.nuget.org/v3/index.json. I checked nuget.org: the newest version of that package is 10.0.12, there is no 10.0.13. What is wrong and what do I do?'
+    tags:
+      capability: diagnose-daily-workload-failure
+      risk: stuck-or-wrong-bits
+      journey: try-prerelease
+    constraints:
+      reject_tools:
+        - bash
+        - powershell
+        - web_fetch
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(servicing|Patch Tuesday|not (yet )?(public|published|released|on nuget))'
+      - type: output-matches
+        config:
+          pattern: '(NuGet\.config|dotnet11|pkgs\.dev\.azure\.com|package source|feed)'
+      - type: output-matches
+        config:
+          pattern: '(update-mode|workload set|manifests)'
+      - type: output-matches
+        config:
+          pattern: '(?i)(\bwait(ing)?\b[\s\S]{0,120}(publish|public|Patch Tuesday|10\.0\.13|nuget\.org|\buntil\b[\s\S]{0,60}(published|public|released))|\b(retry|rerun|re-run|try again|defer|postpone|hold off|come back)\b[\s\S]{0,80}\b(after|once|when)\b[\s\S]{0,60}(published|public|released|Patch Tuesday|10\.0\.13|available)|(edit|patch|change|point|set|pin)[^\n]{0,120}(compat|mono\.toolchain|emscripten|WorkloadManifest\.json|sdk-manifests)[\s\S]{0,400}--skip-manifest-update|--skip-manifest-update[\s\S]{0,400}(edit|patch|change|point|set|pin)[^\n]{0,120}(compat|mono\.toolchain|emscripten|WorkloadManifest\.json|sdk-manifests))'
+      - type: output-not-matches
+        config:
+          pattern: '(maui (is|was|has been) (now )?(successfully )?installed|workloads? (is|are|was|were|has been|have been) (now )?(successfully )?installed|Successfully installed workload)'
+      - type: prompt
+    rubric:
+      - The agent explained that the missing 10.0.13 package is the previous major's servicing runtime that is not yet publicly available
+      - The agent explained that nuget.org has no manifests for a daily band and that the installer fell back to the manifests bundled with the SDK
+      - The agent explained that the daily feeds and the manifests update mode are needed but do not fix this failure by themselves
+      - The agent gave a working remedy, either waiting for publication or patching the throwaway local SDK's compat manifests and using --skip-manifest-update
+      - The agent did not claim the workload was installed
+
+  - name: Detect workloads installed from an older band
+    prompt: 'On a 12.0.1xx daily SDK installed in ./.dotnet, ./.dotnet/dotnet workload install ios android said "Successfully installed workload(s) ios android", but workload list shows ios 26.5.12193-net11-rc.1/11.0.100-rc.1 and android 37.0.0-rc.1.2257/11.0.100-rc.1. I expected the .NET 12 builds with Xcode 27 support. Is this right?'
+    tags:
+      capability: verify-workload-band
+      risk: silent-wrong-bits
+      journey: try-prerelease
+    constraints:
+      reject_tools:
+        - bash
+        - powershell
+        - web_fetch
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(not right|not correct|is wrong|older band|fell back|fallback|bundled)'
+      - type: output-matches
+        config:
+          pattern: 'dotnet12'
+      - type: output-matches
+        config:
+          pattern: '(?i)(darc-pub|dotnet/maui[^\n]{0,60}NuGet\.config|maui''s NuGet\.config|(android|macios|ios)[^\n]{0,40}feeds?)'
+      - type: output-matches
+        config:
+          pattern: '(update-mode|workload set|manifests)'
+      - type: output-matches
+        config:
+          pattern: '(12\.0\.100|net12|same[^\n]{0,20}band|(band|manifest)s?[^\n]{0,60}(match|equal|align)[^\n]{0,40}SDK)'
+      - type: prompt
+    rubric:
+      - The agent recognized that the installed manifests belong to an older band than the SDK
+      - The agent explained that the installer fell back to bundled manifests because the daily band's manifests were not reachable
+      - The agent gave the required dotnet12 and workload feeds plus manifests update mode
+      - The agent told the user to verify the band in workload list after reinstalling
+
+  - name: Create team install scripts for a daily SDK with workloads
+    prompt: >-
+      Teammates cloning this repo should get the 12.0.1xx daily .NET SDK into
+      ./.dotnet together with the ios and android workloads by running one script, on macOS/Linux
+      and on Windows. Write the scripts and whatever else the repo needs for that. Do not download or
+      install anything now.
+    tags:
+      capability: daily-team-install-scripts
+      risk: stale-manifests-on-teammates
+      journey: team-setup
+    environment:
+      files:
+        - src: ./fixtures/daily-team-scripts-validator
+          dest: .eval
+    golden_patch:
+      path: ./references/daily-team-scripts.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: setup-local-sdk-daily-team-scripts
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: >-
+              Create cross-platform install scripts for the 12.0.1xx daily SDK
+              and ios/android workloads. Configure the dotnet12 and required
+              darc-pub feeds, select manifests update mode, preserve failures,
+              shut down build servers, and reject workload manifests that do
+              not match the SDK band and lane. Do not download during setup.
+    graders:
+      - type: file-exists
+        config:
+          path: install*.sh
+      - type: file-exists
+        config:
+          path: install*.ps1
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: 12.0.1xx
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: 12.0.1xx
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: daily
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: daily
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: update-mode manifests
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: update-mode manifests
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: workload install
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: workload install
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: workload list
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: workload list
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: build-server shutdown
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: build-server shutdown
+      - type: file-contains
+        config:
+          path: install*.sh
+          value: NuGet.config
+      - type: file-contains
+        config:
+          path: install*.ps1
+          value: NuGet.config
+      - type: run-command
+        config:
+          command: echo "29b3712f356923133b62a7a5a62f18cd562d3b611681e985cc12f031e816684b  .eval/validate-daily-scripts.sh" | sha256sum -c --quiet && bash .eval/validate-daily-scripts.sh --dotnet-feed dotnet12
+          expected_exit_code: 0
+          timeout: 2m
+      - type: run-command
+        config:
+          command: echo "7838b0b0e055838f254244edd706377aa714dc41ed98288f526bb3452a9f3552  .eval/validate-ps-defaults.ps1" | sha256sum -c --quiet && pwsh -NoProfile -ExecutionPolicy Bypass -File .eval/validate-ps-defaults.ps1
+          expected_exit_code: 0
+          timeout: 1m
+      - type: file-not-exists
+        config:
+          path: .dotnet/dotnet
+      - type: output-matches
+        config:
+          pattern: '(dotnet12|pkgs\.dev\.azure\.com|darc-pub)'
+      - type: output-not-matches
+        config:
+          pattern: '(dotnet-install: (Downloading|Extracting)|Installation finished successfully|Downloaded file size)'
+      - type: prompt
+    rubric:
+      - The scripts install the 12.0.1xx daily SDK into ./.dotnet and default to ios and android
+      - The scripts verify daily feeds, select manifests update mode, and validate workload bands
+      - The agent wrote or safely updated NuGet.config without downloading or installing anything
+
+  - name: Refuse a workload that no manifest of the band defines
+    prompt: >-
+      I have the 12.0.1xx daily SDK (12.0.100-alpha.1.26509.101) in ./.dotnet, the dotnet12 feed
+      is in NuGet.config and the installer is in manifests update mode. ./.dotnet/dotnet workload
+      install ios android maui installs ios and android from the 12.0.100-alpha.1 band, but maui
+      comes out as 11.0.0-rc.1.25470.5/11.0.100-rc.1. I searched the dotnet12 feed and nuget.org:
+      the only Microsoft.NET.Sdk.Maui.Manifest-* packages are for 11.0.100-rc.1 and 11.0.100-rc.2,
+      none for 12.0.100-alpha.1. How do I get the .NET 12 maui workload?
+    tags:
+      capability: refuse-workload-absent-from-band
+      risk: wrong-band-reported-as-right
+      journey: try-prerelease
+    constraints:
+      reject_tools:
+        - bash
+        - powershell
+        - web_fetch
+    graders:
+      - type: output-matches
+        config:
+          pattern: '(no (maui )?manifest|not (yet )?(available|published|exist)|does not (yet )?(exist|ship|publish)|has not (yet )?(moved|shipped|published|been published)|cannot (get|come|be installed)|there is no)'
+      - type: output-matches
+        config:
+          pattern: '(bundled|fell back|fallback|older band|previous band)'
+      - type: output-matches
+        config:
+          pattern: '(without (the )?maui|ios and android|android and ios|skip(ping)? maui|omit(ting)? maui|leave maui out|drop(ping)? maui|keep (the )?(ios|android))'
+      - type: prompt
+    rubric:
+      - The agent concluded that no maui manifest exists for the 12.0.100-alpha.1 band
+      - The agent explained that the 11.0 workload is a bundled-manifest fallback
+      - The agent told the user to install only workloads that exist for the band and to check for later publication
