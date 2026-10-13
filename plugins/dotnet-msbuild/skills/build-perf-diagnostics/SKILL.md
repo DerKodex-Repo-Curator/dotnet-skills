@@ -89,6 +89,7 @@ license: MIT
 - **Fixes**:
   - Separate restore from build: `dotnet restore` then `dotnet build --no-restore`
   - Enable static graph evaluation: `<RestoreUseStaticGraphEvaluation>true</RestoreUseStaticGraphEvaluation>` in Directory.Build.props — can save significant time in large builds (results are workload-dependent)
+- See: `eliminate-redundant-restores` skill when several pipeline or script steps each restore, or before adding `--no-restore` (it fails with NETSDK1004/NETSDK1047 when no earlier restore covers the step)
 
 ### 7. Large Project Count and Graph Shape
 

@@ -1,0 +1,379 @@
+name: eliminate-redundant-restores
+tags:
+  executionShard: heavy
+description: Evaluates the dotnet-msbuild/eliminate-redundant-restores skill
+type: capability
+defaults:
+  timeout: 6m
+stimuli:
+  - name: Skip the restore that an rsp file re-adds to a build step
+    prompt: |
+      The Build step in rsp-inherited/ci.yml takes about 41 s, and
+      rsp-inherited/restore-log-excerpt.txt shows part of its log. The step
+      before it already prepared everything, and nothing in the repository
+      changes between the steps. Update the pipeline so the Build step stops
+      repeating that earlier work, while keeping the same build and test
+      coverage. The repository is also used for local development.
+    tags:
+      capability: rsp-inherited-restore
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./rsp-inherited
+          dest: rsp-inherited
+    golden_patch:
+      path: ./references/skip-restore-on-msbuild-step.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-rsp-inherited"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the second restore is redundant. dotnet msbuild does not accept --no-restore, so the fix is -restore:false on that one invocation. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it. The Test step already uses --no-build, which implies --no-restore.
+    graders:
+      - type: file-contains
+        config:
+          path: rsp-inherited/Directory.Build.rsp
+          value: -restore
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const steps = fs.readFileSync('rsp-inherited/ci.yml', 'utf8').split(/\r?\n/)
+                .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              if (!steps.some(l => /^dotnet restore\b/.test(l))) throw new Error('the explicit restore step was removed');
+              if (!steps.some(l => /^dotnet test\b/.test(l))) throw new Error('the test step was removed');
+              const build = steps.find(l => /^dotnet (msbuild|build)\b/.test(l));
+              if (!build) throw new Error('the build step is missing');
+              const off = /[-/]restore:false/i.test(build) || (/^dotnet build\b/.test(build) && /--no-restore/.test(build));
+              if (!off) throw new Error('the build step still restores: ' + build);
+              if (steps.some(l => /^dotnet msbuild\b/.test(l) && /--no-restore/.test(l))) {
+                throw new Error('--no-restore is not a dotnet msbuild switch');
+              }
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Identified that the Build step restores again because Directory.Build.rsp contains -restore and applies to every
+        MSBuild invocation in that directory
+      - Stopped the Build step from restoring in a way that works for the invocation it uses, such as -restore:false on
+        dotnet msbuild or dotnet build --no-restore, and did not put --no-restore on a dotnet msbuild command
+      - Kept the explicit Restore step and left the -restore line in Directory.Build.rsp so local builds keep working
+      - Kept the same build and test coverage
+
+  - name: Keep restore on a project outside the restored solution
+    prompt: |
+      uncovered-project/ci.yml pays for repeated package work. Add --no-restore
+      to every dotnet command where it is safe, and leave the other commands
+      alone so the pipeline keeps passing. You cannot run the pipeline from
+      here, so work from the repository files.
+    tags:
+      capability: restore-coverage
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./uncovered-project
+          dest: uncovered-project
+    golden_patch:
+      path: ./references/no-restore-covered-solution-only.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-uncovered-project"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The explicit restore covers Contoso.slnx and the projects it lists. The solution build is therefore safe to run with --no-restore. tools/Packager/Packager.csproj is not listed in the solution and nothing in the solution references it, so the restore never produced a project.assets.json for it. Building it with --no-restore would fail with NETSDK1004. I left that command restoring on its own, and the test step already uses --no-build, which implies --no-restore. Not validated: I could not run the pipeline here.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const steps = fs.readFileSync('uncovered-project/ci.yml', 'utf8').split(/\r?\n/)
+                .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              const sol = steps.find(l => /^dotnet build\b/.test(l) && /Contoso\.slnx/.test(l));
+              const pkIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && /Packager/.test(l));
+              if (!sol || !/--no-restore/.test(sol)) throw new Error('the solution build still restores');
+              if (pkIndex < 0) throw new Error('the Packager build step is missing');
+              if (/--no-restore/.test(steps[pkIndex])) {
+                const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Packager/.test(l));
+                const inSolution = /Packager/.test(fs.readFileSync('uncovered-project/Contoso.slnx', 'utf8'));
+                if (!inSolution && (restoredBefore < 0 || restoredBefore > pkIndex)) {
+                  throw new Error('Packager is outside the restored solution but is built with --no-restore');
+                }
+              }
+          expected_exit_code: 0
+      - type: output-matches
+        config:
+          pattern: Packager
+      - type: prompt
+    rubric:
+      - Added --no-restore to the solution build, which the explicit restore covers
+      - Recognized that tools/Packager is not part of the solution the explicit restore covers, and either left its build
+        restoring, restored it explicitly first, or added it to the solution
+      - Did not claim the pipeline was verified, because it could not be run from here
+
+  - name: Carry the runtime identifier into the single restore before publish
+    prompt: |
+      rid-mismatch/build.sh builds and publishes the Gateway service. The
+      publish output shows packages being restored again even though a restore
+      already ran at the top of the script. Remove the repeated package work
+      without making the script fail on a clean machine.
+    tags:
+      capability: restore-inputs
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./rid-mismatch
+          dest: rid-mismatch
+    golden_patch:
+      path: ./references/restore-with-runtime-identifier.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-rid-mismatch"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The publish restores again because the first restore ran without a runtime identifier and publish asks for linux-x64 and self-contained. Simply adding --no-restore to publish would fail with NETSDK1047, since the assets file has no net10.0/linux-x64 target. The fix is to give the single restore the inputs publish uses: restore with -r linux-x64 and -p:SelfContained=true, then build and publish with --no-restore. A restore with a runtime identifier still produces the plain framework target, so the build step keeps working. Not validated on a clean machine: please run build.sh from a clean checkout.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const cmds = fs.readFileSync('rid-mismatch/build.sh', 'utf8').split(/\r?\n/)
+                .map(l => l.trim()).filter(l => /^dotnet\s/.test(l));
+              if (!cmds.some(l => /^dotnet publish\b/.test(l))) throw new Error('the publish command was removed');
+              let restored = null;
+              let count = 0;
+              for (const c of cmds) {
+                const skips = /--no-restore|--no-build/.test(c);
+                const rid = /(-r|--runtime)[ =]+linux-x64/.test(c);
+                if (/^dotnet restore\b/.test(c) || !skips) {
+                  count++;
+                  restored = { rid };
+                } else if (!restored) {
+                  throw new Error('a command skips restore before anything restored: ' + c);
+                } else if (/^dotnet publish\b/.test(c) && !restored.rid) {
+                  throw new Error('publish skips restore but the restore had no linux-x64 runtime identifier: ' + c);
+                }
+              }
+              if (count > 1) throw new Error('restore still runs ' + count + ' times');
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Explained that the later restore happens because the earlier restore did not include the runtime identifier that
+        publish uses, so the assets file lacks that target
+      - Ended with the restore running once, with -r linux-x64, and did not simply add --no-restore to publish after a
+        restore that lacked the runtime identifier
+      - Considered other inputs that publish uses, such as the self-contained setting, when deciding publish could
+        skip restore
+      - Kept the build and publish commands, and either stated what remains unvalidated or said how to validate on a clean
+        checkout
+
+  - name: Restore after the step that edits package references
+    prompt: |
+      generated-reference/ci.yml restores, runs our tool that adds an analyzer
+      package to Contoso.Core, then builds and tests. The Build step takes
+      noticeably longer than the compile itself. Cut the repeated package work
+      from the pipeline without changing what the tool does or which packages
+      the build ends up using.
+    tags:
+      capability: restore-ordering
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./generated-reference
+          dest: generated-reference
+    golden_patch:
+      path: ./references/restore-after-generator.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-generated-reference"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The Build step restores again because the tool edits Contoso.Core.csproj after the first restore: the new PackageReference is not in project.assets.json, so the earlier restore is stale and a --no-restore build would miss the analyzer. The solution only needs one restore, and it must run after the tool. I moved the explicit restore below the tool step and added --no-restore to the build. The test step already uses --no-build. Not validated: run the pipeline from a clean checkout to confirm.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const steps = fs.readFileSync('generated-reference/ci.yml', 'utf8').split(/\r?\n/)
+                .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              const gen = steps.findIndex(l => /AddAnalyzer/.test(l));
+              if (gen < 0) throw new Error('the analyzer tool step was removed');
+              const restoring = [];
+              steps.forEach((l, i) => {
+                if (/Contoso\.slnx/.test(l) && (/^dotnet restore\b/.test(l) ||
+                    (/^dotnet (build|test|publish|pack)\b/.test(l) && !/--no-restore|--no-build/.test(l)))) restoring.push(i);
+              });
+              if (restoring.length !== 1) throw new Error('the solution is restored ' + restoring.length + ' times');
+              if (restoring[0] < gen) throw new Error('the only restore runs before the tool edits the package references');
+              steps.forEach((l, i) => {
+                if (/Contoso\.slnx/.test(l) && /--no-restore|--no-build/.test(l) && i < restoring[0]) {
+                  throw new Error('a step skips restore before the restore ran: ' + l);
+                }
+              });
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Identified that the tool edits package references after the first restore, so that restore is stale for the build
+      - Ended with the solution restored once, after the tool step, and the later steps not restoring
+      - Did not put --no-restore on the build while the only restore still ran before the tool
+      - Kept the tool step and the build and test steps
+
+  - name: Build once and run each test project without rebuilding
+    prompt: |
+      The test stage in test-steps/ci.yml takes about 90 s, but the tests
+      themselves run for only about 20 s of that. Each of the three test steps
+      spends roughly 25 s before its first test starts. Reduce that overhead in
+      ci.yml. Keep the three test steps separate so results are reported
+      separately, and keep the Release configuration.
+    tags:
+      capability: test-step-overhead
+      risk: medium
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./test-steps
+          dest: test-steps
+    golden_patch:
+      path: ./references/build-once-test-no-build.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-test-steps"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              dotnet test restores and builds before it runs tests, so each of the three steps repeats that setup even though the earlier restore covers the same solution. Adding --no-restore alone would still rebuild three times. I added one build step for the solution with --no-restore in the same Release configuration, and every test step now uses --no-build, which also implies --no-restore. The three test steps stay separate. Not validated: I could not run the pipeline here, so confirm the stage passes from a clean checkout.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const steps = fs.readFileSync('test-steps/ci.yml', 'utf8').split(/\r?\n/)
+                .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              const tests = steps.filter(l => /^dotnet test\b/.test(l));
+              if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
+              if (!tests.every(l => /--no-build/.test(l))) throw new Error('a test step still rebuilds');
+              if (!tests.every(l => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(l))) {
+                throw new Error('a test step dropped the Release configuration');
+              }
+              const build = steps.findIndex(l => /^dotnet build\b/.test(l));
+              if (build < 0 || build > steps.findIndex(l => /^dotnet test\b/.test(l))) throw new Error('no build step before the tests');
+              if (!/(-c|--configuration)[ =]+Release|Configuration=Release/.test(steps[build])) {
+                throw new Error('the build step is not Release, so --no-build tests would not find the output');
+              }
+              const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
+                (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
+              if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Identified that each dotnet test step repeats restore and build work that an earlier step already did
+      - Added one build step for the solution that runs once, in the same Release configuration the tests use, and made the
+        test steps skip building
+      - Kept the three test steps separate and kept the explicit restore as the only restore
+      - Did not rely on --no-restore alone for the test steps, which would still rebuild three times
+
+  - name: Confirm a pipeline with a single restore needs no change
+    prompt: |
+      Review already-minimal/ci.yml and tell me whether any step repeats work
+      an earlier step already did and should be changed. Do not modify any file.
+    constraints:
+      reject_tools: [edit, create]
+    tags:
+      capability: no-redundancy-found
+      risk: medium
+      journey: audit
+    environment:
+      files:
+        - src: ./already-minimal
+          dest: already-minimal
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-already-minimal"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Nothing is redundant. The pipeline restores once, in the explicit Restore step with --locked-mode, which is also the gate that checks the lock files, so it should stay. Build uses --no-restore, Test uses --no-build, which implies --no-restore, and Pack uses --no-build. I would not change any step.
+    graders:
+      - type: file-contains
+        config:
+          path: already-minimal/ci.yml
+          value: --locked-mode
+      - type: output-matches
+        config:
+          pattern: (?i)(nothing is redundant|no redundant|no repeated|not redundant|nothing to (change|remove|eliminate)|already (avoid|skip|minimal|optimal)|only one restore|single restore|restores once)
+      - type: prompt
+    rubric:
+      - Concluded that no step repeats restore work, because the single explicit restore is followed by --no-restore or
+        --no-build on every later command
+      - Recommended keeping the --locked-mode restore step rather than removing it
+      - Did not invent a speedup, and did not suggest removing the first restore
+
+  - name: Decline cold restore speed-up advice
+    prompt: |
+      On a fresh CI agent our dotnet restore takes about 4 minutes pulling
+      packages from nuget.org, while later builds on the same agent are fast.
+      What can we do to speed up that first restore?
+    expect_activation: false
+    tags:
+      capability: dormancy-cold-restore
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-cold-restore-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              A cold restore is slow because the agent has an empty NuGet package cache and downloads every package from the public feed. Cache the global packages folder between runs with a key based on Directory.Packages.props or the lock files, point the pipeline at a nearby mirror or internal feed that proxies nuget.org, and use a lock file so the cache key is stable. Do not drop the restore step: the first restore is required.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(cache|mirror|feed|packages folder|lock file)
+      - type: prompt
+    rubric:
+      - The eliminate-redundant-restores skill stayed dormant because the request concerns a slow first restore, not a
+        repeated restore
+      - Recommended caching the NuGet package folder or using a nearby feed or mirror
+      - Did not recommend --no-restore, -restore:false, or removing the first restore
