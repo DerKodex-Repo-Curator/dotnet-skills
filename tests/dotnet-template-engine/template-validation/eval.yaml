@@ -19,10 +19,11 @@ environment:
       fs.mkdirSync('.local-app-data/NuGet/Migrations',{recursive:true});
       fs.writeFileSync('.local-app-data/NuGet/Migrations/1','');"
 stimuli:
-  - name: Report independent errors across a template manifest
+  - name: Review a template manifest before use
     prompt: |
-      Review `.template.config/template.json` and tell me everything that must be
-      fixed before the template can be used. Do not edit the file.
+      Review `.template.config/template.json` and report whether anything must be
+      fixed before the template can be used. Give concrete corrections for any
+      findings, but do not edit the file.
     tags:
       capability: comprehensive-manifest-validation
       risk: high
@@ -90,11 +91,10 @@ stimuli:
       - The response distinguishes required errors from missing optional metadata
       - The verdict and totals agree with the findings table
 
-  - name: Confirm a correct template without changing it
+  - name: Review template release readiness without unnecessary changes
     prompt: |
-      Check `.template.config/template.json` for release readiness. It should
-      already be correct, so do not edit or reformat it unless validation finds a
-      real defect.
+      Check `.template.config/template.json` for release readiness. Do not edit
+      or reformat it unless validation finds a real defect.
     tags:
       capability: no-op-valid-template-review
       risk: medium
@@ -155,11 +155,11 @@ stimuli:
       - Required and important discoverability fields are verified without inventing defects
       - The manifest remains byte-for-byte unchanged
 
-  - name: Stop at malformed JSON and show the exact correction
+  - name: Diagnose a template that stopped loading
     prompt: |
       My custom template stopped loading after I edited
-      `.template.config/template.json`. Locate the syntax problem precisely and
-      show the smallest correction. Do not edit the file.
+      `.template.config/template.json`. Diagnose the problem precisely and show
+      the smallest correction. Do not edit the file.
     tags:
       capability: parse-gate-diagnostics
       risk: high
@@ -300,11 +300,11 @@ stimuli:
       - The reserved search alias is rejected while the non-conflicting alias is accepted
       - A concrete distinctive replacement is supplied for the conflicting alias
 
-  - name: Find incomplete parameter definitions
+  - name: Diagnose custom option definitions
     prompt: |
       The custom options from `.template.config/template.json` are not behaving
-      as expected. Validate every symbol and give exact fixes for incomplete
-      definitions. Do not edit the file.
+      as expected. Validate every symbol and give exact fixes for any defects.
+      Do not edit the file.
     tags:
       capability: symbol-completeness-validation
       risk: high
@@ -407,12 +407,12 @@ stimuli:
       - The host constraint's missing args is an error and the fix contains a supported hostname
       - Existing actionId and constraint type fields are not falsely reported as missing
 
-  - name: Detect parameter-prefix and source-condition hazards
+  - name: Review parameter names and source conditions
     prompt: |
       Review `.template.config/template.json` because option-dependent source
       filtering behaves inconsistently. Check parameter naming and every source
-      condition, explain each risk, and give concrete corrections. Do not edit the
-      file.
+      condition, report whether they are valid, and give concrete corrections for
+      any defects. Do not edit the file.
     tags:
       capability: expression-ambiguity-validation
       risk: high

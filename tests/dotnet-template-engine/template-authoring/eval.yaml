@@ -409,11 +409,11 @@ stimuli:
       - The generated layout preserves central package lookup and matching package versions
       - Project references remain versionless and the manifest supports replacement and discovery
 
-  - name: Leave a correct template unchanged
+  - name: Verify an existing template without unnecessary changes
     prompt: |
       Review `ready-template/`. Do not rewrite files for style; change something
-      only if installation or project-name replacement is broken. Report local
-      verification and leave a correct template unchanged.
+      only if installation or project-name replacement is broken. Report the
+      verification results and make only changes justified by an observed defect.
     tags:
       capability: idempotent-authoring-review
       risk: medium

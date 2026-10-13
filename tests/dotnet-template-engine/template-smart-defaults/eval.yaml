@@ -67,7 +67,7 @@ stimuli:
       expect_tools: [skill]
       reject_tools: [edit, create]
 
-  - name: Keep HTTPS for organizational authentication
+  - name: Complete related defaults for a SingleOrg web API
     prompt: |
       I chose `webapi` with SingleOrg authentication and left related values
       unset. Use evidence/template-help.txt, show preserved and inferred values,
@@ -114,7 +114,7 @@ stimuli:
       expect_tools: [skill]
       reject_tools: [edit, create]
 
-  - name: Preserve controllers without adding a minimal flag
+  - name: Complete related defaults for a controller-based web API
     prompt: |
       I chose a controller-based `webapi`. Complete any related defaults from
       evidence/template-help.txt, show which values came from me, and give the
@@ -351,11 +351,12 @@ stimuli:
       expect_tools: [skill]
       reject_tools: [edit, create]
 
-  - name: Surface an explicit incompatible combination
+  - name: Reconcile explicit SingleOrg and AOT choices
     prompt: |
       I explicitly selected `webapi`, SingleOrg authentication, and native AOT.
-      Use evidence/template-help.txt. Do not silently change any value: explain
-      conflicts, show provenance, and give safe alternatives. Do not create files.
+      Use evidence/template-help.txt to check whether these values can be used
+      together. Do not silently change any value: show provenance and give safe
+      alternatives if needed. Do not create files.
     tags:
       capability: handle-explicit-option-conflict
       risk: high

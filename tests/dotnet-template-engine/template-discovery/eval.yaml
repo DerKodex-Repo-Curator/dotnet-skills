@@ -255,7 +255,7 @@ stimuli:
       expect_tools: [skill]
       reject_tools: [edit, create]
 
-  - name: Inspect worker options without inventing Windows support
+  - name: Inspect worker framework and hosting options
     prompt: |
       From evidence/worker-help.txt, summarize the worker template's framework
       and AOT choices. I also need Windows Service hosting; tell me whether the
