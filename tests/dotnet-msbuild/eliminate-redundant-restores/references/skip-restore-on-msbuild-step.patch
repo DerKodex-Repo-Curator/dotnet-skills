@@ -1,5 +1,4 @@
 diff --git a/rsp-inherited/ci.yml b/rsp-inherited/ci.yml
-index 1ea5101..4f2d541 100644
 --- a/rsp-inherited/ci.yml
 +++ b/rsp-inherited/ci.yml
 @@ -1,7 +1,7 @@
@@ -9,5 +8,6 @@ index 1ea5101..4f2d541 100644
 -  - script: dotnet msbuild Contoso.slnx -t:Build -p:Configuration=Release
 +  - script: dotnet msbuild Contoso.slnx -t:Build -p:Configuration=Release -restore:false
      displayName: Build
-   - script: dotnet test Contoso.slnx -c Release --no-build
+-  - script: dotnet test Contoso.slnx -c Release --no-build
++  - script: dotnet test Contoso.slnx -c Release --no-build --no-restore
      displayName: Test

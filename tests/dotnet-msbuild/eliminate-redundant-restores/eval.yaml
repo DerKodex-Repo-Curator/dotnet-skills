@@ -33,15 +33,15 @@ stimuli:
           - step_id: 1
             source: agent
             message: |-
-              The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the second restore is redundant. dotnet msbuild does not accept --no-restore, so the fix is -restore:false on that one invocation. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it. The Test step already uses --no-build, which implies --no-restore.
+              The Build step restores again even though it is a plain msbuild invocation: Directory.Build.rsp contains -restore, and every MSBuild invocation under that directory inherits it. The explicit Restore step already covers the same solution and nothing changes packages between the steps, so the later restores are redundant. dotnet msbuild does not accept --no-restore, so the Build fix is -restore:false. Test uses --no-build, but that only suppresses its implicit restore; the rsp still enables one, so Test also needs an explicit --no-restore. I kept the explicit Restore step and left -restore in Directory.Build.rsp because local builds rely on it.
 
               | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
               |---|---|---|---|---|
               | Restore | Explicit | No | Keep | Restores Contoso.slnx first |
               | Build | Rsp | Yes | Add -restore:false | Same solution and restore inputs; no package changes |
-              | Test | No | Yes | Keep --no-build | Runs the solution's Release build without restoring |
+              | Test | Rsp | Yes | Keep --no-build; add --no-restore | Explicitly overrides the inherited restore while reusing the Release build |
 
-              Verdict: removed 1 of 2 restores, first restore kept
+              Verdict: removed 2 of 3 restores, first restore kept
     graders:
       - type: file-contains
         config:
@@ -56,10 +56,21 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('rsp-inherited/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
-              if (!steps.some(l => /^dotnet restore\b/.test(l))) throw new Error('the explicit restore step was removed');
-              if (!steps.some(l => /^dotnet test\b/.test(l))) throw new Error('the test step was removed');
-              const build = steps.find(l => /^dotnet (msbuild|build)\b/.test(l));
-              if (!build) throw new Error('the build step is missing');
+              const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
+              const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && solution(l));
+              const buildIndex = steps.findIndex(l => /^dotnet (msbuild|build)\b/.test(l) && solution(l));
+              const testIndex = steps.findIndex(l => /^dotnet test\b/.test(l) && solution(l));
+              if (restoreIndex < 0 || buildIndex < 0 || testIndex < 0 || restoreIndex > buildIndex || buildIndex > testIndex) {
+                throw new Error('Contoso.slnx must be restored, built, then tested in that order');
+              }
+              const build = steps[buildIndex];
+              if (![build, steps[testIndex]].every(l => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(l))) {
+                throw new Error('the solution build and test must keep the Release configuration');
+              }
+              if (!/--no-build/.test(steps[testIndex])) throw new Error('the solution test must keep --no-build');
+              if (!/--no-restore|[-/]restore:false/i.test(steps[testIndex])) {
+                throw new Error('the solution test still inherits the rsp restore despite --no-build');
+              }
               const off = /[-/]restore:false/i.test(build) || (/^dotnet build\b/.test(build) && /--no-restore/.test(build));
               if (!off) throw new Error('the build step still restores: ' + build);
               if (steps.some(l => /^dotnet msbuild\b/.test(l) && /--no-restore/.test(l))) {
@@ -69,6 +80,12 @@ stimuli:
       - type: output-matches
         config: &restore_report
           pattern: '(?im)^[ \t]*\|[^\r\n]*\bStep\b[^\r\n]*\|[^\r\n]*\bRestores today\b[^\r\n]*\|[^\r\n]*Covered by an earlier restore\?[^\r\n]*\|[^\r\n]*\bChange\b[^\r\n]*\|[^\r\n]*\bEvidence\b[^\r\n]*\|[ \t]*\r?\n[ \t]*\|(?:[ \t]*:?-+:?[ \t]*\|){5}[ \t]*\r?\n(?:[ \t]*\|(?:[^|\r\n]+\|){5}[ \t]*\r?\n)+[\s\S]*?^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*(?:removed \d+ of \d+ restores, first restore kept|no redundant restores)\.?[ \t]*$'
+      - type: output-not-matches
+        config: &multiple_verdicts
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:[^\r\n]*[\s\S]*?^[ \t]*(?:\*\*)?Verdict:'
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 2 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that the Build step restores again because Directory.Build.rsp contains -restore and applies to every
@@ -77,13 +94,15 @@ stimuli:
         dotnet msbuild or dotnet build --no-restore, and did not put --no-restore on a dotnet msbuild command
       - Kept the explicit Restore step and left the -restore line in Directory.Build.rsp so local builds keep working
       - Kept the same build and test coverage
+      - Also stopped the test step inheriting the rsp restore rather than relying on --no-build alone
 
   - name: Keep restore on a project outside the restored solution
     prompt: |
       uncovered-project/ci.yml pays for repeated package work. Add --no-restore
       to every dotnet command where it is safe, and leave the other commands
       alone so the pipeline keeps passing. You cannot run the pipeline from
-      here, so work from the repository files.
+      here, so work from the repository files. Only edit ci.yml; leave the
+      solution, project files, and source files unchanged.
     tags:
       capability: restore-coverage
       risk: high
@@ -124,10 +143,12 @@ stimuli:
               const steps = fs.readFileSync('uncovered-project/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
               if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
-              const solIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && /Contoso\.slnx\b/.test(l));
-              const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
-              const testIndex = steps.findIndex(l => /^dotnet test\b/.test(l) && /Contoso\.slnx\b/.test(l));
-              const pkIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && /Packager/.test(l));
+              const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
+              const packager = l => /(?:^|\s)(?:\.\/)?tools\/Packager\/Packager\.csproj(?:\s|$)/.test(l);
+              const solIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && solution(l));
+              const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && solution(l));
+              const testIndex = steps.findIndex(l => /^dotnet test\b/.test(l) && solution(l));
+              const pkIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && packager(l));
               if (solIndex < 0 || !/--no-restore/.test(steps[solIndex])) throw new Error('the solution build is missing or still restores');
               if (restoreIndex < 0 || restoreIndex > solIndex) throw new Error('the solution must be restored before its build');
               if (testIndex < 0 || testIndex < solIndex || !/--no-build/.test(steps[testIndex])) {
@@ -135,23 +156,70 @@ stimuli:
               }
               if (pkIndex < 0) throw new Error('the Packager build step is missing');
               if (/--no-restore/.test(steps[pkIndex])) {
-                const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Packager/.test(l));
-                const inSolution = /Packager/.test(fs.readFileSync('uncovered-project/Contoso.slnx', 'utf8'));
-                if (!inSolution && (restoredBefore < 0 || restoredBefore > pkIndex)) {
+                const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && packager(l));
+                if (restoredBefore < 0 || restoredBefore > pkIndex) {
                   throw new Error('Packager is outside the restored solution but is built with --no-restore');
                 }
               }
+              const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
+                (/^dotnet (build|test|publish|pack)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
+              if (restoring.length !== 2) throw new Error('the solution and Packager must each restore once');
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - |
+              const fs = require('fs');
+              const path = require('path');
+              const crypto = require('crypto');
+              const expected = JSON.parse(process.argv[1]);
+              const root = 'uncovered-project';
+              function collect(directory) {
+                return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+                  const file = path.join(directory, entry.name);
+                  if (entry.isDirectory()) return ['bin', 'obj', '.vs', 'TestResults'].includes(entry.name) ? [] : collect(file);
+                  if (!entry.isFile()) throw new Error('unexpected non-file fixture entry: ' + file);
+                  const relative = path.relative(root, file).split(path.sep).join('/');
+                  return relative === 'ci.yml' ? [] : [relative];
+                });
+              }
+              if (JSON.stringify(collect(root).sort()) !== JSON.stringify(Object.keys(expected).sort())) {
+                throw new Error('only ci.yml may change; a fixture file was added or removed');
+              }
+              for (const [file, hash] of Object.entries(expected)) {
+                const content = fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
+                if (crypto.createHash('sha256').update(content).digest('hex') !== hash) {
+                  throw new Error('only ci.yml may change: ' + file);
+                }
+              }
+            - >-
+              {"Contoso.slnx":"92fddd1b297d8ac86c30b1472949a2c5cd2c1f82ca21cc862e3a7990c76621c2",
+              "src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca",
+              "src/Contoso.Web/Contoso.Web.csproj":"525c5ca7da58041ee81c3c851a0261dde03fb3280a1a577f25d63d781af3960a",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"73e95deb7b9ab1677893740016c0ec02982309936cdc4c5cdd493144fc133d58",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419",
+              "tools/Packager/Packager.csproj":"ce8c03bcf734bbd93246b78ceaf6c4c36408f8d9424db37012faca236d7d28ca",
+              "tools/Packager/Program.cs":"f4760c4d9bb29d06770a13b3c325ed3dba1d4a7f59d68df184f7cd7d87762374"}
           expected_exit_code: 0
       - type: output-matches
         config:
           pattern: Packager
       - type: output-matches
         config: *restore_report
+      - type: output-not-matches
+        config: *multiple_verdicts
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Added --no-restore to the solution build, which the explicit restore covers
       - Recognized that tools/Packager is not part of the solution the explicit restore covers, and either left its build
-        restoring, restored it explicitly first, or added it to the solution
+        restoring or restored it explicitly first
+      - Changed only ci.yml, preserving the solution, project files, and source files
       - Did not claim the pipeline was verified, because it could not be run from here
 
   - name: Carry the runtime identifier into the single restore before publish
@@ -229,6 +297,11 @@ stimuli:
           expected_exit_code: 0
       - type: output-matches
         config: *restore_report
+      - type: output-not-matches
+        config: *multiple_verdicts
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 2 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Explained that the later restore happens because the earlier restore did not include the runtime identifier that
@@ -286,8 +359,8 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('generated-reference/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
-              const gen = steps.findIndex(l => /AddAnalyzer/.test(l));
-              if (gen < 0) throw new Error('the analyzer tool step was removed');
+              const gen = steps.findIndex(l => /^dotnet run\s+--project\s+(?:\.\/)?tools\/AddAnalyzer(?:\/AddAnalyzer\.csproj)?\s+--\s+(?:\.\/)?src\/Contoso\.Core\/Contoso\.Core\.csproj\s*$/.test(l));
+              if (gen < 0) throw new Error('the analyzer tool must still run against src/Contoso.Core/Contoso.Core.csproj');
               const build = steps.findIndex(l => /^dotnet build\b/.test(l) && /Contoso\.slnx\b/.test(l));
               const test = steps.findIndex(l => /^dotnet test\b/.test(l) && /Contoso\.slnx\b/.test(l));
               if (build < 0 || test < 0) throw new Error('the solution build and test steps must remain');
@@ -309,6 +382,11 @@ stimuli:
           expected_exit_code: 0
       - type: output-matches
         config: *restore_report
+      - type: output-not-matches
+        config: *multiple_verdicts
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that the tool edits package references after the first restore, so that restore is stale for the build
@@ -390,6 +468,11 @@ stimuli:
           expected_exit_code: 0
       - type: output-matches
         config: *restore_report
+      - type: output-not-matches
+        config: *multiple_verdicts
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 3 of 4 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that each dotnet test step repeats restore and build work that an earlier step already did
@@ -441,6 +524,11 @@ stimuli:
           pattern: (?i)(nothing is redundant|no redundant|no repeated|not redundant|nothing to (change|remove|eliminate)|already (avoid|skip|minimal|optimal)|only one restore|single restore|restores once)
       - type: output-matches
         config: *restore_report
+      - type: output-not-matches
+        config: *multiple_verdicts
+      - type: output-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*no redundant restores\.?[ \t]*$'
       - type: prompt
     rubric:
       - Concluded that no step repeats restore work, because the single explicit restore is followed by --no-restore or
@@ -472,6 +560,12 @@ stimuli:
       - type: output-matches
         config:
           pattern: (?i)(cache|mirror|feed|packages folder|lock file)
+      - type: output-matches
+        config:
+          pattern: '(?i)(?:\b(?:keep|retain|preserve)\b[^.!?;\n]*\b(?:first|initial|required)\s+restore\b|\b(?:first|initial)\s+restore\b[^.!?;\n]*\b(?:required|necessary|must remain)\b)'
+      - type: output-not-matches
+        config:
+          pattern: '(?i)(?:^|[.!?;,\n]|\b(?:but|however|instead)\b)[ \t]*(?!(?:(?!\b(?:but|however|instead)\b)[^.!?;,\n])*\b(?:do not|don.t|never|must not|should not|cannot|can.t|unsafe|would fail|will fail|will break|not recommended|not appropriate|not suitable|avoid using|avoid adding|avoid removing|avoid skipping)\b)(?:(?!\b(?:but|however|instead)\b)[^.!?;,\n])*(?:--no-restore|-restore:false|\b(?:skip|remove|drop|delete|omit|bypass|avoid)\b(?:(?!\b(?:but|however|instead)\b)[^.!?;,\n])*\b(?:first|initial|required|explicit|the)\s+(?:NuGet\s+)?restore\b)'
       - type: prompt
     rubric:
       - Recognized that the delay comes from downloading packages into an empty cache on the first restore, not from

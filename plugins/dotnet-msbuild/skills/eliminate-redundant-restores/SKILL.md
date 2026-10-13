@@ -1,6 +1,6 @@
 ---
 name: eliminate-redundant-restores
-description: "Remove repeated NuGet restores from multi-step .NET builds safely. USE FOR: build/test/publish steps that each restore, Directory.Build.rsp with -restore, where --no-restore or -restore:false is safe, NETSDK1004/NETSDK1047. DO NOT USE FOR: slow first restore, single builds, version or lock errors."
+description: "Remove repeated NuGet restores from multi-step .NET builds safely. USE FOR: build/test/publish steps that each restore, Directory.Build.rsp with -restore, where --no-restore or -restore:false is safe, NETSDK1004/NETSDK1047. DO NOT USE FOR: slow first restore, only one restore, version or lock errors."
 license: MIT
 ---
 
@@ -19,7 +19,7 @@ A no-op restore still evaluates every project and checks restore state, so each 
 ## When Not to Use
 
 - The first restore is slow (feed latency, missing package cache): that is caching, not redundancy
-- There is a single build invocation: nothing to deduplicate
+- There is only one restore across all invocations: nothing to deduplicate
 - Restore errors about versions, lock files or auditing: fix the restore itself
 - Unranked "why is my build slow": start with `build-perf-baseline`, then `build-perf-diagnostics`
 
@@ -44,12 +44,12 @@ Discover these in the working directory; do not ask the user for paths.
 | Invocation | Restores? |
 |---|---|
 | `dotnet build`, `run`, `test`, `publish`, `pack` | Yes, unless `--no-restore` |
-| `dotnet test`, `publish`, `pack` with `--no-build` | No: `--no-build` implies `--no-restore` |
+| `dotnet test`, `publish`, `pack` with `--no-build` | No implicit restore, but an rsp `-restore` can still enable restore; pass `--no-restore` explicitly to override it |
 | `dotnet msbuild`, `msbuild.exe`, CI MSBuild tasks | Only with `-restore` or `-t:Restore`, **or when `Directory.Build.rsp`/`MSBuild.rsp` contains `-restore`**: every invocation under that directory inherits it, even steps that look build-only |
 | `dotnet restore`, `nuget restore`, `msbuild -t:Restore` | Explicit restore |
 | CI build task with a "restore packages" option | Check its default |
 
-`dotnet build --no-restore` overrides an rsp `-restore`. `dotnet msbuild` and `msbuild.exe` do not; they need an explicit `-restore:false`.
+An explicit `--no-restore` overrides an rsp `-restore` for `dotnet build` and `dotnet test`. Do not rely on `--no-build` alone when an rsp enables restore. `dotnet msbuild` and `msbuild.exe` need an explicit `-restore:false`.
 
 ### Step 3: Decide per invocation
 
@@ -64,7 +64,7 @@ Keep the first restore. Skip a later one only when all three checks pass:
 ### Step 4: Apply the smallest change
 
 - One explicit restore carrying every restore input, then `--no-restore`, `-restore:false` or `--no-build` on later steps.
-- Several `dotnet test` steps over one solution: build once, then `dotnet test --no-build` on each. `--no-restore` alone still rebuilds.
+- Several `dotnet test` steps over one solution: build once, then `dotnet test --no-build` on each. Add `--no-restore` explicitly if an rsp enables restore. `--no-restore` alone still rebuilds.
 - Scope the change to CI and scripts. Leave `-restore` in `Directory.Build.rsp`, because developers rely on it; pass `-restore:false` per invocation instead.
 - Never remove the first restore. If it is a `--locked-mode` gate, keep it there.
 - Do not bundle static graph restore or package caching into this change.
