@@ -16,6 +16,60 @@ def digest(data):
     return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
+def rust_runtime_bytes(source):
+    """Exclude only the fixture's balanced, cfg-gated test module."""
+    text = source.decode("utf-8").replace("\r\n", "\n")
+    header = re.search(r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*]\s*mod\s+tests\s*\{", text)
+    assert header is not None, "Expected the existing inline test module"
+    start = header.start()
+    index = header.end()
+    depth = 1
+    while index < len(text):
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            assert end >= 0, "Unclosed inline test module"
+            index = end
+        elif text.startswith("/*", index):
+            nesting = 1
+            index += 2
+            while nesting and index < len(text):
+                if text.startswith("/*", index):
+                    nesting += 1
+                    index += 2
+                elif text.startswith("*/", index):
+                    nesting -= 1
+                    index += 2
+                else:
+                    index += 1
+            assert nesting == 0, "Unclosed Rust block comment"
+        else:
+            raw = re.match(r'(?:br|cr|r)(#{0,255})"', text[index:])
+            character = re.match(r"'(?:[^'\\\r\n]|\\(?:u\{[0-9a-fA-F_]+\}|x[0-9a-fA-F]{2}|.))'", text[index:])
+            if raw:
+                end = text.find('"' + raw[1], index + raw.end())
+                assert end >= 0, "Unclosed Rust raw string"
+                index = end + 1 + len(raw[1])
+            elif text[index] == '"':
+                index += 1
+                while index < len(text) and text[index] != '"':
+                    index += 2 if text[index] == "\\" else 1
+                assert index < len(text), "Unclosed Rust string"
+                index += 1
+            elif character:
+                index += character.end()
+            else:
+                if text[index] == "{":
+                    depth += 1
+                elif text[index] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return b"\0".join(part.encode("utf-8") for part in (
+                            text[:start], text[index + 1:],
+                        ))
+                index += 1
+    raise AssertionError("Unclosed inline test module")
+
+
 def check_files(root, expected, mutable, python_tests=False):
     ignored = {"__pycache__", "target", ".git"}
     pytest_outputs = {
@@ -71,7 +125,7 @@ def main():
     parser.add_argument("case", choices=["repair", "regression", "new-regression", "rust", "go"])
     parser.add_argument("--root", type=Path, default=Path("work"))
     parser.add_argument("--file", action="append", required=True)
-    parser.add_argument("--runtime-prefix")
+    parser.add_argument("--runtime-sha256")
     args = parser.parse_args()
     expected = dict(value.split("=", 1) for value in args.file)
     mutable = {"test_total.py"} if args.case == "repair" else (
@@ -106,8 +160,7 @@ def main():
             )
     elif args.case == "rust":
         source = (args.root / "src" / "lib.rs").read_bytes()
-        prefix, marker, _ = source.partition(b"#[cfg(test)]")
-        assert marker and digest(prefix) == args.runtime_prefix, "Runtime Rust region changed"
+        assert digest(rust_runtime_bytes(source)) == args.runtime_sha256, "Runtime Rust region changed"
         output = command(["cargo", "test", "--offline"], args.root)
         assert re.search(r"test tests::free_shipping_at_threshold\s+\.\.\. ok", output)
         count = re.search(r"test result: ok\.\s+(\d+) passed; 0 failed", output)
@@ -116,6 +169,9 @@ def main():
             args.root, "src/lib.rs", "subtotal >= 50", "subtotal > 50",
             ["cargo", "test", "--offline"], 101, r"test result: FAILED",
         )
+        assert digest(rust_runtime_bytes(
+            (args.root / "src" / "lib.rs").read_bytes()
+        )) == args.runtime_sha256, "Runtime Rust region changed"
     else:
         test_sources = list(args.root.glob("*_test.go"))
         assert test_sources, "No Go test file"

@@ -1,6 +1,8 @@
 """Replay selected migration goldens through their executable eval graders."""
 
 import argparse
+import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -28,6 +30,7 @@ def materialize(spec, stimulus, workspace):
         subprocess.run(
             ["git", "apply", "--whitespace=nowarn", "-"], cwd=workspace,
             input=patch.read_bytes().replace(b"\r\n", b"\n"), check=True,
+            env=dict(os.environ, GIT_CEILING_DIRECTORIES=str(workspace.parent.resolve())),
         )
 
 
@@ -59,6 +62,24 @@ def run_graders(stimulus, workspace, response=None):
             else:
                 matched = bool(paths)
             assert matched == ("not" not in kind), (kind, config)
+            continue
+        if kind == "program":
+            with tempfile.TemporaryDirectory(prefix="grader-input-", dir=workspace) as directory:
+                input_path = Path(directory) / "input.json"
+                input_path.write_text(json.dumps({
+                    "trajectory": {"workDir": str(workspace), "output": response},
+                }), encoding="utf-8")
+                result = subprocess.run(
+                    [config["program"], *config.get("args", [])],
+                    cwd=workspace, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=360,
+                    env=dict(os.environ, EVALUATE_WORKSPACE=str(workspace),
+                             EVALUATE_GRADER_INPUT=str(input_path)),
+                )
+                assert result.returncode == 0, (result.stdout, result.stderr)
+                assert result.stdout.strip(), "Program grader produced no verdict"
+                verdict = json.loads(result.stdout)
+                assert verdict["passed"], verdict
             continue
         assert kind == "run-command", f"Unsupported deterministic grader: {kind}"
         result = subprocess.run(

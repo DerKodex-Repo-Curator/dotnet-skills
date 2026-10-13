@@ -9,7 +9,10 @@ stimuli:
     prompt: |
       Convert this xUnit v2 project to MSTest v4 while keeping VSTest and net8.0.
       Preserve the shared resource's lifetime and the collection's execution
-      semantics. Run the migrated tests and explain any scheduling trade-off.
+      semantics using framework-managed scheduling, not custom locks or a new
+      scheduler. Keep both existing test classes and cases. Run the migrated
+      tests and explain any scheduling or fixture-scope trade-off, including
+      what the chosen policy would mean for unrelated classes.
     environment:
       files:
         - src: fixtures/handle-icollectionfixture-explicitly-do-not-silently-widen-scope/TestProject.csproj
@@ -22,22 +25,70 @@ stimuli:
           dest: global.json
         - src: ../graders/migration_evidence.py
           dest: .eval/migration_evidence.py
+        - src: ../graders/CollectionSchedulingContract.cs
+          dest: .eval/CollectionSchedulingContract.txt
+        - src: ../graders/collection_report.py
+          dest: .eval/collection_report.py
     golden_patch:
       path: goldens/default-collection.patch
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: mstest-default-collection-scheduling
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              Migrated both members to MSTest v4, preserving net8.0 and VSTest.
+              CollectionTests.cs uses one lazy shared resource, with ClassCleanup
+              tracking both collection members and disposing after the last member,
+              and DoNotParallelize on FirstMember and SecondMember.
+              `dotnet test TestProject.csproj --logger trx` passed both FirstCase
+              and SecondCase (2 passed, 0 failed, 0 skipped). Lifecycle evidence
+              records one created instance and one disposal after both cases.
+
+              This is conservative scheduling, not exact collection equivalence:
+              unrelated classes cannot overlap with these members. Resource
+              lifetime remains bounded to the collection members rather than
+              assembly initialization/cleanup.
     graders:
-      - type: run-command
+      - type: program
         config:
-          command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest
-            --mstest-major 4 --lifecycle --expect FirstCase=Passed --expect SecondCase=Passed
-            --unchanged-file bbadd2d5430f817f830d9a34899bc1bc9d99aae2dcd20815a4d1615b28c2f7b5:LifecycleProbe.cs
-          expected_exit_code: 0
+          program: python
+          args:
+            - -c
+            - >-
+              import hashlib,pathlib;
+              p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='d457ba6dfd7054c540d277f3ad0f9334fe157765809c47ab09de90eaaf3480c6','Report verifier changed';
+              exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
+      - type: output-matches
+        config:
+          pattern: '(?is)(?:conservative|coarser|broader|assembly-wide|whole assembly).{0,250}(?:serial|parallel|overlap|scope)|(?:serial|parallel|overlap|scope).{0,250}(?:conservative|coarser|broader|assembly-wide|whole assembly)|(?:serializ\w*|parallel\w*).{0,100}unrelated|unrelated.{0,100}(?:serializ\w*|parallel\w*)'
+      - type: output-matches
+        config:
+          pattern: '(?i)unrelated|other (?:test )?classes|other collections'
       - type: prompt
+        config:
+          evidence: [trajectory, diff]
+          prompt: >-
+            Judge the actual migrated diff and the explanation, not exact
+            attribute spelling. MSTest DoNotParallelize tests run serially in
+            a deferred phase and cannot overlap other tests in that assembly;
+            this is conservative serialization, not a failure to serialize.
+            Serial assembly policy also suffices for this two-member fixture.
+            A supported common exclusive ResourceLock can preserve narrower
+            scheduling. Require a collection-only shared helper whose lifetime
+            ends after the last member, not assembly initialization or cleanup;
+            disclosure does not excuse widening fixture lifetime. Require accurate
+            disclosure of the scheduling scope and its effect on unrelated
+            classes; do not require custom locks.
     rubric:
-      - Both collection members still serialize even though the source has no DisableParallelization flag.
-      - The two members share one resource instance, created before use and disposed exactly once after the last use.
-      - Any conservative scheduling or wider lifetime is explicitly disclosed rather than claimed as exact equivalence.
+      - Both collection members serialize even though the source has no DisableParallelization flag.
+      - The two members share one collection-scoped resource created before use and disposed exactly once when the last member completes, without assembly-wide initialization or cleanup; both original cases execute.
+      - Explains the chosen framework scheduling and resource lifetime, including its effect on unrelated classes, without claiming conservative serialization is exact collection-level concurrency parity.
 
   - name: Migrate basic xUnit v2 project to MSTest v4 preserving VSTest
     tags: {capability: xunit-v2-migration, risk: runner-change, journey: migrate-vstest-project}

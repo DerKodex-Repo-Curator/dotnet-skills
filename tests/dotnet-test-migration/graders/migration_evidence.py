@@ -1,6 +1,7 @@
 """Fixture-scoped migration evidence, not a general-purpose test-result tool."""
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -67,12 +68,40 @@ def execute(command, root, evidence, name, environment=None, expected_exit=0):
     return result
 
 
-def run(args):
-    root = Path.cwd()
+def verify_mstest_packages(assets, project, major=None, version=None):
+    resolved = {}
+    for package in ("MSTest.TestFramework", "MSTest.TestAdapter"):
+        matches = [key.split("/", 1)[1] for key in assets if key.startswith(package + "/")]
+        assert len(matches) == 1, (str(project), package, matches)
+        resolved[package] = matches[0]
+        if major:
+            assert matches[0].split(".")[0] == major, (str(project), package, matches)
+        if version:
+            assert matches[0] == version, (str(project), package, matches)
+    assert len(set(resolved.values())) == 1, (str(project), resolved)
+
+
+def verify_runner(effective, native, runner):
+    assert effective["TargetFramework"] == "net8.0", effective
+    bridge = effective["TestingPlatformDotnetTestSupport"].lower() == "true"
+    mtp = any(effective[name].lower() == "true" for name in (
+        "EnableMSTestRunner", "UseMicrosoftTestingPlatformRunner",
+        "IsTestingPlatformApplication",
+    ))
+    assert native == (runner == "native"), effective
+    if runner == "vstest":
+        assert not bridge and not mtp, effective
+    else:
+        assert mtp and effective["OutputType"] == "Exe", effective
+        assert bridge == (runner == "bridge"), effective
+
+
+def run(args, root=None):
+    root = Path.cwd() if root is None else root
     preserved = {}
     for item in args.unchanged_file:
         expected, filename = item.split(":", 1)
-        path = Path(filename)
+        path = root / filename
         assert not path.is_symlink() and path.is_file(), filename
         actual = hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
         assert actual == expected, f"Preserved fixture changed: {filename}"
@@ -81,7 +110,7 @@ def run(args):
     artifacts.mkdir(parents=True, exist_ok=True)
     evidence = Path(tempfile.mkdtemp(prefix="migration-", dir=artifacts))
     project = Path(args.project)
-    assert project.is_file(), project
+    assert (root / project).is_file(), project
     assert args.expect or args.allow_empty, "An empty run needs explicit authorization"
     execute(["dotnet", "restore", str(project)], root, evidence, "restore")
     properties = (
@@ -94,21 +123,10 @@ def run(args):
         root, evidence, "properties",
     )
     effective = json.loads(evaluation.stdout)["Properties"]
-    assert effective["TargetFramework"] == "net8.0", effective
     native = json.loads((root / "global.json").read_text(encoding="utf-8")).get(
         "test", {}
     ).get("runner") == "Microsoft.Testing.Platform"
-    bridge = effective["TestingPlatformDotnetTestSupport"].lower() == "true"
-    mtp = any(effective[name].lower() == "true" for name in (
-        "EnableMSTestRunner", "UseMicrosoftTestingPlatformRunner",
-        "IsTestingPlatformApplication",
-    ))
-    assert native == (args.runner == "native"), effective
-    if args.runner == "vstest":
-        assert not bridge and not mtp, effective
-    else:
-        assert mtp and effective["OutputType"] == "Exe", effective
-        assert bridge == (args.runner == "bridge"), effective
+    verify_runner(effective, native, args.runner)
     production = {}
     for index, filename in enumerate(args.production_project):
         values = json.loads(execute(
@@ -121,18 +139,23 @@ def run(args):
             assert values[name].lower() != "true", (filename, values)
         production[filename] = values
 
-    assets = json.loads(
-        (root / project.parent / "obj" / "project.assets.json").read_text(encoding="utf-8")
-    )["libraries"]
-    if args.mstest_major:
-        frameworks = [
-            key for key in assets if key.startswith("MSTest.TestFramework/")
-        ]
-        assert len(frameworks) == 1, frameworks
-        assert frameworks[0].split("/")[1].split(".")[0] == args.mstest_major, frameworks
-    if args.mstest_version:
-        assert "MSTest.TestFramework/" + args.mstest_version in assets, assets
-        assert "MSTest.TestAdapter/" + args.mstest_version in assets, assets
+    package_projects = {}
+    test_project_properties = {str(project): effective}
+    for index, filename in enumerate(dict.fromkeys([str(project), *args.package_project])):
+        if index:
+            execute(["dotnet", "restore", filename], root, evidence, f"restore-package-{index}")
+            values = json.loads(execute(
+                ["dotnet", "msbuild", filename, "-getProperty:" + properties],
+                root, evidence, f"test-properties-{index}",
+            ).stdout)["Properties"]
+            verify_runner(values, native, args.runner)
+            test_project_properties[filename] = values
+        assets = json.loads(
+            (root / Path(filename).parent / "obj" / "project.assets.json").read_text(encoding="utf-8")
+        )["libraries"]
+        if args.mstest_major or args.mstest_version:
+            verify_mstest_packages(assets, filename, args.mstest_major, args.mstest_version)
+        package_projects[filename] = sorted(assets)
     target = args.solution or str(project)
     if args.runner == "vstest":
         command = [
@@ -192,7 +215,9 @@ def run(args):
         "runner": args.runner, "project": str(project), "command": command,
         "exit_code": result.returncode, "properties": effective,
         "production_properties": production,
-        "packages": sorted(assets), "cases": cases,
+        "test_project_properties": test_project_properties,
+        "packages": package_projects[str(project)], "package_projects": package_projects,
+        "cases": cases,
         "preserved_files": preserved,
         "reports": {str(report): sha256(report) for report in reports},
     }
@@ -200,6 +225,25 @@ def run(args):
         json.dumps(summary, indent=2), encoding="utf-8"
     )
     print(json.dumps(summary))
+    return summary
+
+
+def run_checkpoints(args):
+    root = Path.cwd()
+    checkpoints = (
+        ("v3-vstest", root / "checkpoints" / "v3", "vstest", "3"),
+        ("v4-vstest", root / "checkpoints" / "v4", "vstest", "4"),
+        ("v4-native", root, "native", "4"),
+    )
+    evidence = {}
+    for name, directory, runner, major in checkpoints:
+        assert directory.is_dir(), f"Missing replayable migration checkpoint: {name}"
+        stage = copy.copy(args)
+        stage.runner = runner
+        stage.mstest_major = major
+        stage.mstest_version = None
+        evidence[name] = run(stage, directory)
+    print(json.dumps({"verified_checkpoints": evidence}))
 
 
 def main():
@@ -208,7 +252,7 @@ def main():
     check = commands.add_parser("preserve")
     check.add_argument("--root", required=True)
     check.add_argument("--file", action="append", default=[], required=True)
-    test = commands.add_parser("run")
+    test = commands.add_parser("run", aliases=["stages"])
     test.add_argument("--project", required=True)
     test.add_argument("--solution")
     test.add_argument("--report-count", type=int, default=1)
@@ -218,6 +262,7 @@ def main():
     test.add_argument("--mstest-major")
     test.add_argument("--mstest-version")
     test.add_argument("--production-project", action="append", default=[])
+    test.add_argument("--package-project", action="append", default=[])
     test.add_argument("--lifecycle", action="store_true")
     test.add_argument("--allow-empty", action="store_true")
     test.add_argument("--exit-code", type=int, default=0)
@@ -231,6 +276,8 @@ def main():
             )
         })
         print("PRESERVED: complete file set and bytes")
+    elif args.operation == "stages":
+        run_checkpoints(args)
     else:
         run(args)
 

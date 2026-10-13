@@ -51,14 +51,22 @@ EXECUTION_TOOLS = {
     "terminal", "create_agent", "create_session", "write_agent", "send_session_message",
     "author_factory", "run_factory", "apply_patch", "edit", "create",
 }
+SHELL_TOOLS = {"bash", "powershell", "shell", "run_in_terminal", "run_command", "terminal"}
 
 
 def policy_evidence(events):
     denials = []
+    shell_denials = []
     retries = []
+    starts = {}
     denied = False
     for event in events:
         data = event.get("data", {})
+        if event["type"] == "tool.execution_start":
+            identity = data.get("toolCallId")
+            if identity:
+                assert identity not in starts, "Duplicate tool-call identity"
+                starts[identity] = data.get("toolName", "").split(".")[-1].lower()
         error = data.get("error") or {}
         explicit_denial = (
             isinstance(error, dict) and error.get("code") == "denied"
@@ -72,12 +80,19 @@ def policy_evidence(events):
             explicit_denial or failed_with_policy_message
         ):
             denied = True
-            denials.append(data.get("toolCallId"))
+            identity = data.get("toolCallId")
+            denials.append(identity)
+            if starts.get(identity) in SHELL_TOOLS:
+                shell_denials.append({"tool": starts[identity], "tool_call_id": identity})
         if denied and event["type"] == "tool.execution_start":
             name = data.get("toolName", "").split(".")[-1].lower()
             if name in EXECUTION_TOOLS or "delegate" in name:
                 retries.append({"tool": name, "tool_call_id": data.get("toolCallId")})
-    return {"policy_denials": denials, "execution_after_denial": retries}
+    return {
+        "policy_denials": denials,
+        "shell_denials": shell_denials,
+        "execution_after_denial": retries,
+    }
 
 
 def tree(root):
@@ -219,7 +234,7 @@ def run(args):
         result.update(policy_evidence(events))
         assert not result["execution_after_denial"], "Execution/delegation retried after explicit denial"
         if args.case == "denied-run":
-            assert result["policy_denials"], "Intentional denial path was not exercised"
+            assert result["shell_denials"], "Configured shell-denial path was not exercised"
             result["restraint_only"] = True
         else:
             assert not result["policy_denials"], "Authorized execution was blocked by host policy; not certified"

@@ -186,7 +186,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3e5e83a1e07b15fb974eb0ccc5b92ed8f5b9c8e2df8bb6b46b75935036cb4ded','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
             --file 5dedff259cd3951d7944eb07f4a70ea0152d7e051e8d2a4def183426adc4059d:OrderTests.csproj
             --file f2660905616f9ef20ae1f6f56b334c01d17cc1d4bc1d23cd33ff5d958670f43e:OrderServiceTests.cs
           expected_exit_code: 0
@@ -201,9 +201,13 @@ stimuli:
     tags: {capability: composed-migration-delivery, risk: green-build-with-missing-cases, journey: deliver-multi-step-migration}
     prompt: |
       Upgrade OrderTests from MSTest 2.2.10 to MSTest 4 and switch it to the
-      native .NET 10 Microsoft.Testing.Platform runner. Apply the migration
-      in safe stages, validating between stages, and finish by running the
-      tests with a TRX report. Preserve all behavior and parameterized cases.
+      native .NET 10 Microsoft.Testing.Platform runner without changing net8.0.
+      Deliver self-contained replayable checkpoints under checkpoints/v3
+      (MSTest v3 on VSTest) and checkpoints/v4 (MSTest v4 on VSTest), each
+      containing its own global.json and OrderTests project and test sources.
+      Build and run each checkpoint, then leave the final native-MTP project
+      in OrderTests and run it with a TRX report. Preserve all behavior and
+      parameterized cases in all three outputs.
     environment:
       files:
         - src: fixtures/mstest-v2-vstest
@@ -224,7 +228,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project OrderTests/OrderTests.csproj
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3e5e83a1e07b15fb974eb0ccc5b92ed8f5b9c8e2df8bb6b46b75935036cb4ded','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" stages --project OrderTests/OrderTests.csproj
             --runner native --mstest-major 4 --expect CreateOrder_ValidInput_ReturnsOrder=Passed
             --expect invalid-zero=Passed --expect invalid-negative=Passed
           expected_exit_code: 0
@@ -232,8 +236,8 @@ stimuli:
       - type: prompt
     rubric:
       - Completes the requested framework and runner migration rather than returning a plan or stopping after a package update.
-      - Validates the intermediate stages and records actual execution, not inferred build or test success.
-      - All original test behaviors and both parameterized rows remain, with a fresh parseable native-MTP TRX.
+      - Delivers independently replayable v3/VSTest and v4/VSTest checkpoints, not only a final v4/native workspace.
+      - Every checkpoint and the final output build and execute all original test behaviors and both parameterized rows, with fresh parseable TRX reports.
 
   - name: Decline request to write new tests
     tags: {capability: generation-boundary, risk: unrelated-migration, journey: redirect-generation}

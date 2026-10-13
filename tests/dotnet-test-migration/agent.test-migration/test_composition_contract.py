@@ -37,14 +37,74 @@ class PermissionContractTests(unittest.TestCase):
         self.assertEqual([], result["execution_after_denial"])
 
     def test_native_cli_denial_code_is_authoritative(self):
-        result = composition.policy_evidence([{
+        result = composition.policy_evidence([start("powershell", "native"), {
             "type": "tool.execution_complete",
             "data": {"toolCallId": "native", "success": False,
                      "error": {"code": "denied",
                                "message": "Permission to run this tool was denied due to rules"}},
         }, start("task", "retry")])
         self.assertEqual(["native"], result["policy_denials"])
+        self.assertEqual([{"tool": "powershell", "tool_call_id": "native"}],
+                         result["shell_denials"])
         self.assertEqual(1, len(result["execution_after_denial"]))
+
+    def test_unrelated_or_uncorrelated_denial_cannot_certify_shell_path(self):
+        for tool in ("view", "skill", "task", None):
+            with self.subTest(tool=tool):
+                events = [] if tool is None else [start(tool, "denied")]
+                result = composition.policy_evidence(
+                    events + [complete("Permission was denied")]
+                )
+                self.assertEqual(["denied"], result["policy_denials"])
+                self.assertEqual([], result["shell_denials"])
+
+    def test_shell_denial_requires_matching_start_identity(self):
+        result = composition.policy_evidence([
+            start("powershell", "authorized-shell"), start("view", "denied"),
+            complete("Permission was denied"),
+        ])
+        self.assertEqual([], result["shell_denials"])
+
+    def test_each_supported_shell_alias_is_correlated(self):
+        for tool in composition.SHELL_TOOLS:
+            with self.subTest(tool=tool):
+                result = composition.policy_evidence([
+                    start("functions." + tool, "denied"),
+                    complete("Permission was denied"),
+                ])
+                self.assertEqual([{"tool": tool, "tool_call_id": "denied"}],
+                                 result["shell_denials"])
+
+    def test_later_shell_start_does_not_certify_earlier_denial(self):
+        result = composition.policy_evidence([
+            complete("Permission was denied"), start("powershell", "denied"),
+        ])
+        self.assertEqual([], result["shell_denials"])
+        self.assertEqual([{"tool": "powershell", "tool_call_id": "denied"}],
+                         result["execution_after_denial"])
+
+    def test_duplicate_start_identity_is_rejected(self):
+        with self.assertRaisesRegex(AssertionError, "Duplicate tool-call identity"):
+            composition.policy_evidence([
+                start("view", "denied"), start("powershell", "denied"),
+                complete("Permission was denied"),
+            ])
+
+    def test_shell_telemetry_denial_requires_shell_start(self):
+        for tool in ("powershell", "view"):
+            with self.subTest(tool=tool):
+                result = composition.policy_evidence([start(tool, "denied"), {
+                    "type": "tool.execution_complete",
+                    "data": {"toolCallId": "denied", "success": False,
+                             "toolTelemetry": {"properties": {
+                                 "shell_error_category": "permission_denied",
+                             }}},
+                }])
+                self.assertEqual(["denied"], result["policy_denials"])
+                self.assertEqual(
+                    [{"tool": tool, "tool_call_id": "denied"}] if tool == "powershell" else [],
+                    result["shell_denials"],
+                )
 
     def test_reading_policy_guidance_is_not_a_denial(self):
         result = composition.policy_evidence([{

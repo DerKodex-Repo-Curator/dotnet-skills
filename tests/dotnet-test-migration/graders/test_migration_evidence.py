@@ -12,6 +12,15 @@ SPEC.loader.exec_module(evidence)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_framework_and_adapter_are_checked_for_each_project(self):
+        assets = {"MSTest.TestFramework/4.4.1": {}, "MSTest.TestAdapter/4.4.1": {}}
+        evidence.verify_mstest_packages(assets, "Beta.Tests.csproj", "4", "4.4.1")
+        for package in ("MSTest.TestFramework", "MSTest.TestAdapter"):
+            changed = dict(assets)
+            changed[package + "/4.5.1"] = changed.pop(package + "/4.4.1")
+            with self.subTest(package=package), self.assertRaises(AssertionError):
+                evidence.verify_mstest_packages(changed, "Beta.Tests.csproj", "4", "4.4.1")
+
     def test_equal_totals_do_not_hide_changed_case_set(self):
         with self.assertRaises(AssertionError):
             evidence.verify_cases(

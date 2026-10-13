@@ -44,7 +44,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='a403f7e5d43556396eb083c4836522c781f1eded75946363c2d1f54c750e933d','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" repair
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='263b8c9cc726655951d34aa914ab2c81a72e5f28b670f8a8e6fb1acb75378399','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" repair
             --file amounts.py=3251dbf18617cd67c47707cb9bd1611dbac212ff0ee9814a75b8ce1f34b85aad
             --file test_total.py=70d913860bf0a07524c7d101d144b293a036eb92b55f3db3e2533ba2f4e69a6c
             --file unrelated.txt=66c24b2a4601b9533524546566bcbab0f7b51afdf1a56f9742e82e409f54dcae
@@ -86,7 +86,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='a403f7e5d43556396eb083c4836522c781f1eded75946363c2d1f54c750e933d','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" regression
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='263b8c9cc726655951d34aa914ab2c81a72e5f28b670f8a8e6fb1acb75378399','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" regression
             --file limit.py=9e8adcd45da1f45c2c3ce1d8fab533ea9f2d950eb7ee191cd15e8de6cb89d1b3
             --file test_limit.py=4fd2f2ac45151b3b58e952c912c7b357ab312801f6fc20c300abdf0e959a0685
           expected_exit_code: 0
@@ -133,7 +133,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='a403f7e5d43556396eb083c4836522c781f1eded75946363c2d1f54c750e933d','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" new-regression
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='263b8c9cc726655951d34aa914ab2c81a72e5f28b670f8a8e6fb1acb75378399','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" new-regression
             --file limit.py=9e8adcd45da1f45c2c3ce1d8fab533ea9f2d950eb7ee191cd15e8de6cb89d1b3
             --file test_existing.py=a3fd3149c0e0bbd3e97332a5e8c5ea1a4c44f48742cbacaeeb079c448a1ce72b
           expected_exit_code: 0
@@ -164,10 +164,10 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='a403f7e5d43556396eb083c4836522c781f1eded75946363c2d1f54c750e933d','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" rust
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='263b8c9cc726655951d34aa914ab2c81a72e5f28b670f8a8e6fb1acb75378399','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" rust
             --file Cargo.toml=19d72898ca89ad2801b322e979815ff165c43bbce653513049f4f1b064575375
             --file src/lib.rs=0f1fbe0e1d30fc10107863526042f3cc0065a4ed9301192bf0289450099a8d2f
-            --runtime-prefix 1ca6bc72e95f49f17c333775d746799d2530fae8c97bd277461122360e60a15a
+            --runtime-sha256 9ed3cd4127992a8c0f0562807f143108f8cc3e35a1f4580a63b92985b3a6d343
           expected_exit_code: 0
           timeout: 3m
       - type: prompt
@@ -195,7 +195,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='a403f7e5d43556396eb083c4836522c781f1eded75946363c2d1f54c750e933d','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" go
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/operation_contract.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='263b8c9cc726655951d34aa914ab2c81a72e5f28b670f8a8e6fb1acb75378399','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" go
             --file client.go=d8944b09cbf0dafaf2b4dbaae04b1de3cd3503b0fee59f6dea05cb92a9e0975a
             --file go.mod=24ec381a2da550fff2e2a9e9ea7926acd70bd8a37aa99c438d7071b3a0913801
           expected_exit_code: 0

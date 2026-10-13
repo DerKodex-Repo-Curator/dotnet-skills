@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 
@@ -46,12 +47,52 @@ class ReplayTests(unittest.TestCase):
             "Expected 2 fresh reports",
         )
 
+    def test_secondary_project_cannot_change_package_versions(self):
+        self.broken_golden(
+            "migrate-vstest-to-mtp",
+            "Deliver native MTP migration with fresh reports from both projects",
+            "Beta.Tests/Beta.Tests.csproj",
+            'Include="MSTest.TestFramework" Version="4.4.1"',
+            'Include="MSTest.TestFramework" Version="4.5.1"',
+            "Beta.Tests.*MSTest.TestFramework",
+        )
+
+    def test_secondary_project_cannot_stay_on_vstest_in_bridge_solution(self):
+        self.broken_golden(
+            "migrate-vstest-to-mtp",
+            "Keep the explicit SDK 10 compatibility bridge while enabling MTP",
+            "Beta.Tests/Beta.Tests.csproj",
+            '<Project Sdk="Microsoft.NET.Sdk">',
+            '<Project Sdk="Microsoft.NET.Sdk">\n<PropertyGroup>'
+            '<EnableMSTestRunner>false</EnableMSTestRunner>'
+            '<TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>'
+            '</PropertyGroup>',
+            "EnableMSTestRunner",
+        )
+
+    def test_platform_migration_cannot_weaken_test_assertions(self):
+        for name in (
+            "Deliver native MTP migration with fresh reports from both projects",
+            "Keep the explicit SDK 10 compatibility bridge while enabling MTP",
+        ):
+            for filename, before, after in (
+                ("Alpha.Tests/AdditionTests.cs",
+                 "Assert.AreEqual(expected, Arithmetic.Add(left, right))",
+                 "Assert.AreEqual(expected, expected)"),
+                ("Beta.Tests/BoundaryTests.cs",
+                 "Assert.AreEqual(0, Arithmetic.Add(0, 0))",
+                 "Assert.IsTrue(true)"),
+            ):
+                with self.subTest(case=name, file=filename):
+                    self.broken_golden("migrate-vstest-to-mtp", name, filename,
+                                       before, after, "Preserved fixture changed")
+
     def test_shared_fixture_must_be_disposed(self):
         self.broken_golden(
             "migrate-xunit-to-mstest",
             "Preserve an ordinary shared collection without a disable-parallelization flag",
-            "CollectionTests.cs", "public static void Cleanup() => Resource.Dispose();",
-            "public static void Cleanup() { }", "disposed",
+            "CollectionTests.cs", "            resource.Value.Dispose();",
+            "            _ = resource.Value;", "disposed",
         )
 
     def test_central_runner_properties_cannot_pollute_production(self):
@@ -71,6 +112,43 @@ class ReplayTests(unittest.TestCase):
             '    [DataRow(-1, DisplayName = "invalid-negative")]\n', "",
             "invalid-negative",
         )
+
+    def test_final_only_workspace_cannot_claim_validated_checkpoints(self):
+        spec = ROOT / "agent.test-migration" / "eval.yaml"
+        stimulus = next(case for case in yaml.safe_load(
+            spec.read_text(encoding="utf-8")
+        )["stimuli"] if case["name"] == "Deliver staged MSTest v2 to v4 and native MTP migration")
+        with tempfile.TemporaryDirectory(prefix="missing-migration-checkpoint-") as temporary:
+            workspace = Path(temporary)
+            materialize(spec, stimulus, workspace)
+            shutil.rmtree(workspace / "checkpoints")
+            with self.assertRaisesRegex(AssertionError, "Missing replayable migration checkpoint"):
+                run_graders(stimulus, workspace)
+
+    def test_each_intermediate_checkpoint_must_preserve_parameterized_cases(self):
+        for directory in ("v3", "v4"):
+            with self.subTest(stage=directory):
+                self.broken_golden(
+                    "agent.test-migration",
+                    "Deliver staged MSTest v2 to v4 and native MTP migration",
+                    f"checkpoints/{directory}/OrderTests/OrderServiceTests.cs",
+                    '    [DataRow(-1, DisplayName = "invalid-negative")]\n', "",
+                    "invalid-negative",
+                )
+
+    def test_v3_checkpoint_cannot_be_a_copy_of_final_native_output(self):
+        spec = ROOT / "agent.test-migration" / "eval.yaml"
+        stimulus = next(case for case in yaml.safe_load(
+            spec.read_text(encoding="utf-8")
+        )["stimuli"] if case["name"] == "Deliver staged MSTest v2 to v4 and native MTP migration")
+        with tempfile.TemporaryDirectory(prefix="wrong-migration-checkpoint-") as temporary:
+            workspace = Path(temporary)
+            materialize(spec, stimulus, workspace)
+            target = workspace / "checkpoints" / "v3"
+            shutil.copytree(workspace / "OrderTests", target / "OrderTests", dirs_exist_ok=True)
+            shutil.copyfile(workspace / "global.json", target / "global.json")
+            with self.assertRaises(AssertionError):
+                run_graders(stimulus, workspace)
 
     def test_plan_cannot_edit_tests_while_retaining_old_package_string(self):
         self.broken_golden(
