@@ -1,6 +1,8 @@
 """Replay selected migration goldens through their executable eval graders."""
 
 import argparse
+import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -59,6 +61,24 @@ def run_graders(stimulus, workspace, response=None):
             else:
                 matched = bool(paths)
             assert matched == ("not" not in kind), (kind, config)
+            continue
+        if kind == "program":
+            with tempfile.TemporaryDirectory(prefix="grader-input-") as directory:
+                input_path = Path(directory) / "input.json"
+                input_path.write_text(json.dumps({
+                    "trajectory": {"workDir": str(workspace), "output": response},
+                }), encoding="utf-8")
+                result = subprocess.run(
+                    [config["program"], *config.get("args", [])],
+                    cwd=workspace, capture_output=True, text=True,
+                    encoding="utf-8", errors="replace", timeout=360,
+                    env=dict(os.environ, EVALUATE_WORKSPACE=str(workspace),
+                             EVALUATE_GRADER_INPUT=str(input_path)),
+                )
+                assert result.returncode == 0, (result.stdout, result.stderr)
+                if result.stdout.strip():
+                    verdict = json.loads(result.stdout)
+                    assert verdict["passed"], verdict
             continue
         assert kind == "run-command", f"Unsupported deterministic grader: {kind}"
         result = subprocess.run(

@@ -21,6 +21,16 @@ replay_spec = importlib.util.spec_from_file_location(
 )
 replay = importlib.util.module_from_spec(replay_spec)
 replay_spec.loader.exec_module(replay)
+report_spec = importlib.util.spec_from_file_location(
+    "collection_report", SPEC.parent.parent / "graders" / "collection_report.py"
+)
+report = importlib.util.module_from_spec(report_spec)
+report_spec.loader.exec_module(report)
+RESOURCE_REPORT = (
+    "Both members share one resource and serialize on the same exclusive key. "
+    "MSTest permits unrelated classes to run in parallel, so this avoids the "
+    "broader assembly serialization; lifecycle remains assembly-wide for this fixture."
+)
 
 
 class DefaultCollectionTests(unittest.TestCase):
@@ -39,6 +49,12 @@ class DefaultCollectionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="collection-contract-") as parent:
             root = self.workspace(parent)
             replay.run_graders(CASE, root)
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                replay.run_graders(
+                    CASE, root,
+                    "The two members serialize; unrelated classes remain parallel "
+                    "and can overlap exactly as in xUnit.",
+                )
             source = root / "CollectionTests.cs"
             golden = source.read_text(encoding="utf-8")
 
@@ -58,7 +74,9 @@ class DefaultCollectionTests(unittest.TestCase):
                 "[DoNotParallelize]", '[ResourceLock("Shared")]'
             )
             source.write_text(resource_locks, encoding="utf-8")
-            replay.run_graders(CASE, root)
+            replay.run_graders(CASE, root, RESOURCE_REPORT)
+            with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                replay.run_graders(CASE, root)
 
             source.write_text(resource_locks.replace(
                 '[ResourceLock("Shared")]', '[ResourceLock("Other")]', 1
@@ -130,6 +148,38 @@ class DefaultCollectionTests(unittest.TestCase):
                 replay.run_graders(
                     output_only, root, "Migrated and both tests pass with exact parity."
                 )
+
+    def test_report_polarity_matches_the_observed_policy(self):
+        serial_report = (
+            "MSTest serializes unrelated classes under this assembly policy, "
+            "whereas xUnit allows unrelated collections to run concurrently."
+        )
+        deferred_report = (
+            "Unrelated classes cannot overlap with these members. "
+            "This is a coarser policy than xUnit collections."
+        )
+        reversed_report = "Unrelated classes remain parallel and can overlap exactly as in xUnit."
+        for policy in ("assembly-serial", "deferred-members"):
+            for valid in (serial_report, deferred_report):
+                with self.subTest(policy=policy, valid=valid):
+                    report.validate_report(policy, valid)
+            for invalid in (
+                reversed_report, serial_report + " " + reversed_report,
+                "Unrelated classes are not serialized in MSTest.",
+                "MSTest does not serialize unrelated classes.",
+            ):
+                with self.subTest(policy=policy, invalid=invalid):
+                    with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                        report.validate_report(policy, invalid)
+        report.validate_report("shared-resource", RESOURCE_REPORT)
+        report.validate_report(
+            "shared-resource", "MSTest does not serialize unrelated classes."
+        )
+        report.validate_report(
+            "shared-resource", "Unrelated classes are not blocked in MSTest."
+        )
+        with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+            report.validate_report("shared-resource", deferred_report)
 
 
 if __name__ == "__main__":

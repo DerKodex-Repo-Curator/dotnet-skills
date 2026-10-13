@@ -33,7 +33,7 @@ class PlatformContractTests(unittest.TestCase):
         failed = []
         for grader in STIMULUS["graders"]:
             kind = grader["type"]
-            if kind in ("prompt", "run-command"):
+            if kind in ("prompt", "run-command", "tool-calls"):
                 continue
             self.assertIn(kind, ("output-matches", "output-not-matches"))
             found = checker.vally_regex_found(grader["config"]["pattern"], response)
@@ -154,6 +154,48 @@ class PlatformContractTests(unittest.TestCase):
                             path.write_bytes(original + b"\nchanged\n")
                         self.assertNotEqual(0, run_guard().returncode)
                         path.write_bytes(original)
+            for addition in ("extra.cs", "obj/project.assets.json", "bin/Debug/test.dll"):
+                with self.subTest(addition=addition):
+                    path = root / addition
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("unexpected", encoding="utf-8")
+                    self.assertNotEqual(0, run_guard().returncode)
+                    path.unlink()
+
+    def test_configuration_only_case_rejects_shell_aliases(self):
+        rejected = set(STIMULUS["constraints"]["reject_tools"])
+        self.assertTrue({"bash", "powershell", "execute", "run_shell_command"} <= rejected)
+
+    def test_production_tool_grader_rejects_shell_and_write_trajectories(self):
+        config = next(
+            grader["config"] for grader in STIMULUS["graders"]
+            if grader["type"] == "tool-calls"
+        )
+        script = r"""
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { ToolCallGrader } from "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/tool-call-grader.js";
+const config = JSON.parse(readFileSync(0, "utf8"));
+const grader = new ToolCallGrader();
+for (const name of ["view", "glob", "read_file", "functions.view",
+                    "bash", "powershell", "functions.powershell", "run_shell_command",
+                    "execute", "edit", "create", "apply_patch", "write_file", "replace", "task"]) {
+  const allowed = ["view", "glob", "read_file", "functions.view"].includes(name);
+  const data = { toolName: name, toolCallId: "one", arguments: { command: "dotnet build" } };
+  const result = await grader.grade({ config, trajectory: { events: [
+    { type: "tool_call", data },
+    { type: "tool_result", data: { ...data, success: true, result: "done" } }
+  ] } });
+  assert.equal(result.passed, allowed, name);
+}
+const result = await grader.grade({ config, trajectory: { events: [] } });
+assert.equal(result.passed, true);
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=ROOT, input=json.dumps(config), capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

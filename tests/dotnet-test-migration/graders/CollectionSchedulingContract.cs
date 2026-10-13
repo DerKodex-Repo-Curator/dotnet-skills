@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -13,6 +14,7 @@ internal static class CollectionSchedulingContract
         if (assembly.IsDefined(typeof(DoNotParallelizeAttribute)) ||
             assembly.GetCustomAttribute<ParallelizeAttribute>() is null)
         {
+            RecordPolicy("assembly-serial");
             return;
         }
 
@@ -26,6 +28,7 @@ internal static class CollectionSchedulingContract
         // One deferred member cannot overlap the other in MSTest's parallel phase.
         if (policies.Any(attributes => attributes.Any(a => a is DoNotParallelizeAttribute)))
         {
+            RecordPolicy("deferred-members");
             return;
         }
 
@@ -40,10 +43,20 @@ internal static class CollectionSchedulingContract
         if (resources[0].Any(first => resources[1].Any(second =>
             first.Name == second.Name && (first.Exclusive || second.Exclusive))))
         {
+            RecordPolicy("shared-resource");
             return;
         }
 
         throw new InvalidOperationException(
             "Collection scheduling contract: shared members can overlap.");
+    }
+
+    private static void RecordPolicy(string policy)
+    {
+        var lifecycle = Environment.GetEnvironmentVariable("MIGRATION_PROBE");
+        if (!string.IsNullOrEmpty(lifecycle))
+        {
+            File.WriteAllText(Path.ChangeExtension(lifecycle, ".scheduling.json"), policy);
+        }
     }
 }

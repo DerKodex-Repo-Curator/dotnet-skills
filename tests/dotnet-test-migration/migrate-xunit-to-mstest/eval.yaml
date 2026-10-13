@@ -27,6 +27,8 @@ stimuli:
           dest: .eval/migration_evidence.py
         - src: ../graders/CollectionSchedulingContract.cs
           dest: .eval/CollectionSchedulingContract.txt
+        - src: ../graders/collection_report.py
+          dest: .eval/collection_report.py
     golden_patch:
       path: goldens/default-collection.patch
     golden_trajectory:
@@ -50,19 +52,16 @@ stimuli:
               initialization/cleanup bounds the resource to this sole collection's
               assembly; adding other collections would require a scope review.
     graders:
-      - type: run-command
+      - type: program
         config:
-          command: >-
-            python -c "import hashlib,pathlib,sys;
-            guard=pathlib.Path('.eval/CollectionSchedulingContract.txt').read_bytes();
-            assert hashlib.sha256(guard.replace(b'\r\n',b'\n')).hexdigest()=='4d4b67562f29da3b1281052daaeb025860575060aa6853392a9aad0c4a62e6b9','Scheduling verifier changed';
-            pathlib.Path('CollectionSchedulingContract.cs').write_bytes(guard);
-            p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';
-            sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest
-            --mstest-major 4 --lifecycle --expect FirstCase=Passed --expect SecondCase=Passed
-            --unchanged-file bbadd2d5430f817f830d9a34899bc1bc9d99aae2dcd20815a4d1615b28c2f7b5:LifecycleProbe.cs
-          expected_exit_code: 0
+          program: python
+          args:
+            - -c
+            - >-
+              import hashlib,pathlib;
+              p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='0d540faf65e401a8e987aae41b3a300a530035cc679a716daf43aaa6e9e9cb94','Report verifier changed';
+              exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches
         config:

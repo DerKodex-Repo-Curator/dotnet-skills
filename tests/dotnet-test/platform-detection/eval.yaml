@@ -17,8 +17,9 @@ stimuli:
   - name: Reject SDK 10 VSTest mode for an MTP 2 application
     prompt: |
       Identify this project's test platform and framework from its configuration.
-      Can our normal dotnet test entry point run it as written? Inspect the
-      configuration only; do not build, run tests, or modify files.
+      Can our normal dotnet test entry point run it as written? Read configuration
+      with file-inspection tools only; do not execute shell commands, build,
+      run tests, or modify files.
 
       Answer with these three lines first:
       dotnet test mode: <VSTest or native MTP>
@@ -58,6 +59,10 @@ stimuli:
               Selecting native MTP would require an explicit configuration change.
               I did not build, run commands, or modify files.
     graders:
+      - type: tool-calls
+        config:
+          disallowed:
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|edit|create|apply_patch|write_file|replace|task)$'
       - type: output-matches
         config:
           pattern: '(?im)^[ \t]*\**[ \t]*dotnet test mode:[ \t]*\**[ \t]*VSTest\b'
@@ -84,16 +89,30 @@ stimuli:
           command: >-
             python -c "import hashlib,pathlib;
             expected={'global.json':'d2274b8a769cf15d1e663c34ae8b3285b88ea8c552ea096e037e498c5cc8a99c','TestProject.csproj':'1d0a3f11460934cfa2f8ec8130d6f4699d57cf5aec8967a870da00d87b40f0a7','SampleTests.cs':'0c799e74455a9079482584d53b5a69668c84afe3c049b854509ac8e8dc97b74e'};
-            assert all(hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==h for p,h in expected.items()), 'Read-only fixture changed'"
+            assert all(hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest()==h for p,h in expected.items()), 'Read-only fixture changed';
+            additions={str(p) for p in pathlib.Path('.').rglob('*') if p.is_file() and not any(part in {'.git','.agents','.copilot','.claude'} for part in p.parts) and p.as_posix() not in expected};
+            assert not additions, 'Unexpected files in read-only fixture: '+str(sorted(additions))"
           expected_exit_code: 0
           timeout: 1m
       - type: prompt
+        config:
+          evidence: [trajectory, repo]
+          prompt: >-
+            Assess the classifications against the supplied project configuration.
+            No shell execution, builds, tests or edits are permitted. Do not
+            substitute a minimum tool-call count for checking the actual
+            configuration and answer; the oracle provides reference evidence
+            without running an agent.
     rubric:
       - Identifies the configured VSTest command mode and MSTest framework but reports the executed platform unavailable
       - Explains that MTP 2 cannot use the VSTest-mode bridge on SDK 10 despite enabled runner, bridge property and executable output
       - Does not silently reclassify the incompatible entry point as VSTest or MTP, change configuration, or claim successful execution
     constraints:
       reject_tools:
+        - bash
+        - powershell
+        - execute
+        - run_shell_command
         - edit
         - create
         - apply_patch
