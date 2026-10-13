@@ -5,7 +5,7 @@ defaults:
   timeout: 5m
   runs: 2
 stimuli:
-  - name: Recommend data-driven patterns with display names for unclear parameters
+  - name: Review a growing validation test suite
     prompt: |
       I keep adding test cases to my Validation.Tests project and each new case
       needs a whole new method. Can you analyze the project and suggest a better structure?
@@ -94,7 +94,7 @@ stimuli:
         - bash
         - edit
         - create
-  - name: Detect repeated object construction and setup across test methods
+  - name: Review copy-paste in order service tests
     prompt: |
       I feel like my test code has a lot of copy-paste. Can you analyze
       my OrderService.Tests project and tell me what patterns are repeated
@@ -358,12 +358,11 @@ stimuli:
         - edit
         - create
 
-  - name: Consolidate complex copy-paste cases with a data source
+  - name: Review maintainability as currency cases grow
     prompt: |
-      CurrencyConverterTests.cs has several Fact methods with the same shape,
-      but each case constructs different Money and ExchangeRate records.
-      Recommend a maintainable xUnit structure that keeps each conversion case
-      readable in test output.
+      I expect CurrencyConverterTests.cs to cover more currency pairs over
+      time. Review the file and recommend a structure that makes new cases easy
+      to add without making individual failures hard to identify.
     tags:
       capability: complex-data-parameterization
       risk: medium

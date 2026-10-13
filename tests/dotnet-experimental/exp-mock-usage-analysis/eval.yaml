@@ -266,11 +266,11 @@ stimuli:
     constraints:
       reject_tools: [bash, edit, create]
 
-  - name: Replace mocks of records and value objects
+  - name: Audit order service test boundaries
     prompt: |
-      Review OrderServiceTests.cs against Models.cs and OrderService.cs. Which
-      mocks represent useful boundaries, and which mocks should be replaced
-      with ordinary values?
+      I'm not sure OrderServiceTests.cs uses test doubles at the right
+      boundaries. Review it against Models.cs and OrderService.cs and tell me
+      whether each test double earns its complexity.
     tags:
       capability: trivial-type-mock-detection
       risk: medium
