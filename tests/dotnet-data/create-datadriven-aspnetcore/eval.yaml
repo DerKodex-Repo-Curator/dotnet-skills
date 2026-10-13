@@ -454,6 +454,7 @@ stimuli:
       files:
         - { src: fixtures/razor-pages-crud, dest: fixtures/razor-pages-crud }
         - { src: validators/validate-restraint.mjs, dest: validators/validate-restraint.mjs }
+        - { src: validators/static-fixture-baseline.json, dest: validators/static-fixture-baseline.json }
     golden_patch:
       path: references/add-terms-page.patch
     golden_trajectory:
@@ -538,6 +539,7 @@ stimuli:
       files:
         - { src: fixtures/blazor-crud, dest: fixtures/blazor-crud }
         - { src: validators/validate-restraint.mjs, dest: validators/validate-restraint.mjs }
+        - { src: validators/static-fixture-baseline.json, dest: validators/static-fixture-baseline.json }
     golden_patch:
       path: references/add-reports-component.patch
     golden_trajectory:

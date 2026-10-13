@@ -266,7 +266,38 @@ function restraintMutation(contract, name, mutate) {
   }
 }
 
+function restraintPositiveMutation(contract, name, mutate) {
+  try {
+    const root = cloneForMutation(contract, name);
+    mutate(root);
+    const result = restraintValidatorResult(contract, root);
+    if (result.status === 0) reportPass(contract, name);
+    else reportUnexpected(contract, name, result, "pass");
+  } catch (error) {
+    failures.push(`${contract}: ${name} mutation failed: ${error.message}`);
+    console.error(`FAIL ${contract}: ${name} mutation setup`);
+  }
+}
+
 function restraintMutations() {
+  restraintMutation("razor-static", "unrelated Privacy page edit", (root) =>
+    replace(root, "Pages/Privacy.cshtml", "<h1>", '<h1 class="display-4">', 1));
+  restraintMutation("razor-static", "unrelated model edit", (root) =>
+    replace(root, "Models/Product.cs", "public class Product", "public sealed class Product", 1));
+  restraintMutation("razor-static", "unrelated configuration edit", (root) =>
+    replace(root, "appsettings.json", "{", '{\n  "StaticPagesEnabled": true,', 1));
+  restraintMutation("razor-static", "deleted baseline file", (root) =>
+    fs.rmSync(path.join(root, "Pages", "Index.cshtml")));
+  restraintMutation("razor-static", "unrelated helper addition", (root) =>
+    write(root, "Helpers/StaticPageHelper.cs", "namespace MyApp.Helpers; public static class StaticPageHelper { }\n"));
+  restraintPositiveMutation("razor-static", "allowed navigation-only edit", (root) =>
+    replace(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>',
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>\n                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Terms">Terms</a>\n                        </li>',
+      1,
+    ));
   restraintMutation("razor-static", "non-EF AppDbContext over-scaffolding", (root) =>
     write(root, "Data/AppDbContext.cs", "namespace MyApp.Data; public sealed class AppDbContext { }\n"));
   restraintMutation("razor-static", "compilable Product and Category CRUD pages", (root) => {
@@ -303,6 +334,26 @@ function restraintMutations() {
     replace(root, "Pages/Terms.cshtml", "MyApp.Pages.TermsModel", "MyApp.Pages.MissingTermsModel", 1));
   restraintMutation("razor-static", "Terms backing file is not a PageModel", (root) =>
     replace(root, "Pages/Terms.cshtml.cs", ": PageModel", "", 1));
+  restraintMutation("blazor-static", "unrelated Home component edit", (root) =>
+    replace(root, "Components/Pages/Home.razor", "<h1>", '<h1 class="display-4">', 1));
+  restraintMutation("blazor-static", "unrelated model edit", (root) =>
+    replace(root, "Models/Employee.cs", "public class Employee", "public sealed class Employee", 1));
+  restraintMutation("blazor-static", "unrelated configuration edit", (root) =>
+    replace(root, "appsettings.json", "{", '{\n  "ReportsEnabled": true,', 1));
+  restraintMutation("blazor-static", "unrelated CSS edit", (root) =>
+    replace(root, "wwwroot/app.css", "html, body", "html, body, #app", 1));
+  restraintMutation("blazor-static", "deleted baseline file", (root) =>
+    fs.rmSync(path.join(root, "Components", "Pages", "Counter.razor")));
+  restraintMutation("blazor-static", "unrelated helper addition", (root) =>
+    write(root, "Helpers/StaticPageHelper.cs", "namespace BlazorApp.Helpers; public static class StaticPageHelper { }\n"));
+  restraintPositiveMutation("blazor-static", "allowed navigation-only edit", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      '<NavLink class="nav-link" href="reports">',
+      '<NavLink class="nav-link" href="reports" title="Reports">',
+      1,
+    ));
   restraintMutation("blazor-static", "non-EF AppDbContext over-scaffolding", (root) =>
     write(root, "Data/AppDbContext.cs", "namespace BlazorApp.Data; public sealed class AppDbContext { }\n"));
   restraintMutation("blazor-static", "compilable Employee and Department CRUD components", (root) => {
@@ -360,22 +411,6 @@ function restraintMutations() {
     );
   });
 
-  const unrelatedRazorNames = cloneForMutation("razor-static", "unrelated-page-names");
-  write(unrelatedRazorNames, "Pages/ProductionNotes.cshtml", '@page\n<h1>Production notes</h1>\n');
-  write(unrelatedRazorNames, "Pages/Admin/CategoricalSummary.cshtml", '@page\n<h1>Summary</h1>\n');
-  write(unrelatedRazorNames, "Pages/Admin/Production/Index.cshtml", '@page\n<h1>Production</h1>\n');
-  write(unrelatedRazorNames, "Pages/Admin/Categorical/Index.cshtml", '@page\n<h1>Categorical</h1>\n');
-  const unrelatedResult = restraintValidatorResult("razor-static", unrelatedRazorNames);
-  if (unrelatedResult.status === 0) reportPass("razor-static", "legitimate unrelated page names");
-  else reportUnexpected("razor-static", "legitimate unrelated page names", unrelatedResult, "pass");
-  const unrelatedBlazorNames = cloneForMutation("blazor-static", "unrelated-component-names");
-  write(unrelatedBlazorNames, "Components/Pages/EmploymentStatus.razor", '@page "/employment"\n<h1>Employment status</h1>\n');
-  write(unrelatedBlazorNames, "Components/Pages/DepartmentalNews.razor", '@page "/departmental-news"\n<h1>Departmental news</h1>\n');
-  write(unrelatedBlazorNames, "Components/Pages/Admin/Employment/Index.razor", '@page "/employment/index"\n<h1>Employment</h1>\n');
-  write(unrelatedBlazorNames, "Components/Pages/Admin/Departmental/Index.razor", '@page "/departmental/index"\n<h1>Departmental</h1>\n');
-  const unrelatedBlazorResult = restraintValidatorResult("blazor-static", unrelatedBlazorNames);
-  if (unrelatedBlazorResult.status === 0) reportPass("blazor-static", "legitimate unrelated component names");
-  else reportUnexpected("blazor-static", "legitimate unrelated component names", unrelatedBlazorResult, "pass");
 }
 
 function cloneForMutation(contract, name, source = goldenRoots.get(contract)) {

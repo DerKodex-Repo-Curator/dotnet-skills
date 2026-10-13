@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const [contract, rootArg] = process.argv.slice(2);
 const contracts = new Set(["razor-static", "blazor-static"]);
@@ -13,13 +14,30 @@ if (!contracts.has(contract) || !rootArg) {
 
 const root = path.resolve(rootArg);
 const files = [];
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const manifestPath = path.join(scriptDirectory, "static-fixture-baseline.json");
+const ignoredDirectories = new Set(["bin", "obj", ".git", "node_modules"]);
+
+let manifest;
+try {
+  manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+} catch (error) {
+  console.error(`Could not load static fixture baseline ${manifestPath}: ${error.message}`);
+  process.exit(2);
+}
+
+const baseline = manifest?.contracts?.[contract];
+if (manifest?.schemaVersion !== 1 || manifest?.algorithm !== "sha256" || !Array.isArray(baseline?.files)) {
+  console.error(`Static fixture baseline does not define ${contract} with schema version 1 and SHA-256 files`);
+  process.exit(2);
+}
 
 function visit(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory() && ["bin", "obj", ".git"].includes(entry.name)) continue;
+    if (entry.isDirectory() && ignoredDirectories.has(entry.name)) continue;
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) visit(full);
-    else files.push({
+    else if (entry.isFile()) files.push({
       rel: path.relative(root, full).replaceAll("\\", "/"),
       bytes: fs.readFileSync(full),
       text: fs.readFileSync(full, "utf8"),
@@ -29,6 +47,55 @@ function visit(directory) {
 
 visit(root);
 const failures = [];
+const scopeRules = {
+  "razor-static": {
+    mutableBaseline: new Set(["Pages/Shared/_Layout.cshtml"]),
+    allowedNew: new Set(["Pages/Terms.cshtml", "Pages/Terms.cshtml.cs"]),
+  },
+  "blazor-static": {
+    mutableBaseline: new Set(["Components/Layout/NavMenu.razor"]),
+    allowedNew: new Set([
+      "Components/Pages/Reports.razor",
+      "Components/Pages/Reports.razor.css",
+    ]),
+  },
+};
+
+function sha256(bytes) {
+  return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function validateFileScope() {
+  const rules = scopeRules[contract];
+  const actualByPath = new Map(files.map((file) => [file.rel, file]));
+  const baselineByPath = new Map();
+
+  for (const entry of baseline.files) {
+    if (typeof entry?.path !== "string" || !/^[a-f0-9]{64}$/.test(entry?.sha256 ?? "")) {
+      failures.push("static fixture baseline contains an invalid file entry");
+      continue;
+    }
+    if (baselineByPath.has(entry.path)) {
+      failures.push(`static fixture baseline contains a duplicate path: ${entry.path}`);
+      continue;
+    }
+    baselineByPath.set(entry.path, entry.sha256);
+    const actual = actualByPath.get(entry.path);
+    if (!actual) {
+      failures.push(`baseline file is missing (deleted or renamed): ${entry.path}`);
+    } else if (!rules.mutableBaseline.has(entry.path) && sha256(actual.bytes) !== entry.sha256) {
+      failures.push(`baseline file changed outside allowed navigation: ${entry.path}`);
+    }
+  }
+
+  for (const file of files) {
+    if (!baselineByPath.has(file.rel) && !rules.allowedNew.has(file.rel)) {
+      failures.push(`unrelated added file is forbidden: ${file.rel}`);
+    }
+  }
+}
+
+validateFileScope();
 const joined = files.map((file) => file.text).join("\n");
 const project = files.find((file) => file.rel.endsWith(".csproj"))?.text ?? "";
 const program = files.find((file) => file.rel === "Program.cs")?.text ?? "";
@@ -141,13 +208,6 @@ if (contract === "razor-static") {
     failures.push("NavMenu.razor must link to /reports");
   }
   forbidText(reports, /@rendermode\b/i, "the static Reports component must not add a render mode");
-  const programFile = files.find((file) => file.rel === "Program.cs");
-  const programHash = programFile
-    ? crypto.createHash("sha256").update(programFile.bytes).digest("hex")
-    : "";
-  if (programHash !== "8ecc472ed8e07e0c2e7a7773b3d06e475577ed722673500d7db9837683dfdb9a") {
-    failures.push("Program.cs must remain byte-for-byte identical to the staged interactive host");
-  }
   forbidText(program, /AddInteractiveWebAssemblyComponents|AddInteractiveWebAssemblyRenderMode|AddInteractiveAutoRenderMode/i, "new render modes are forbidden");
 }
 
