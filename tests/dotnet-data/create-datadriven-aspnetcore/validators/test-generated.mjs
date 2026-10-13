@@ -529,6 +529,16 @@ function testPatchTodoLayout() {
 }
 
 function testRouteGroupConstantLayouts() {
+  const trailingSlashRoot = cloneForMutation("todo-api", "trailing-slash-route-group-layout");
+  replace(
+    trailingSlashRoot,
+    "Endpoints/TodoEndpoints.cs",
+    'MapGroup("/api/todos")',
+    'MapGroup("/api/todos/")',
+    1,
+  );
+  expectPass("todo-api", trailingSlashRoot, "normalized trailing-slash route-group layout");
+
   const todoRoot = cloneForMutation("todo-api", "constant-route-group-layout");
   replace(
     todoRoot,
@@ -721,8 +731,11 @@ function testParentApiHttpLayouts() {
 }
 
 function testTodoUpdatePatterns() {
-  for (const operation of ["Update", "Attach"]) {
-    const root = cloneForMutation("todo-api", `${operation.toLowerCase()}-submitted-entity-layout`);
+  for (const [name, statement] of [
+    ["Update", "dbContext.TodoItems.Update(submitted);"],
+    ["Attach modified", "dbContext.TodoItems.Attach(submitted).State = EntityState.Modified;"],
+  ]) {
+    const root = cloneForMutation("todo-api", `${name.toLowerCase().replaceAll(" ", "-")}-submitted-entity-layout`);
     replace(
       root,
       "Endpoints/TodoEndpoints.cs",
@@ -733,11 +746,83 @@ function testTodoUpdatePatterns() {
             Title = request.Title.Trim(),
             IsComplete = request.IsComplete
         };
-        dbContext.TodoItems.${operation}(submitted);`,
+        ${statement}`,
       1,
     );
-    expectPass("todo-api", root, `${operation} validated submitted entity`);
+    expectPass("todo-api", root, `${name} validated submitted entity`);
   }
+}
+
+function testModelStateLayouts() {
+  const razorEqualityRoot = cloneForMutation("razor-pages", "modelstate-equality-layouts");
+  for (const relativeFile of [
+    "Pages/Products/Create.cshtml.cs",
+    "Pages/Products/Edit.cshtml.cs",
+    "Pages/Categories/Create.cshtml.cs",
+    "Pages/Categories/Edit.cshtml.cs",
+  ]) {
+    replace(
+      razorEqualityRoot,
+      relativeFile,
+      "if (!ModelState.IsValid)",
+      "if (ModelState.IsValid == false)",
+      1,
+    );
+  }
+  expectPass("razor-pages", razorEqualityRoot, "ModelState equality early-return layouts");
+
+  const razorElseRoot = cloneForMutation("razor-pages", "modelstate-else-layout");
+  replace(
+    razorElseRoot,
+    "Pages/Categories/Create.cshtml.cs",
+    /        if \(!ModelState\.IsValid\)\s*\{\s*return Page\(\);\s*\}\s*context\.Categories\.Add\(Category\);\s*await context\.SaveChangesAsync\(\);\s*return RedirectToPage\("\.\/Index"\);/,
+    `        if (ModelState.IsValid)
+        {
+            context.Categories.Add(Category);
+            await context.SaveChangesAsync();
+            return RedirectToPage("./Index");
+        }
+        else
+        {
+            return Page();
+        }`,
+    1,
+  );
+  expectPass("razor-pages", razorElseRoot, "ModelState valid-branch else layout");
+
+  const mvcEqualityRoot = cloneForMutation("mvc", "modelstate-equality-layouts");
+  replace(
+    mvcEqualityRoot,
+    "Controllers/BooksController.cs",
+    /if \(ModelState\.IsValid\)/g,
+    "if (ModelState.IsValid == true)",
+  );
+  replace(
+    mvcEqualityRoot,
+    "Controllers/AuthorsController.cs",
+    /if \(!ModelState\.IsValid\)/g,
+    "if (ModelState.IsValid == false)",
+  );
+  expectPass("mvc", mvcEqualityRoot, "ModelState equality layouts");
+
+  const mvcElseRoot = cloneForMutation("mvc", "modelstate-else-layout");
+  replace(
+    mvcElseRoot,
+    "Controllers/AuthorsController.cs",
+    /        if \(!ModelState\.IsValid\)\s*\{\s*return View\(author\);\s*\}\s*context\.Add\(author\);\s*await context\.SaveChangesAsync\(\);\s*return RedirectToAction\(nameof\(Index\)\);/,
+    `        if (ModelState.IsValid)
+        {
+            context.Add(author);
+            await context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
+        }
+        else
+        {
+            return View(author);
+        }`,
+    1,
+  );
+  expectPass("mvc", mvcElseRoot, "ModelState valid-branch else layout");
 }
 
 function testApiMetadataLayouts() {
@@ -1153,6 +1238,39 @@ function razorMutations() {
     replace(root, `${product}/Create.cshtml.cs`, "context.Products.Add(Product)", "_ = Product"));
   mutation("razor-pages", "remove edit flow", (root) =>
     replace(root, `${product}/Edit.cshtml.cs`, "EntityState.Modified", "EntityState.Unchanged"));
+  for (const entity of ["Products", "Categories"]) {
+    const singular = entity.endsWith("ies")
+      ? `${entity.slice(0, -3)}y`
+      : entity.slice(0, -1);
+    for (const action of ["Create", "Edit"]) {
+      mutation("razor-pages", `${singular} ${action} reverses ModelState polarity`, (root) =>
+        replace(
+          root,
+          `Pages/${entity}/${action}.cshtml.cs`,
+          "if (!ModelState.IsValid)",
+          "if (ModelState.IsValid)",
+          1,
+        ));
+    }
+  }
+  for (const action of ["Create", "Edit"]) {
+    mutation("razor-pages", `Product ${action} removes submitted CategoryId validation`, (root) =>
+      replace(
+        root,
+        `Pages/Products/${action}.cshtml.cs`,
+        /\s*if \(!await context\.Categories\.AnyAsync\(category => category\.Id == Product\.CategoryId\)\)\s*\{\s*ModelState\.AddModelError\("Product\.CategoryId", "Select a valid category\."\);\s*\}/,
+        "",
+        1,
+      ));
+    mutation("razor-pages", `Product ${action} ignores submitted CategoryId lookup`, (root) =>
+      replace(
+        root,
+        `Pages/Products/${action}.cshtml.cs`,
+        /if \(!await context\.Categories\.AnyAsync\(category => category\.Id == Product\.CategoryId\)\)\s*\{\s*ModelState\.AddModelError\("Product\.CategoryId", "Select a valid category\."\);\s*\}/,
+        "_ = await context.Categories.AnyAsync(category => category.Id == Product.CategoryId);",
+        1,
+      ));
+  }
   mutation("razor-pages", "POST self-assignment cannot use GET lookup", (root) => {
     replace(
       root,
@@ -1187,6 +1305,8 @@ function razorMutations() {
 
 function todoMutations() {
   const endpoints = "Endpoints/TodoEndpoints.cs";
+  mutation("todo-api", "Todo route base mismatch", (root) =>
+    replace(root, endpoints, 'MapGroup("/api/todos")', 'MapGroup("/api/todos-broken")', 1));
   mutation("todo-api", "remove list flow", (root) =>
     replace(root, endpoints, ".ToListAsync()", ".ToList()", 1));
   mutation("todo-api", "remove by-id flow", (root) =>
@@ -1205,6 +1325,20 @@ function todoMutations() {
     replace(root, endpoints, "item.Title = request.Title.Trim();", "item.Title = item.Title;", 1);
     replace(root, endpoints, "item.IsComplete = request.IsComplete;", "item.IsComplete = item.IsComplete;", 1);
   });
+  mutation("todo-api", "Todo bare Attach does not mark modified", (root) =>
+    replace(
+      root,
+      endpoints,
+      /        item\.Title = request\.Title\.Trim\(\);\s*        item\.IsComplete = request\.IsComplete;/,
+      `        var submitted = new TodoItem
+        {
+            Id = item.Id,
+            Title = request.Title.Trim(),
+            IsComplete = request.IsComplete
+        };
+        dbContext.TodoItems.Attach(submitted);`,
+      1,
+    ));
   mutation("todo-api", "remove delete flow", (root) =>
     replace(root, endpoints, "dbContext.TodoItems.Remove(item)", "_ = item"));
   mutation("todo-api", "remove validation", (root) =>
@@ -1594,6 +1728,24 @@ function mvcMutations() {
       "context.Update(author)",
       "context.Attach(author)",
     ));
+  for (const [entity, relativeFile] of [
+    ["Book", books],
+    ["Author", "Controllers/AuthorsController.cs"],
+  ]) {
+    for (const action of ["Create", "Edit"]) {
+      mutation("mvc", `${entity} ${action} reverses ModelState polarity`, (root) =>
+        replace(
+          root,
+          relativeFile,
+          new RegExp(
+            `(public async Task<IActionResult> ${action}\\b[\\s\\S]*?)if \\((!?)ModelState\\.IsValid\\)`,
+          ),
+          (match, prefix, negated) =>
+            `${prefix}if (${negated ? "" : "!"}ModelState.IsValid)`,
+          1,
+        ));
+    }
+  }
   mutation("mvc", "remove delete flow", (root) =>
     replace(root, books, "context.Books.Remove(book)", "_ = book"));
   mutation("mvc", "remove validation", (root) =>
@@ -1704,6 +1856,8 @@ function addUnrelatedWarningsBranch(root, relativeFile, methodName) {
 function parentApiMutations() {
   const endpoints = "Endpoints/ProductEndpoints.cs";
   const http = "ParentChildApi.http";
+  mutation("parent-api", "Product route base mismatch", (root) =>
+    replace(root, endpoints, 'MapGroup("/api/products")', 'MapGroup("/api/products-broken")', 1));
   mutation("parent-api", "remove list flow", (root) =>
     replace(root, endpoints, ".ToListAsync()", ".ToList()", 1));
   mutation("parent-api", "remove by-id flow", (root) =>
@@ -1726,6 +1880,34 @@ function parentApiMutations() {
     replace(root, endpoints, "product.Price = request.Price;", "product.Price = product.Price;");
     replace(root, endpoints, "product.CategoryId = request.CategoryId;", "product.CategoryId = product.CategoryId;");
   });
+  mutation("parent-api", "Category bare Attach does not mark modified", (root) =>
+    replace(
+      root,
+      endpoints,
+      "        category.Name = request.Name.Trim();",
+      `        var submitted = new Category
+        {
+            Id = category.Id,
+            Name = request.Name.Trim()
+        };
+        dbContext.Categories.Attach(submitted);`,
+      1,
+    ));
+  mutation("parent-api", "Product bare Attach does not mark modified", (root) =>
+    replace(
+      root,
+      endpoints,
+      /        product\.Name = request\.Name\.Trim\(\);\s*        product\.Price = request\.Price;\s*        product\.CategoryId = request\.CategoryId;/,
+      `        var submitted = new Product
+        {
+            Id = product.Id,
+            Name = request.Name.Trim(),
+            Price = request.Price,
+            CategoryId = request.CategoryId
+        };
+        dbContext.Products.Attach(submitted);`,
+      1,
+    ));
   mutation("parent-api", "remove delete flow", (root) =>
     replace(root, endpoints, "dbContext.Categories.Remove(category)", "_ = category"));
   mutation("parent-api", "remove validation", (root) =>
@@ -2040,6 +2222,22 @@ function blazorMutations() {
     replace(root, employees, "await db.Employees.AddAsync", "_ = db.Employees.Entry"));
   mutation("blazor", "remove edit flow", (root) =>
     replace(root, employees, /\s*employee\.(?:FirstName|LastName|Email|DepartmentId)\s*=\s*model\.(?:FirstName|LastName|Email|DepartmentId);/g, ""));
+  mutation("blazor", "shared Employee bare Attach does not update", (root) =>
+    replace(
+      root,
+      employees,
+      /        employee\.FirstName = model\.FirstName;\s*        employee\.LastName = model\.LastName;\s*        employee\.Email = model\.Email;\s*        employee\.DepartmentId = model\.DepartmentId;/,
+      "        db.Employees.Attach(model);",
+      1,
+    ));
+  mutation("blazor", "shared Department bare Attach does not update", (root) =>
+    replace(
+      root,
+      "Components/Pages/Departments.razor",
+      "        department.Name = model.Name;",
+      "        db.Departments.Attach(model);",
+      1,
+    ));
   mutation("blazor", "remove delete flow", (root) =>
     replace(root, employees, "db.Employees.Remove(employee)", "_ = employee"));
   mutation("blazor", "remove validation", (root) =>
@@ -2107,6 +2305,22 @@ function testSeparateBlazorLayout() {
       "Components/Pages/Employee/Edit.razor",
       "await db.SaveChangesAsync();",
       "_ = target;",
+    ));
+  mutationFrom("blazor", root, "separate Employee bare Attach does not update", (mutationRoot) =>
+    replace(
+      mutationRoot,
+      "Components/Pages/Employee/Edit.razor",
+      "target.FirstName = model.FirstName; target.LastName = model.LastName; target.Email = model.Email; target.DepartmentId = model.DepartmentId;",
+      "db.Employees.Attach(model);",
+      1,
+    ));
+  mutationFrom("blazor", root, "separate Department bare Attach does not update", (mutationRoot) =>
+    replace(
+      mutationRoot,
+      "Components/Pages/Department/Edit.razor",
+      "target.Name = model.Name;",
+      "db.Departments.Attach(model);",
+      1,
     ));
   mutationFrom("blazor", root, "separate remove delete SaveChangesAsync", (mutationRoot) =>
     replace(
@@ -2216,6 +2430,27 @@ function testCombinedTwoFormBlazorLayout() {
   const root = cloneForMutation("blazor", "combined-two-form-layout");
   write(root, "Components/Pages/Employees.razor", combinedEmployeeComponent());
   expectPass("blazor", root, "synthetic combined two-form layout");
+  const attachModifiedRoot = cloneForMutation(
+    "blazor",
+    "combined-attach-modified-layout",
+    root,
+  );
+  replace(
+    attachModifiedRoot,
+    "Components/Pages/Employees.razor",
+    /        target\.FirstName = editModel\.FirstName;\s*        target\.LastName = editModel\.LastName;\s*        target\.Email = editModel\.Email;\s*        target\.DepartmentId = editModel\.DepartmentId;/,
+    "        db.Employees.Attach(editModel).State = EntityState.Modified;",
+    1,
+  );
+  expectPass("blazor", attachModifiedRoot, "combined Attach plus Modified update layout");
+  mutationFrom("blazor", root, "combined Employee bare Attach does not update", (mutationRoot) =>
+    replace(
+      mutationRoot,
+      "Components/Pages/Employees.razor",
+      /        target\.FirstName = editModel\.FirstName;\s*        target\.LastName = editModel\.LastName;\s*        target\.Email = editModel\.Email;\s*        target\.DepartmentId = editModel\.DepartmentId;/,
+      "        db.Employees.Attach(editModel);",
+      1,
+    ));
   mutationFrom("blazor", root, "combined swapped create and edit handlers", (mutationRoot) => {
     replace(
       mutationRoot,
@@ -2429,6 +2664,7 @@ try {
   testApiMetadataLayouts();
   testTodoErrorConditionLayouts();
   testRequiredValidationConditionLayouts();
+  testModelStateLayouts();
   apiMetadataMutations("todo-api", "Endpoints/TodoEndpoints.cs", "group", "Todo");
   testRazorEditLayouts();
   razorMutations();

@@ -370,9 +370,13 @@ function checkMetadata(records, label) {
 }
 
 function recordsForBase(records, base) {
-  return records.filter((record) =>
-    typeof record.route === "string" &&
-    record.route.toLowerCase().startsWith(base.toLowerCase()));
+  const normalizedBase = base.toLowerCase().replace(/\/+$/, "");
+  return records.filter((record) => {
+    if (typeof record.route !== "string") return false;
+    const normalizedRoute = record.route.toLowerCase().replace(/\/+$/, "");
+    return normalizedRoute === normalizedBase ||
+      normalizedRoute.startsWith(`${normalizedBase}/`);
+  });
 }
 
 function checkApiCrud(records, base, entity, options = {}) {
@@ -685,6 +689,21 @@ function validateRazorPages() {
     for (const action of ["Create", "Edit"]) {
       fail(test(surface[action], /<form\b[^>]*method\s*=\s*["']post/i, /asp-validation-(?:summary|for)/i, /<(?:input|select)\b/i), `${entity} ${action} lacks a validated form.`);
       fail(test(model[action], /\[BindProperty\]/, /OnPostAsync\s*\(/, /ModelState\.IsValid/), `${entity} ${action} lacks bound validation-aware POST behavior.`);
+      const post = methodsNamed(model[action], "OnPostAsync")[0] ??
+        methodsNamed(model[action], "OnPost")[0];
+      const submitted = boundPropertyName(model[action], singular);
+      const submittedNames = requestDerivedNames(post?.body ?? "", submitted);
+      const persistence = action === "Create"
+        ? [/\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/]
+        : [
+            (fragment) => hasSubmittedEntityMutation(fragment, submittedNames),
+            /SaveChangesAsync\s*\(/,
+          ];
+      fail(
+        Boolean(post) &&
+          modelStateControlsPersistence(post.body, persistence, /\breturn\s+Page\s*\(/),
+        `${entity} ${action} POST can persist when ModelState is invalid.`,
+      );
     }
     fail(test(model.Create, /\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/), `${entity} Create does not add and save.`);
     fail(test(model.Edit, /OnGetAsync\s*\(/, /(?:Find|FirstOrDefault|SingleOrDefault)Async\s*\(/), `${entity} Edit lacks async read behavior.`);
@@ -717,10 +736,17 @@ function validateRazorPages() {
     );
     const get = getMethod(methodsNamed(text, "OnGetAsync")) ?? getMethod(methodsNamed(text, "OnGet"));
     const post = methodsNamed(text, "OnPostAsync")[0] ?? methodsNamed(text, "OnPost")[0];
+    const boundProduct = boundPropertyName(text, "Product");
     const loadsChoices = (body) =>
       /LoadCategories/.test(body) || /\.Categories\b[\s\S]{0,350}(?:ToList|ToArray)Async\s*\(/.test(body);
     fail(Boolean(get) && loadsChoices(get.body), `Product ${action} GET does not load category choices.`);
     fail(Boolean(post) && loadsChoices(post.body), `Product ${action} invalid POST does not reload category choices.`);
+    fail(
+      Boolean(post) &&
+        Boolean(boundProduct) &&
+        hasSubmittedCategoryLookup(post.body, boundProduct),
+      `Product ${action} POST does not validate Product.CategoryId against Categories before persistence.`,
+    );
   }
   const navigation = joined(/(?:Layout|Nav|Menu).*\.cshtml$/i);
   fail(
@@ -779,7 +805,15 @@ function validateController(entity) {
   fail(Boolean(createPost), `${plural} Create POST is missing.`);
   if (createPost) {
     fail(/\[ValidateAntiForgeryToken\]/.test(createPost.prefix), `${plural} Create POST lacks anti-forgery validation.`);
-    fail(test(createPost.body, /ModelState\.IsValid/, /\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/, /View\s*\(/), `${plural} Create POST lacks validation/add/save behavior.`);
+    fail(
+      test(createPost.body, /ModelState\.IsValid/, /\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/, /View\s*\(/) &&
+        modelStateControlsPersistence(
+          createPost.body,
+          [/\.(?:Add|AddAsync)\s*\(/, /SaveChangesAsync\s*\(/],
+          /\breturn\s+View\s*\(/,
+        ),
+      `${plural} Create POST lacks validation/add/save behavior.`,
+    );
   }
 
   const edits = methodParts(text, "Edit");
@@ -789,9 +823,19 @@ function validateController(entity) {
   fail(Boolean(editPost), `${plural} Edit POST is missing.`);
   if (editPost) {
     fail(/\[ValidateAntiForgeryToken\]/.test(editPost.prefix), `${plural} Edit POST lacks anti-forgery validation.`);
+    const submitted = parameterNameForType(editPost.signature, entity);
+    const submittedNames = requestDerivedNames(editPost.body, submitted);
     fail(
       test(editPost.body, /ModelState\.IsValid/, /SaveChangesAsync\s*\(/, /NotFound\s*\(/, /View\s*\(/) &&
-        validMvcPostEdit(editPost, entity),
+        validMvcPostEdit(editPost, entity) &&
+        modelStateControlsPersistence(
+          editPost.body,
+          [
+            (fragment) => hasSubmittedEntityMutation(fragment, submittedNames),
+            /SaveChangesAsync\s*\(/,
+          ],
+          /\breturn\s+View\s*\(/,
+        ),
       `${plural} Edit POST lacks validation/submitted-value update/save/not-found behavior.`,
     );
   }
@@ -981,9 +1025,10 @@ function hasTargetEntityMutation(text, entity, submittedEntity) {
   }
 
   return methodInvocations(text).some((invocation) =>
-    /^(?:Update|Attach)$/.test(invocation.name) &&
+    invocation.name === "Update" &&
     invocation.arguments.some((argument) =>
-      referencesAnyIdentifier(argument, submittedValues)));
+      referencesAnyIdentifier(argument, submittedValues))) ||
+    marksSubmittedEntityModified(text, submittedValues);
 }
 
 function boundPropertyName(text, entity) {
@@ -1017,6 +1062,17 @@ function marksSubmittedEntityModified(text, submittedNames) {
     }
   }
   return false;
+}
+
+function hasSubmittedEntityMutation(text, submittedNames) {
+  if (submittedNames.size === 0) return false;
+  if (marksSubmittedEntityModified(text, submittedNames)) return true;
+
+  return [...text.matchAll(
+    /\b(@?[A-Za-z_]\w*)\s*\.\s*[A-Za-z_]\w*\s*=(?!=|>)\s*([^;]+);/g,
+  )].some((assignment) =>
+    referencesAnyIdentifier(assignment[2], submittedNames) &&
+    !referencesIdentifier(assignment[2], assignment[1]));
 }
 
 function associatedAsyncTargetVariables(text, entity, requestNames) {
@@ -1179,6 +1235,53 @@ function parsedIfStatements(text) {
   return result;
 }
 
+function conditionResultForModelStateValidity(condition) {
+  let expression = stripOuterParentheses(condition);
+  if (expression.startsWith("!")) {
+    const nested = conditionResultForModelStateValidity(
+      stripOuterParentheses(expression.slice(1)),
+    );
+    return nested === null ? null : !nested;
+  }
+
+  const compact = expression.replace(/\s+/g, "").toLowerCase();
+  const valid = "modelstate.isvalid";
+  if (compact === valid) return true;
+  if (
+    [`${valid}==true`, `${valid}istrue`, `${valid}!=false`, `${valid}isnotfalse`]
+      .includes(compact)
+  ) return true;
+  if (
+    [`${valid}==false`, `${valid}isfalse`, `${valid}!=true`, `${valid}isnottrue`]
+      .includes(compact)
+  ) return false;
+  return null;
+}
+
+function modelStateControlsPersistence(body, requiredPatterns, rerenderPattern) {
+  const matches = (requirement, text) =>
+    typeof requirement === "function"
+      ? requirement(text)
+      : requirement.test(text);
+  return parsedIfStatements(body).some((node) => {
+    const conditionWhenValid = conditionResultForModelStateValidity(node.condition);
+    if (conditionWhenValid === null) return false;
+
+    const prefix = body.slice(0, node.start);
+    const suffix = body.slice(node.end);
+    const validBranch = conditionWhenValid ? node.thenText : node.elseText;
+    const invalidBranch = conditionWhenValid ? node.elseText : node.thenText;
+    const continues = (branch) => !/\breturn\b/.test(branch);
+    const validFlow = `${validBranch}\n${continues(validBranch) ? suffix : ""}`;
+    const invalidFlow = `${invalidBranch}\n${continues(invalidBranch) ? suffix : ""}`;
+
+    return requiredPatterns.every((requirement) => matches(requirement, validFlow)) &&
+      requiredPatterns.every((requirement) =>
+        !matches(requirement, prefix) && !matches(requirement, invalidFlow)) &&
+      rerenderPattern.test(invalidFlow);
+  });
+}
+
 function errorResponse(text) {
   return /\b(?:NotFound|ValidationProblem|BadRequest|UnprocessableEntity)\s*\(/.test(text);
 }
@@ -1249,6 +1352,16 @@ function invalidBranchRejects(text, node, branch) {
   return parsedIfStatements(text).some((later) =>
     later.start >= node.end &&
     [...states].some((state) => {
+      if (/^ModelState$/i.test(state)) {
+        const conditionWhenValid = conditionResultForModelStateValidity(later.condition);
+        if (conditionWhenValid === null) return false;
+        const invalidBranch = conditionWhenValid ? later.elseText : later.thenText;
+        const fallthrough = later.elseText || /\breturn\b/.test(later.thenText)
+          ? ""
+          : text.slice(later.end);
+        return /\breturn\s+(?:Page|View)\s*\(/.test(`${invalidBranch}\n${fallthrough}`) ||
+          errorResponse(`${invalidBranch}\n${fallthrough}`);
+      }
       const nonEmptyResult = conditionResultForNonEmptyCollection(later.condition, state);
       if (nonEmptyResult === null) return false;
       return errorResponse(nonEmptyResult ? later.thenText : later.elseText);
@@ -1460,6 +1573,9 @@ function hasSubmittedCategoryLookup(text, requestParameter) {
     `(?:^|[^A-Za-z0-9_@])${escapedParameter}\\s*\\.\\s*CategoryId\\b`,
   );
   const ifStatements = parsedIfStatements(text);
+  const persistenceIndex = text.search(
+    /\.(?:Add|AddAsync|Update|Attach)\s*\(|SaveChangesAsync\s*\(/,
+  );
   for (const categories of text.matchAll(/\.Categories\b/g)) {
     const start = statementStart(text, categories.index);
     const statement = statementAt(text, start);
@@ -1472,20 +1588,26 @@ function hasSubmittedCategoryLookup(text, requestParameter) {
       const argumentsText = statement.slice(openParen + 1, closeParen);
       const awaitIndex = statement.lastIndexOf("await", lookup.index);
       if (awaitIndex < 0 || !submittedCategory.test(argumentsText)) continue;
+      const absoluteLookup = start + lookup.index;
+      if (persistenceIndex >= 0 && absoluteLookup >= persistenceIndex) continue;
 
       const variable = assignedAwaitResult(statement, awaitIndex);
       if (variable && variable !== "_") {
         const booleanResult = lookup[1].toLowerCase() === "any";
         for (const node of ifStatements) {
+          if (
+            node.start < start + statement.length ||
+            (persistenceIndex >= 0 && node.start >= persistenceIndex)
+          ) continue;
           if (!referencesIdentifier(node.condition, variable)) continue;
           const branch = invalidBranchForResult(node, variable, booleanResult);
           if (invalidBranchRejects(text, node, branch)) return true;
         }
       }
 
-      const absoluteLookup = start + lookup.index;
       for (const node of ifStatements) {
         if (absoluteLookup < node.conditionStart || absoluteLookup > node.conditionEnd) continue;
+        if (persistenceIndex >= 0 && node.start >= persistenceIndex) continue;
         const branch = lookup[1].toLowerCase() === "any"
           ? (/!\s*await\b/.test(node.condition) ? node.thenText : node.elseText)
           : (/\bis\s+null\b|==\s*null\b/.test(node.condition) ? node.thenText : node.elseText);
@@ -1693,8 +1815,9 @@ function analyzeFormHandler(text, handler, modelNames) {
         /^(?:Add|AddAsync)$/.test(invocation.name) &&
         invocation.arguments.some((argument) => referencesAnyIdentifier(argument, aliases)));
       const trackedUpdateUsesModel = methodInvocations(method.body).some((invocation) =>
-        /^(?:Update|Attach)$/.test(invocation.name) &&
-        invocation.arguments.some((argument) => referencesAnyIdentifier(argument, aliases)));
+        invocation.name === "Update" &&
+        invocation.arguments.some((argument) => referencesAnyIdentifier(argument, aliases))) ||
+        marksSubmittedEntityModified(method.body, aliases);
       const loadsExisting = /\.(?:Find|FirstOrDefault|SingleOrDefault)Async\s*\(/.test(method.body);
       const assignsFromModel = [...method.body.matchAll(
         /\b(@?[A-Za-z_]\w*)\s*\.\s*[A-Za-z_]\w*\s*=\s*([^;]+);/g,
