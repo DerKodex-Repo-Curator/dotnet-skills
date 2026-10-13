@@ -49,11 +49,11 @@ visit(root);
 const failures = [];
 const scopeRules = {
   "razor-static": {
-    mutableBaseline: new Set(["Pages/Shared/_Layout.cshtml"]),
+    navigationBaseline: "Pages/Shared/_Layout.cshtml",
     allowedNew: new Set(["Pages/Terms.cshtml", "Pages/Terms.cshtml.cs"]),
   },
   "blazor-static": {
-    mutableBaseline: new Set(["Components/Layout/NavMenu.razor"]),
+    navigationBaseline: "Components/Layout/NavMenu.razor",
     allowedNew: new Set([
       "Components/Pages/Reports.razor",
       "Components/Pages/Reports.razor.css",
@@ -63,6 +63,105 @@ const scopeRules = {
 
 function sha256(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function decodeUtf8(bytes) {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function insertionIsInsideNavigation(before, after) {
+  const beforeLower = before.toLowerCase();
+  const afterLower = after.toLowerCase();
+  return beforeLower.lastIndexOf("<nav") > beforeLower.lastIndexOf("</nav>") &&
+    afterLower.includes("</nav>") &&
+    />\s*$/.test(before) &&
+    /^\s*</.test(after);
+}
+
+function hasOnlyTags(text, allowedTags) {
+  const tags = [...text.matchAll(/<\/?\s*([a-z][\w:-]*)\b[^>]*>/gi)];
+  return tags.length > 0 && tags.every((match) => allowedTags.has(match[1].toLowerCase()));
+}
+
+function hasForbiddenNavigationContent(text) {
+  return /<!--|-->|@\*|\*@|<%|%>|\b(?:on[a-z]+|style)\s*=|(?:javascript|data)\s*:/i.test(text);
+}
+
+function validatesRazorNavigationInsertion(text) {
+  const trimmed = text.trim();
+  if (hasForbiddenNavigationContent(trimmed)) return false;
+  if (!hasOnlyTags(trimmed, new Set(["li", "a", "span"]))) return false;
+  if (!/^(?:<a\b[^>]*>[\s\S]*<\/a>|<li\b[^>]*>\s*<a\b[^>]*>[\s\S]*<\/a>\s*<\/li>)$/i.test(trimmed)) {
+    return false;
+  }
+  const anchors = [...trimmed.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)];
+  if (anchors.length !== 1) return false;
+  const [, attributes] = anchors[0];
+  const linksToTerms =
+    /\basp-page\s*=\s*(["'])\/Terms\1/i.test(attributes) ||
+    /\bhref\s*=\s*(["'])(?:~?\/)?Terms\/?\1/i.test(attributes);
+  const visibleText = trimmed.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return linksToTerms && visibleText === "Terms";
+}
+
+function validatesBlazorNavigationInsertion(text) {
+  const trimmed = text.trim();
+  if (hasForbiddenNavigationContent(trimmed)) return false;
+  if (!hasOnlyTags(trimmed, new Set(["div", "navlink", "span"]))) return false;
+  if (!/^(?:<NavLink\b[^>]*>[\s\S]*<\/NavLink>|<div\b[^>]*>\s*<NavLink\b[^>]*>[\s\S]*<\/NavLink>\s*<\/div>)$/i.test(trimmed)) {
+    return false;
+  }
+  const links = [...trimmed.matchAll(/<NavLink\b([^>]*)>([\s\S]*?)<\/NavLink>/gi)];
+  if (links.length !== 1) return false;
+  const [, attributes] = links[0];
+  const linksToReports = /\bhref\s*=\s*(["'])\/?reports\/?\1/i.test(attributes);
+  const visibleText = trimmed.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return linksToReports && visibleText === "Reports";
+}
+
+function validateNavigationFile(entry, actual, contract) {
+  if (typeof entry.contentBase64 !== "string") {
+    failures.push(`static fixture baseline is missing navigation content: ${entry.path}`);
+    return;
+  }
+  const baselineBytes = Buffer.from(entry.contentBase64, "base64");
+  if (baselineBytes.toString("base64") !== entry.contentBase64 || sha256(baselineBytes) !== entry.sha256) {
+    failures.push(`static fixture baseline has invalid navigation content: ${entry.path}`);
+    return;
+  }
+  if (actual.bytes.equals(baselineBytes)) return;
+  if (actual.bytes.length <= baselineBytes.length) {
+    failures.push(`baseline navigation content was deleted or modified: ${entry.path}`);
+    return;
+  }
+
+  const insertionLength = actual.bytes.length - baselineBytes.length;
+  const validatesInsertion = contract === "razor-static"
+    ? validatesRazorNavigationInsertion
+    : validatesBlazorNavigationInsertion;
+  for (let index = 0; index <= baselineBytes.length; index += 1) {
+    if (!actual.bytes.subarray(0, index).equals(baselineBytes.subarray(0, index))) continue;
+    if (!actual.bytes.subarray(index + insertionLength).equals(baselineBytes.subarray(index))) continue;
+
+    const before = decodeUtf8(baselineBytes.subarray(0, index));
+    const after = decodeUtf8(baselineBytes.subarray(index));
+    const insertion = decodeUtf8(actual.bytes.subarray(index, index + insertionLength));
+    if (
+      before !== null &&
+      after !== null &&
+      insertion !== null &&
+      insertionIsInsideNavigation(before, after) &&
+      validatesInsertion(insertion)
+    ) {
+      return;
+    }
+  }
+
+  failures.push(`baseline navigation allows only one ${contract === "razor-static" ? "Terms" : "Reports"} entry insertion: ${entry.path}`);
 }
 
 function validateFileScope() {
@@ -79,11 +178,13 @@ function validateFileScope() {
       failures.push(`static fixture baseline contains a duplicate path: ${entry.path}`);
       continue;
     }
-    baselineByPath.set(entry.path, entry.sha256);
+    baselineByPath.set(entry.path, entry);
     const actual = actualByPath.get(entry.path);
     if (!actual) {
       failures.push(`baseline file is missing (deleted or renamed): ${entry.path}`);
-    } else if (!rules.mutableBaseline.has(entry.path) && sha256(actual.bytes) !== entry.sha256) {
+    } else if (entry.path === rules.navigationBaseline) {
+      validateNavigationFile(entry, actual, contract);
+    } else if (sha256(actual.bytes) !== entry.sha256) {
       failures.push(`baseline file changed outside allowed navigation: ${entry.path}`);
     }
   }

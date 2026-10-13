@@ -86,7 +86,7 @@ function run(command, args, options = {}) {
 function applyPatch(work, patch) {
   const initialized = run("git", ["init", "--quiet"], { cwd: work });
   if (initialized.status !== 0) return initialized;
-  return run("git", ["apply", "--whitespace=nowarn", patch], { cwd: work });
+  return run("git", ["-c", "core.autocrlf=false", "apply", "--whitespace=nowarn", patch], { cwd: work });
 }
 
 function validatorResult(contract, root) {
@@ -298,6 +298,44 @@ function restraintMutations() {
       '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>\n                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Terms">Terms</a>\n                        </li>',
       1,
     ));
+  restraintMutation("razor-static", "full layout replacement", (root) =>
+    write(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      '<nav><a class="nav-link" asp-page="/Terms">Terms</a></nav>\n<main>@RenderBody()</main>\n',
+    ));
+  restraintMutation("razor-static", "existing Home navigation removed", (root) =>
+    replace(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Index">Home</a>\n                        </li>\n',
+      "",
+      1,
+    ));
+  restraintMutation("razor-static", "existing Privacy navigation removed", (root) =>
+    replace(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>\n',
+      "",
+      1,
+    ));
+  restraintMutation("razor-static", "unrelated navigation insertion", (root) =>
+    replace(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>',
+      '                        <li class="nav-item">\n                            <a class="nav-link text-dark" asp-area="" asp-page="/Privacy">Privacy</a>\n                        </li>\n                        <li class="nav-item">\n                            <a class="nav-link text-dark" href="/About">About</a>\n                        </li>',
+      1,
+    ));
+  restraintMutation("razor-static", "script style and form navigation insertion", (root) =>
+    replace(
+      root,
+      "Pages/Shared/_Layout.cshtml",
+      "                    </ul>",
+      '                        <li><a asp-page="/Terms">Terms</a></li>\n                        <script>void 0</script><style>.nav{display:none}</style><form></form>\n                    </ul>',
+      1,
+    ));
   restraintMutation("razor-static", "non-EF AppDbContext over-scaffolding", (root) =>
     write(root, "Data/AppDbContext.cs", "namespace MyApp.Data; public sealed class AppDbContext { }\n"));
   restraintMutation("razor-static", "compilable Product and Category CRUD pages", (root) => {
@@ -352,6 +390,44 @@ function restraintMutations() {
       "Components/Layout/NavMenu.razor",
       '<NavLink class="nav-link" href="reports">',
       '<NavLink class="nav-link" href="reports" title="Reports">',
+      1,
+    ));
+  restraintMutation("blazor-static", "full menu replacement", (root) =>
+    write(
+      root,
+      "Components/Layout/NavMenu.razor",
+      '<nav><NavLink class="nav-link" href="reports">Reports</NavLink></nav>\n',
+    ));
+  restraintMutation("blazor-static", "existing Home navigation removed", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      '        <div class="nav-item px-3">\n            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">\n                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home\n            </NavLink>\n        </div>\n\n',
+      "",
+      1,
+    ));
+  restraintMutation("blazor-static", "existing Counter navigation removed", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      '        <div class="nav-item px-3">\n            <NavLink class="nav-link" href="counter">\n                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter\n            </NavLink>\n        </div>\n\n',
+      "",
+      1,
+    ));
+  restraintMutation("blazor-static", "existing Weather navigation removed", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      '        <div class="nav-item px-3">\n            <NavLink class="nav-link" href="weather">\n                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather\n            </NavLink>\n        </div>',
+      "",
+      1,
+    ));
+  restraintMutation("blazor-static", "unrelated navigation insertion", (root) =>
+    replace(
+      root,
+      "Components/Layout/NavMenu.razor",
+      "    </nav>",
+      '        <div class="nav-item px-3">\n            <NavLink class="nav-link" href="about">About</NavLink>\n        </div>\n    </nav>',
       1,
     ));
   restraintMutation("blazor-static", "non-EF AppDbContext over-scaffolding", (root) =>
