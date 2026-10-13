@@ -4,6 +4,72 @@ type: capability
 defaults:
   timeout: 20m
 stimuli:
+  - name: Keep long-running runner diagnostics separate from enforced timeouts
+    tags: {capability: diagnostic-timeout-semantics, risk: warning-becomes-failure, journey: migrate-runner-configuration}
+    prompt: |
+      Migrate this xUnit v2 project to MSTest v4, preserving net8.0 and VSTest.
+      Preserve the behavior of the existing runner configuration rather than
+      inventing new failure conditions. Run the migrated tests and explain any
+      runner setting that has no equivalent.
+    environment:
+      files:
+        - src: fixtures/runner-diagnostics/TestProject.csproj
+          dest: TestProject.csproj
+        - src: fixtures/runner-diagnostics/DiagnosticsTests.cs
+          dest: DiagnosticsTests.cs
+        - src: fixtures/runner-diagnostics/xunit.runner.json
+          dest: xunit.runner.json
+        - src: ../graders/global-vstest.json
+          dest: global.json
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+        - src: ../graders/DiagnosticTimeoutContract.cs
+          dest: .eval/DiagnosticTimeoutContract.txt
+    golden_patch:
+      path: goldens/runner-diagnostics.patch
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: migrate-runner-diagnostic-warning
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              Migrated the test to MSTest v4, preserving net8.0 and VSTest.
+              CompletesNormally passed. longRunningTestSeconds was a diagnostic
+              warning threshold, not an enforced failure deadline. I did not
+              synthesize a Timeout attribute. The xUnit-specific warning setting
+              has no direct equivalent here and was documented rather than
+              changing pass/fail behavior.
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;
+            guard=pathlib.Path('.eval/DiagnosticTimeoutContract.txt').read_bytes();
+            assert hashlib.sha256(guard.replace(b'\r\n',b'\n')).hexdigest()=='45d48abdd4a7bbadd0f11a6db07c69df6aa7f4c1051b0c55468dcfbd7867d290','Diagnostic verifier changed';
+            pathlib.Path('DiagnosticTimeoutContract.cs').write_bytes(guard);
+            p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';
+            sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest
+            --mstest-major 4 --expect CompletesNormally=Passed
+          expected_exit_code: 0
+          timeout: 4m
+      - type: output-matches
+        config:
+          pattern: '(?i)longRunningTestSeconds'
+      - type: output-matches
+        config:
+          pattern: '(?i)diagnostic|warning'
+      - type: prompt
+        config:
+          evidence: [trajectory, diff]
+    rubric:
+      - Treats longRunningTestSeconds as a diagnostic warning threshold, not a pass/fail timeout
+      - Does not synthesize Timeout attributes or another enforced deadline from the runner warning
+      - Preserves the existing framework target and VSTest runner and identifies unsupported diagnostic settings explicitly
+
   - name: Preserve an ordinary shared collection without a disable-parallelization flag
     tags: {capability: default-collection-contract, risk: overlapping-members-or-split-fixture, journey: migrate-shared-resource}
     prompt: |
@@ -60,7 +126,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='ec8392a6d447d083fa38c2d9ef2cbba67affade4565808bd66b82f3164cf720b','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='67ae86c7e4ec636487c94f3d8eacf8f78843efb6970e722597eb76c193b78345','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

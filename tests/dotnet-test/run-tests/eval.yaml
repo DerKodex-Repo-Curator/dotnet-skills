@@ -138,7 +138,7 @@ stimuli:
       # Required options must be in the executable segment, not quoted values.
       - type: output-matches
         config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))(?!(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--[ \t])[^\r\n]*$'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t](?:--list-tests|-t)(?=[ \t\r\n]|$))(?!(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--[ \t])[^\r\n]*$'
       - type: output-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:Bridge\.slnx|"Bridge\.slnx"|''Bridge\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--(?=[ \t])(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))[^\r\n]*$'
@@ -150,13 +150,16 @@ stimuli:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+(?:build|run|watch)(?=[ \t\r\n]|$)|^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--(?=[ \t])(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build\b'
       - type: output-not-matches
         config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?!(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?![ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]-t(?=[ \t\r\n]|$))(?!(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))'
       - type: output-not-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)[^\r\n]*[;&|]'
       - type: output-not-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?(?:(?:env|command|exec|nohup|time|timeout|sudo|sh|bash|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)[ \t]+|[&.][ \t]+|[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+)[^\r\n]*\bdotnet(?:\.exe)?[ \t]+(?:test|build|run|watch)\b|^[ \t]*(?:[$>][ \t]*)?dotnet\.exe[ \t]+(?:test|build|run|watch)\b'
+      - type: output-not-matches
+        config:
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?(?:(?:env|command|exec|nohup|time|timeout|sudo|sh|bash|zsh|cmd(?:\.exe)?|powershell(?:\.exe)?|pwsh(?:\.exe)?)[ \t]+[^\r\n]*?|[&.][ \t]+|[A-Za-z_][A-Za-z0-9_]*=[^ \t\r\n]+[ \t]+)?(?:"(?:[^"\r\n]*[\\/])?dotnet(?:\.exe)?"|''(?:[^''\r\n]*[\\/])?dotnet(?:\.exe)?''|[^ \t''"\r\n]*[\\/]dotnet(?:\.exe)?)[ \t]+(?:test|build|run|watch)\b'
       - type: prompt
     rubric:
       - Gives a discovery-only command for each named solution without running tests or rebuilding

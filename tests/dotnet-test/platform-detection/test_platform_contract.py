@@ -114,6 +114,19 @@ class PlatformContractTests(unittest.TestCase):
             with self.subTest(explanation=explanation):
                 self.assertEqual([], self.failures(labels + "\n\n" + explanation))
 
+    def test_native_support_does_not_claim_bridge_support(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for separator in (", but", ", yet", ", however", ", whereas", ", while", " and"):
+            with self.subTest(separator=separator):
+                explanation = (
+                    f"MTP 2 supports native mode{separator} cannot use the VSTest bridge on SDK 10."
+                )
+                self.assertEqual([], self.failures(labels + "\n\n" + explanation))
+                self.assertIn("output-not-matches", self.failures(
+                    labels + "\n\n" + explanation +
+                    "\nMTP 2 supports the VSTest bridge on SDK 10."
+                ))
+
     def test_wrong_mode_framework_and_missing_version_evidence_fail(self):
         for original, replacement in (
             ("dotnet test mode: VSTest", "dotnet test mode: native MTP"),

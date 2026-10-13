@@ -252,6 +252,37 @@ class DiscoveryContractTests(unittest.TestCase):
             GOLDEN + "\ndotnet.exe test Native.slnx --no-build"
         ))
 
+    def test_quoted_and_qualified_executables_cannot_add_test_execution(self):
+        for executable, wrapper, prefix in product(
+            (
+                "/usr/bin/dotnet", "./dotnet", r".\dotnet.exe",
+                r"C:\tools\dotnet.exe", '"dotnet"', "'dotnet'",
+                '"/usr/bin/dotnet"', "'/usr/bin/dotnet'",
+                r'"C:\Program Files\dotnet\dotnet.exe"',
+            ),
+            ("", "& ", "env ", "command "),
+            ("", "$ ", "> "),
+        ):
+            with self.subTest(executable=executable, wrapper=wrapper, prefix=prefix):
+                extra = f"{prefix}{wrapper}{executable} test Native.slnx --no-build"
+                self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + extra))
+        self.assertEqual([], self.failed_graders(
+            GOLDEN + '\nAvoid `/usr/bin/dotnet test Native.slnx --no-build`.'
+        ))
+
+    def test_vstest_discovery_alias_is_allowed_only_in_its_executable_segment(self):
+        valid = COMMANDS[0].replace("--list-tests", "-t")
+        self.assertEqual([], self.failed_graders(GOLDEN.replace(COMMANDS[0], valid)))
+        for command in (
+            "dotnet test VSTest.slnx --no-build # -t",
+            'dotnet test VSTest.slnx --no-build --logger "console -t "',
+            "dotnet test VSTest.slnx -t # --no-build",
+            "dotnet test Bridge.slnx --no-build -- -t",
+            "dotnet test --solution Native.slnx --no-build -t",
+        ):
+            with self.subTest(command=command):
+                self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+
     def test_inline_command_mention_is_not_execution(self):
         for mention in (
             "Do not use `dotnet test Native.slnx --no-build` to discover tests.",

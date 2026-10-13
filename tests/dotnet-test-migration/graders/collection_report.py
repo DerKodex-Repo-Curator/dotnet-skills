@@ -22,6 +22,7 @@ def validate_report(policy, response):
     assert isinstance(response, str) and response.strip(), "Missing final report"
     normalized = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
     normalized = re.sub(r"\s+", " ", normalized)
+    normalized = re.sub(r"\bunlike\s+xunit(?:\.net)?\s*,\s*", "", normalized, flags=re.I)
     unrelated = r"\b(?:unrelated|other)\s+(?:(?:test\s+)?(?:classes|tests)|collections)\b"
     members = (
         r"\b(?:(?:these|those|the)\s+(?:(?:deferred|serialized|shared|collection|two)\s+)?"
@@ -41,7 +42,7 @@ def validate_report(policy, response):
         historical = False
         # Keep coordinated overlap targets together, but separate their predicates.
         separator = (
-            r"\b(?:but|yet|however|while)\b|"
+            r",(?=\s*(?:MSTest|xUnit)\b)|\b(?:but|yet|however|while)\b|"
             rf"\band(?=\s+(?:{continuation}|{unrelated}|{members}\s+(?:can|cannot|may|are)\b))"
         )
         for clause in re.split(separator, sentence, flags=re.I):
@@ -74,7 +75,9 @@ def validate_report(policy, response):
             claims.update((target, permitted) for target in targets or ["unspecified"])
 
     if policy == "shared-resource":
-        assert claims and all(permitted for _, permitted in claims), (
+        assert claims & {("members", True), ("unspecified", True)} and all(
+            permitted for _, permitted in claims
+        ), (
             "Scheduling disclosure contradicts shared-resource policy: "
             "unrelated classes remain eligible for parallel execution"
         )
@@ -97,7 +100,7 @@ def main():
     grading = json.loads(Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
     guard = verified_bytes(
         workspace / ".eval" / "CollectionSchedulingContract.txt",
-        "a1d32b2ef667a7abb236d3c91884a7b8e13121d656618eab0ea6c446c01d87a7",
+        "b8171dd9e7aff92ec6b5f5e4d7537fb427d2b8036ce14839f9a79a6f2d4ba430",
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",

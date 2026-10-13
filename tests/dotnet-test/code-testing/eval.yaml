@@ -25,6 +25,55 @@ environment:
     - src: ../graders/authenticated_artifacts.py
       dest: .eval/authenticated_artifacts.py
 stimuli:
+  - name: Leave already-correct tests unchanged during a repair request
+    prompt: |
+      I suspect NoopRepair/test_amounts.py still needs repair after the module
+      was renamed. Check it, fix anything that is actually broken, and run
+      python -m unittest -v from NoopRepair. Keep the existing test intent,
+      production behavior and unrelated files intact; do not modernize the suite.
+    tags:
+      capability: repair-already-correct-tests
+      risk: unnecessary-test-rewrite
+      journey: investigate-reported-test-failure
+    environment:
+      files:
+        - src: fixtures/repair-noop/amounts.py
+          dest: NoopRepair/amounts.py
+        - src: fixtures/repair-noop/test_amounts.py
+          dest: NoopRepair/test_amounts.py
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: code-testing-repair-noop
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              No repair was needed: test_amounts.py already imports amounts.
+              I left both source files unchanged. `python -m unittest -v` from
+              NoopRepair passed test_total and test_empty (2 tests).
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,subprocess,sys;
+            root=pathlib.Path('NoopRepair');
+            expected={'amounts.py':'3251dbf18617cd67c47707cb9bd1611dbac212ff0ee9814a75b8ce1f34b85aad','test_amounts.py':'2f9d898323917f0f5014dc669e4fbe874e9c54f57c0bf53333a06b310489d8bc'};
+            actual={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in root.rglob('*') if p.is_file() and not (p.parent==root/'__pycache__' and p.suffix=='.pyc')};
+            assert actual==expected, 'Already-correct repair changed files';
+            subprocess.run([sys.executable,'-B','-m','unittest','-v'],cwd=root,check=True)"
+          expected_exit_code: 0
+          timeout: 1m
+      - type: output-matches
+        config:
+          pattern: '(?i)no (?:repair|changes?|fix)(?: (?:was|were|is|are))? (?:needed|required)|already (?:correct|imports|uses)|unchanged'
+      - type: prompt
+    rubric:
+      - Recognizes that the existing import and tests are already correct instead of forcing a repair
+      - Preserves all fixture source files and test intent without adding compatibility modules or unrelated rewrites
+      - Runs the existing unittest entry point and reports the actual result
+
   - name: Generate a project-wide pytest suite across multiple modules
     prompt: |
       Generate a comprehensive pytest suite for the entire project under

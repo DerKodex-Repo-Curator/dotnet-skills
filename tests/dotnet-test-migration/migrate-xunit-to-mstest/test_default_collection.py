@@ -68,6 +68,13 @@ class DefaultCollectionTests(unittest.TestCase):
                 "using Microsoft.VisualStudio.TestTools.UnitTesting;\n"
                 "[assembly: Parallelize(Workers = 2, Scope = ExecutionScope.ClassLevel)]",
             )
+            source.write_text(
+                parallel.replace("Workers = 2", "Workers = 1").replace("[DoNotParallelize]\n", ""),
+                encoding="utf-8",
+            )
+            replay.run_graders(
+                CASE, root, "MSTest serializes unrelated classes under this assembly policy."
+            )
             source.write_text(parallel, encoding="utf-8")
             replay.run_graders(CASE, root)
             replay.run_graders(CASE, root, DEFERRED_REPORT)
@@ -272,6 +279,40 @@ class DefaultCollectionTests(unittest.TestCase):
                 with self.subTest(policy=policy, negative=response):
                     with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                         report.validate_report(policy, response)
+
+    def test_leading_comparison_retains_current_framework_claims(self):
+        contrasts = (
+            "Unlike xUnit, unrelated classes cannot overlap these deferred members, "
+            "but can run in parallel with each other.",
+            "Unlike xUnit, MSTest ensures unrelated classes cannot overlap "
+            "these deferred members.",
+        )
+        for response in contrasts:
+            with self.subTest(response=response):
+                report.validate_report("deferred-members", response)
+                with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                    report.validate_report(
+                        "deferred-members", response.replace("cannot overlap", "can overlap")
+                    )
+        report.validate_report(
+            "assembly-serial", "Unlike xUnit, MSTest serializes unrelated classes."
+        )
+        report.validate_report(
+            "shared-resource", "Unlike xUnit, MSTest allows unrelated classes to overlap these members."
+        )
+        report.validate_report(
+            "deferred-members",
+            "In xUnit unrelated classes can overlap, MSTest does not allow unrelated "
+            "classes to overlap these deferred members.",
+        )
+
+    def test_shared_resource_report_must_address_collection_members(self):
+        peers = "Unrelated classes can overlap each other."
+        with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+            report.validate_report("shared-resource", peers)
+        report.validate_report(
+            "shared-resource", peers + " Unrelated classes may overlap these members."
+        )
 
 
 if __name__ == "__main__":

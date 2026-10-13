@@ -226,8 +226,9 @@ After a successful build for the same configuration and target framework:
 | Native MTP mode, SDK 10+, MTP 1.7+ | `dotnet test --project <project.csproj> --no-build --list-tests` | `dotnet test --solution <solution.slnx> --no-build --list-tests` |
 
 Keep the actual solution extension and preserve configuration, target framework
-and applicable filters. In bridge mode, `--no-build` and other SDK options stay
-before `--`; the MTP `--list-tests` option follows it. The compatibility limits
+and applicable filters. VSTest also accepts `-t` as its `--list-tests` alias;
+keep `--list-tests` for the MTP application. In bridge mode, `--no-build` and other
+SDK options stay before `--`; the MTP `--list-tests` option follows it. The compatibility limits
 above still apply: SDK 10+ bridging requires compatible MTP 1.x, not MTP 2+.
 For classic projects, use the repository runner's discovery option, such as
 `vstest.console.exe <test.dll> /ListTests`, preserving adapter configuration.

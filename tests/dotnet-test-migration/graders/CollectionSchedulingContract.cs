@@ -11,8 +11,9 @@ internal static class CollectionSchedulingContract
     internal static void Verify()
     {
         var assembly = typeof(CollectionSchedulingContract).Assembly;
+        var parallelize = assembly.GetCustomAttribute<ParallelizeAttribute>();
         if (assembly.IsDefined(typeof(DoNotParallelizeAttribute)) ||
-            assembly.GetCustomAttribute<ParallelizeAttribute>() is null)
+            parallelize is null || parallelize.Workers == 1)
         {
             RecordPolicy("assembly-serial");
             return;
