@@ -2,12 +2,14 @@
 name: system-text-json-net11
 description: >
   Guidance for System.Text.Json APIs added in .NET 11:
-  `JsonNamingPolicy.PascalCase`, `JsonSerializerOptions.GetTypeInfo<T>()`, and
-  `JsonSerializerOptions.TryGetTypeInfo<T>(out JsonTypeInfo<T>? info)`.
+  `JsonNamingPolicy.PascalCase` and the generic
+  `JsonSerializerOptions.GetTypeInfo` and `JsonSerializerOptions.TryGetTypeInfo`
+  overloads.
   USE when targeting net11.0 or later for PascalCase property, dictionary-key, or
   string-enum names without a custom policy; removing casing-only `JsonPropertyName`
   attributes; fixing file-based `NoMetadataForType` or disabled reflection; obtaining
-  `JsonTypeInfo<T>` without a cast; or probing metadata availability without exceptions.
+  strongly typed `JsonTypeInfo` metadata without a cast; or probing metadata
+  availability without exceptions.
   DO NOT USE for pre-net11 targets, established older policies such as `CamelCase`, or
   Newtonsoft.Json / Json.NET, `DefaultContractResolver`, `NamingStrategy`, or another
   non-System.Text.Json library.
