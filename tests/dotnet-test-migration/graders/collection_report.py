@@ -22,39 +22,71 @@ def validate_report(policy, response):
     assert isinstance(response, str) and response.strip(), "Missing final report"
     normalized = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
     normalized = re.sub(r"\s+", " ", normalized)
-    clauses = [
-        clause.strip()
-        for clause in re.split(r"[.!?;\n]+|\b(?:whereas|unlike)\b", normalized, flags=re.I)
-        if clause.strip()
-    ]
-    target_clauses = [
-        clause for clause in clauses
-        if not re.match(r"^(?:in\s+)?xunit\b", clause, re.I)
-    ]
-    subject = r"\b(?:unrelated|other)\s+(?:(?:test\s+)?(?:classes|tests)|collections)\b"
-    parallel = r"\b(?:parallel|concurrent(?:ly)?|overlap)\b"
-    restrictive = [
-        subject + r".{0,80}\b(?:cannot|can't|do not|don't|no longer)\b.{0,60}" + parallel,
-        subject + r"(?:(?!\b(?:not|never)\b).){0,80}\b(?:serial(?:ized|ly)?|sequential(?:ly)?|nonparallel|blocked)\b",
-        r"(?<!not )(?<!n't )(?<!never )\b(?:serializes?|serializing|blocks?)\b.{0,80}" + subject,
-    ]
-    permissive = [
-        subject + r".{0,80}\b(?:can|may|remain|continue|allowed)\b.{0,60}" + parallel,
-        r"\b(?:allows?|permits?)\b.{0,60}" + subject + r".{0,60}" + parallel,
-        r"\b(?:does not|doesn't)\s+(?:serialize|block)\b.{0,60}" + subject,
-        subject + r".{0,60}\b(?:not|never)\s+(?:serialized|blocked)\b",
-    ]
-    restricted = any(re.search(pattern, clause, re.I) for clause in target_clauses
-                     for pattern in restrictive)
-    permitted = any(re.search(pattern, clause, re.I) for clause in target_clauses
-                    for pattern in permissive)
+    unrelated = r"\b(?:unrelated|other)\s+(?:(?:test\s+)?(?:classes|tests)|collections)\b"
+    members = (
+        r"\b(?:(?:these|those|the)\s+(?:(?:deferred|serialized|shared|collection|two)\s+)?"
+        r"(?:members|classes|tests)|(?:deferred|serialized)\s+members)\b"
+    )
+    peers = r"\b(?:each other|one another|themselves)\b"
+    parallel = r"\b(?:parallel|concurrent(?:ly)?|overlaps?|overlapping)\b"
+    serial = r"\b(?:serial(?:izes?|izing|ized|ly)?|sequential(?:ly)?|nonparallel|blocks?|blocked)\b"
+    negation = r"\b(?:cannot|can't|don't|doesn't|won't|isn't|aren't|not|never|no longer)\b"
+    continuation = (
+        r"(?:can|cannot|can't|may|must|do|does|don't|doesn't|will|won't|are|aren't|"
+        r"remain|continue|not|never|no longer)\b"
+    )
+    claims = set()
+    for sentence in re.split(r"[.!?;\n]+|\b(?:whereas|unlike)\b", normalized, flags=re.I):
+        subject = None
+        historical = False
+        # Keep coordinated overlap targets together, but separate their predicates.
+        separator = (
+            r"\b(?:but|yet|however|while)\b|"
+            rf"\band(?=\s+(?:{continuation}|{unrelated}|{members}\s+(?:can|cannot|may|are)\b))"
+        )
+        for clause in re.split(separator, sentence, flags=re.I):
+            clause = re.sub(r"\s+", " ", clause).strip(" ,")
+            if re.match(r"^(?:in\s+)?xunit\b", clause, re.I):
+                historical = True
+            elif re.match(r"^mstest\b", clause, re.I):
+                historical = False
+            if historical:
+                continue
+            if subject and re.match(continuation, clause, re.I):
+                clause = subject + " " + clause
+            actor = re.search(unrelated + "|" + members, clause, re.I)
+            if actor:
+                subject = actor[0]
+            if not re.search(unrelated, clause, re.I):
+                continue
+            # Member adjectives (for example, "serialized members") are not predicates.
+            predicate_text = re.sub(members, "", clause, flags=re.I)
+            predicate = re.search(parallel + "|" + serial, predicate_text, re.I)
+            if not predicate:
+                continue
+            negated = bool(re.search(negation, predicate_text[:predicate.start()], re.I))
+            permitted = bool(re.fullmatch(parallel, predicate[0], re.I)) != negated
+            targets = []
+            if re.search(members, clause, re.I):
+                targets.append("members")
+            if re.search(peers, clause, re.I):
+                targets.append("peers")
+            claims.update((target, permitted) for target in targets or ["unspecified"])
+
     if policy == "shared-resource":
-        assert permitted and not restricted, (
+        assert claims and all(permitted for _, permitted in claims), (
             "Scheduling disclosure contradicts shared-resource policy: "
             "unrelated classes remain eligible for parallel execution"
         )
+    elif policy == "deferred-members":
+        assert ("members", False) in claims and claims <= {
+            ("members", False), ("peers", True),
+        }, (
+            "Scheduling disclosure contradicts deferred-members: unrelated classes "
+            "may overlap each other, but cannot overlap these deferred members"
+        )
     else:
-        assert restricted and not permitted, (
+        assert claims and not any(permitted for _, permitted in claims), (
             f"Scheduling disclosure contradicts {policy}: "
             "unrelated tests cannot freely overlap these serialized members"
         )

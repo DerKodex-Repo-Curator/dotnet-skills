@@ -31,6 +31,10 @@ RESOURCE_REPORT = (
     "MSTest permits unrelated classes to run in parallel, so this avoids the "
     "broader assembly serialization; lifecycle remains assembly-wide for this fixture."
 )
+DEFERRED_REPORT = (
+    "Unrelated classes may run in parallel with each other, but cannot overlap "
+    "these deferred members. This is coarser scheduling than xUnit collections."
+)
 
 
 class DefaultCollectionTests(unittest.TestCase):
@@ -66,6 +70,17 @@ class DefaultCollectionTests(unittest.TestCase):
             )
             source.write_text(parallel, encoding="utf-8")
             replay.run_graders(CASE, root)
+            replay.run_graders(CASE, root, DEFERRED_REPORT)
+            for invalid in (
+                "Unrelated classes cannot overlap each other, but may overlap "
+                "these deferred members. This is coarser scheduling.",
+                "Unrelated classes may run in parallel with each other, and these "
+                "deferred members may overlap unrelated classes. This is coarser scheduling.",
+                "MSTest serializes unrelated classes under this assembly policy.",
+            ):
+                with self.subTest(deferred_report=invalid):
+                    with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                        replay.run_graders(CASE, root, invalid)
 
             source.write_text(parallel.replace("[DoNotParallelize]\n", "", 1), encoding="utf-8")
             replay.run_graders(CASE, root)
@@ -159,8 +174,11 @@ class DefaultCollectionTests(unittest.TestCase):
             "This is a coarser policy than xUnit collections."
         )
         reversed_report = "Unrelated classes remain parallel and can overlap exactly as in xUnit."
-        for policy in ("assembly-serial", "deferred-members"):
-            for valid in (serial_report, deferred_report):
+        for policy, positives in (
+            ("assembly-serial", (serial_report, deferred_report)),
+            ("deferred-members", (deferred_report, DEFERRED_REPORT)),
+        ):
+            for valid in positives:
                 with self.subTest(policy=policy, valid=valid):
                     report.validate_report(policy, valid)
             for invalid in (
@@ -180,6 +198,80 @@ class DefaultCollectionTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
             report.validate_report("shared-resource", deferred_report)
+
+    def test_overlap_targets_and_negation_are_not_interchangeable(self):
+        positives = {
+            "assembly-serial": (
+                "Unrelated classes cannot overlap each other or these members.",
+                "MSTest does not allow unrelated classes to run concurrently.",
+            ),
+            "deferred-members": (
+                DEFERRED_REPORT,
+                DEFERRED_REPORT.replace(" parallel ", " parallel\n").replace(
+                    "these deferred", "these\ndeferred"
+                ),
+                "Unrelated classes may run concurrently with one another, but unrelated "
+                "classes cannot run concurrently with these members.",
+                "These deferred members cannot overlap unrelated classes, but unrelated "
+                "classes can overlap each other.",
+                "These deferred members may not overlap unrelated classes.",
+                "Unrelated classes can overlap each other but are not allowed to overlap "
+                "these deferred members.",
+                "Unrelated classes cannot overlap these members, but aren't blocked "
+                "from running in parallel with each other.",
+                "Unrelated classes cannot overlap these members, whereas xUnit allows "
+                "unrelated classes to run in parallel and unrelated collections may overlap.",
+                "In xUnit unrelated collections may overlap, whereas unrelated classes "
+                "cannot overlap these deferred members.",
+                "Unrelated classes cannot overlap these members, but xUnit allows unrelated "
+                "classes to run in parallel and unrelated collections can overlap.",
+            ),
+            "shared-resource": (
+                "Unrelated classes may run in parallel with each other and these members.",
+                "These serialized members cannot overlap each other, but may overlap "
+                "unrelated classes.",
+                "Unrelated classes can overlap these serialized members, but these "
+                "members cannot overlap each other.",
+                "Unrelated classes are not serialized with these members.",
+            ),
+        }
+        negatives = {
+            "assembly-serial": (
+                DEFERRED_REPORT,
+                "Unrelated classes cannot overlap these members, but may overlap each other.",
+            ),
+            "deferred-members": (
+                "Unrelated classes cannot overlap each other, but may overlap these members.",
+                "Unrelated classes may not run in parallel with each other, but can overlap "
+                "these deferred members.",
+                "Unrelated classes can overlap each other but cannot overlap one another.",
+                DEFERRED_REPORT + " These deferred members may overlap unrelated classes.",
+                DEFERRED_REPORT + " Unrelated classes may overlap each other and these members.",
+                "Unrelated classes cannot overlap these members, yet can overlap these members.",
+                "Unrelated classes cannot overlap these members, however may overlap these members.",
+                "Unrelated classes cannot overlap these members, but aren't blocked "
+                "from overlapping these members.",
+                "MSTest serializes unrelated classes under this assembly policy.",
+            ),
+            "shared-resource": (
+                DEFERRED_REPORT,
+                RESOURCE_REPORT + " These members cannot overlap unrelated classes.",
+                "MSTest does not allow unrelated classes to run in parallel.",
+                "MSTest doesn't permit unrelated classes to run concurrently.",
+                "Unrelated classes may not overlap these members.",
+                "Unrelated classes are not allowed to overlap these members.",
+                "Unrelated classes can not run in parallel.",
+            ),
+        }
+        for policy, responses in positives.items():
+            for response in responses:
+                with self.subTest(policy=policy, positive=response):
+                    report.validate_report(policy, response)
+        for policy, responses in negatives.items():
+            for response in responses:
+                with self.subTest(policy=policy, negative=response):
+                    with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                        report.validate_report(policy, response)
 
 
 if __name__ == "__main__":

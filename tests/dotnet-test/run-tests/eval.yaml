@@ -134,21 +134,23 @@ stimuli:
               bridge forwards the discovery flag after `--`; native MTP uses
               an explicit solution selector. I have not executed the commands.
     graders:
+      # Scan shell quotes/backslash escapes as data; stop at unquoted whitespace + #.
+      # Required options must be in the executable segment, not quoted values.
       - type: output-matches
         config:
-          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test\s+["'']?VSTest\.slnx["'']?(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--list-tests(?:\s|$))(?![^\r\n]*\s--\s)[^\r\n]*$'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:VSTest\.slnx|"VSTest\.slnx"|''VSTest\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))(?!(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--[ \t])[^\r\n]*$'
       - type: output-matches
         config:
-          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test\s+["'']?Bridge\.slnx["'']?(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--\s+[^\r\n]*--list-tests(?:\s|$))[^\r\n]*$'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test[ \t]+(?:Bridge\.slnx|"Bridge\.slnx"|''Bridge\.slnx'')(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--(?=[ \t])(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))[^\r\n]*$'
       - type: output-matches
         config:
-          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+test(?=[^\r\n]*\s--solution\s+["'']?Native\.slnx["'']?(?:\s|$))(?=[^\r\n]*\s--no-build(?:\s|$))(?=[^\r\n]*\s--list-tests(?:\s|$))[^\r\n]*$'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t]|$)(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--solution[ \t]+(?:Native\.slnx|"Native\.slnx"|''Native\.slnx'')(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))[^\r\n]*$'
       - type: output-not-matches
         config:
-          pattern: '(?im)^\s*(?:[$>]\s*)?dotnet\s+(?:build|run|watch)(?:\s|$)|^\s*(?:[$>]\s*)?dotnet\s+test[^\r\n]*\s--\s+[^\r\n]*--no-build\b'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+(?:build|run|watch)(?=[ \t\r\n]|$)|^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--(?=[ \t])(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build\b'
       - type: output-not-matches
         config:
-          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?![^\r\n]*[ \t]--list-tests(?:[ \t\r\n]|$))'
+          pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)(?!(?=(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--no-build(?=[ \t\r\n]|$))(?:\\[^\r\n]|(?![ \t]#)[^\\''"\r\n]|"(?:\\[^\r\n]|[^\\"\r\n])*"|''[^''\r\n]*'')*[ \t]--list-tests(?=[ \t\r\n]|$))'
       - type: output-not-matches
         config:
           pattern: '(?im)^[ \t]*(?:[$>][ \t]*)?dotnet[ \t]+test(?=[ \t\r\n]|$)[^\r\n]*[;&|]'

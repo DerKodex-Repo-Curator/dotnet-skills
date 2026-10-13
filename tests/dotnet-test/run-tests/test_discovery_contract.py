@@ -90,6 +90,91 @@ class DiscoveryContractTests(unittest.TestCase):
                 self.assertNotIn("output-matches", failures)
                 self.assertIn("output-not-matches", failures)
 
+    def test_required_options_in_comments_do_not_satisfy_a_lane(self):
+        for index, command in (
+            (0, "dotnet test VSTest.slnx --no-build # --list-tests"),
+            (0, "dotnet test VSTest.slnx --list-tests # --no-build"),
+            (1, "dotnet test Bridge.slnx --no-build -- # --list-tests"),
+            (1, "dotnet test Bridge.slnx --no-build # -- --list-tests"),
+            (1, "dotnet test Bridge.slnx --no-build --list-tests # --"),
+            (1, "dotnet test Bridge.slnx -- --list-tests # --no-build"),
+            (2, "dotnet test --solution Native.slnx --no-build # --list-tests"),
+            (2, "dotnet test --solution Native.slnx --list-tests # --no-build"),
+            (2, "dotnet test --no-build --list-tests # --solution Native.slnx"),
+        ):
+            with self.subTest(command=command):
+                commands = list(COMMANDS)
+                commands[index] = command
+                self.assertIn("output-matches", self.failed_graders("\n".join(commands)))
+
+    def test_extra_commands_cannot_borrow_required_options_from_comments_or_literals(self):
+        for command, prefix, position in product(
+            (
+                "dotnet test VSTest.slnx --no-build # --list-tests",
+                "dotnet test Bridge.slnx --no-build # -- --list-tests",
+                "dotnet test --solution Native.slnx --no-build # --list-tests",
+                "dotnet test VSTest.slnx --list-tests # --no-build",
+                "dotnet test Bridge.slnx -- --list-tests # --no-build",
+                "dotnet test --solution Native.slnx --list-tests # --no-build",
+                'dotnet test VSTest.slnx --no-build --logger "console # --list-tests "',
+                "dotnet test VSTest.slnx --no-build --logger 'console # --list-tests '",
+                'dotnet test VSTest.slnx --list-tests --logger "console # --no-build "',
+            ),
+            ("", "  ", "$ ", "> ", "\t"),
+            range(4),
+        ):
+            with self.subTest(command=command, prefix=prefix, position=position):
+                commands = list(COMMANDS)
+                commands.insert(position, prefix + command)
+                failures = self.failed_graders("\n".join(commands))
+                self.assertNotIn("output-matches", failures)
+                self.assertIn("output-not-matches", failures)
+
+    def test_valid_flags_before_comments_and_quoted_hashes_pass(self):
+        for quote, prefix, comment, whitespace in product(
+            ("'", '"'),
+            ("", "  ", "$ ", "> ", "\t"),
+            (
+                "# --list-tests is discovery only",
+                "# do not move --no-build after -- or run dotnet test",
+                "# no dotnet build and no test execution",
+                '# prose may contain unmatched " or \' quotes',
+            ),
+            (" ", "  ", "\t"),
+        ):
+            with self.subTest(
+                quote=quote, prefix=prefix, comment=comment, whitespace=whitespace,
+            ):
+                commands = []
+                for index, command in enumerate(COMMANDS):
+                    # A quoted hash is data, even before the required options.
+                    if index == 0:
+                        command = command.replace(
+                            " --no-build",
+                            f" --results-directory {quote}inventory # snapshot{quote}"
+                            " --no-build",
+                        )
+                    commands.append(f"{prefix}{command}{whitespace}{comment}")
+                self.assertEqual([], self.failed_graders("\n".join(commands)))
+
+    def test_escaped_quotes_do_not_turn_literal_flags_into_options(self):
+        command = r'dotnet test VSTest.slnx --no-build --logger "console \" --list-tests "'
+        self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+        command = r'dotnet test VSTest.slnx --list-tests --logger "console \" --no-build "'
+        self.assertIn("output-not-matches", self.failed_graders(GOLDEN + "\n" + command))
+
+    def test_hash_inside_an_unquoted_word_is_not_a_comment(self):
+        command = COMMANDS[0].replace(
+            " --no-build", " --results-directory inventory#snapshot --no-build"
+        )
+        self.assertEqual([], self.failed_graders(GOLDEN.replace(COMMANDS[0], command)))
+        for operator in (";", "&&", "||", "|", "&"):
+            with self.subTest(operator=operator):
+                self.assertIn(
+                    "output-not-matches",
+                    self.failed_graders(GOLDEN + f"\n{command} {operator} dotnet test"),
+                )
+
     def test_existing_negative_guards_still_reject_extra_commands(self):
         for command in (
             "dotnet build Native.slnx",
@@ -124,6 +209,19 @@ class DiscoveryContractTests(unittest.TestCase):
                 failures = self.failed_graders("\n".join(commands))
                 self.assertNotIn("output-matches", failures)
                 self.assertIn("output-not-matches", failures)
+
+    def test_escaped_quotes_cannot_hide_chained_execution(self):
+        for value in (
+            r'"inventory \" # snapshot"',
+            r'"inventory `" # snapshot"',
+            r'inventory\"#snapshot',
+            r'"path\"; dotnet test; echo "\"',
+        ):
+            with self.subTest(value=value):
+                command = COMMANDS[0] + f" --results-directory {value}; dotnet test"
+                self.assertIn(
+                    "output-not-matches", self.failed_graders(GOLDEN + "\n" + command)
+                )
 
     def test_missing_discovery_command_still_fails(self):
         for command in COMMANDS:
@@ -160,6 +258,9 @@ class DiscoveryContractTests(unittest.TestCase):
             "Do not chain `dotnet test Native.slnx --no-build; "
             "dotnet test --solution Native.slnx --no-build --list-tests`.",
             "Avoid `env dotnet test Native.slnx --no-build`; it executes tests.",
+            "The comment in `dotnet test VSTest.slnx --no-build # --list-tests` "
+            "does not enable discovery.",
+            "# dotnet test VSTest.slnx --no-build # --list-tests",
         ):
             with self.subTest(mention=mention):
                 self.assertEqual([], self.failed_graders(GOLDEN + "\n" + mention))
