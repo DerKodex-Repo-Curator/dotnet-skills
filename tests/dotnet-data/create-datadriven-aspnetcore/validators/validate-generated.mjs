@@ -169,10 +169,43 @@ function expandReferencedMethods(text, fragment) {
   return expanded;
 }
 
-function endpointRecords(text) {
+function staticStringValue(text, expression, beforeIndex, seen = new Set()) {
+  const candidate = expression.trim();
+  const regularLiteral = candidate.match(/^"((?:\\.|[^"\\])*)"$/s);
+  if (regularLiteral) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+  const verbatimLiteral = candidate.match(/^@"((?:""|[^"])*)"$/s);
+  if (verbatimLiteral) return verbatimLiteral[1].replaceAll('""', '"');
+  if (!/^@?[A-Za-z_]\w*$/.test(candidate) || seen.has(candidate)) return null;
+
+  let assignment = null;
+  const assignmentPattern = /(?<![.\w])(@?[A-Za-z_]\w*)\s*=(?!=|>)\s*([^;]+);/g;
+  for (const match of text.matchAll(assignmentPattern)) {
+    if (match.index >= beforeIndex) break;
+    if (match[1] === candidate) assignment = match;
+  }
+  if (!assignment) return null;
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(candidate);
+  return staticStringValue(text, assignment[2], assignment.index, nextSeen);
+}
+
+function endpointRecords(text, supportingText = text) {
   const groups = new Map();
-  for (const match of text.matchAll(/\b(?:var\s+)?(\w+)\s*=\s*[^;]*?MapGroup\s*\(\s*"([^"]+)"/g)) {
-    groups.set(match[1], { base: match[2], statement: statementAt(text, match.index) });
+  for (const match of text.matchAll(/\b(?:var\s+)?(\w+)\s*=\s*[^;]*?\bMapGroup\s*\(/g)) {
+    const openParen = text.indexOf("(", match.index + match[0].lastIndexOf("MapGroup"));
+    const closeParen = balancedEnd(text, openParen, "(", ")");
+    if (closeParen < 0) continue;
+    const argument = splitTopLevelArguments(text.slice(openParen + 1, closeParen))[0] ?? "";
+    const base = staticStringValue(text, argument, match.index);
+    if (base === null) continue;
+    groups.set(match[1], { base, statement: statementAt(text, match.index) });
   }
 
   const records = [];
@@ -187,11 +220,11 @@ function endpointRecords(text) {
     let behavior = statement;
     let handlerSignature = call;
     if (handler) {
-      const methods = methodsNamed(text, handler);
+      const methods = methodsNamed(supportingText, handler);
       handlerSignature = methods.map((method) => method.signature).join("\n");
       for (const method of methods) behavior += `\n${method.signature}\n${method.body}`;
     }
-    behavior = expandReferencedMethods(text, behavior);
+    behavior = expandReferencedMethods(supportingText, behavior);
     const group = groups.get(match[1]);
     records.push({
       verb: match[2].toUpperCase(),
@@ -663,7 +696,7 @@ function validateRazorPages() {
 
 function validateTodoApi() {
   checkContext("TodoDbContext", ["TodoItem"], false);
-  const records = endpointRecords(cs);
+  const records = matching(/\.cs$/i).flatMap((file) => endpointRecords(file.text, cs));
   checkApiCrud(records, "/api/todos", "Todo", {
     validation: true,
     validationType: "TodoRequest",
@@ -804,7 +837,7 @@ function validateParentApi() {
   const contextClasses = [...cs.matchAll(/class\s+(\w+)[^{:\n]*(?::[^{\n]*\bDbContext\b|\([^)]*DbContextOptions)/g)].map((match) => match[1]);
   fail(contextClasses.length === 1 && contextClasses[0] === "StoreDbContext", "Parent API must reuse StoreDbContext and must not add another DbContext.");
 
-  const records = endpointRecords(cs);
+  const records = matching(/\.cs$/i).flatMap((file) => endpointRecords(file.text, cs));
   const category = checkApiCrud(records, "/api/categories", "Category", {
     validation: true,
     validationType: "CategoryRequest",

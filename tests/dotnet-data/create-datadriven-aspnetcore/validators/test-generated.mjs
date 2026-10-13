@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -11,7 +12,7 @@ const scenarioDirectory = path.dirname(scriptDirectory);
 const validator = path.join(scriptDirectory, "validate-generated.mjs");
 const restraintValidator = path.join(scriptDirectory, "validate-restraint.mjs");
 const preferredBase = "Q:\\copilot\\26bbc64f-ad82-47bf-a29d-42ec7aead779\\validator-tests";
-const fallbackBase = path.join(scenarioDirectory, ".validator-tests");
+const fallbackBase = path.join(os.tmpdir(), "dotnet-skills-create-datadriven-validator-tests");
 
 function usableBase(candidate) {
   try {
@@ -24,6 +25,15 @@ function usableBase(candidate) {
 }
 
 const base = process.platform === "win32" && usableBase(preferredBase) ? preferredBase : fallbackBase;
+const scenarioRelativeBase = path.relative(scenarioDirectory, base);
+if (
+  !path.isAbsolute(base) ||
+  (scenarioRelativeBase !== ".." &&
+    !scenarioRelativeBase.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(scenarioRelativeBase))
+) {
+  throw new Error(`Validator workspace must be outside the tracked scenario: ${base}`);
+}
 fs.mkdirSync(base, { recursive: true });
 const runRoot = path.join(base, `run-${Date.now()}-${process.pid}`);
 fs.mkdirSync(runRoot, { recursive: true });
@@ -504,6 +514,40 @@ function testPatchTodoLayout() {
   replace(root, "Endpoints/TodoEndpoints.cs", "group.MapPut", "group.MapPatch");
   replace(root, "TodoApi.http", "\nPUT ", "\nPATCH ");
   expectPass("todo-api", root, "PATCH update layout");
+}
+
+function testRouteGroupConstantLayouts() {
+  const todoRoot = cloneForMutation("todo-api", "constant-route-group-layout");
+  replace(
+    todoRoot,
+    "Endpoints/TodoEndpoints.cs",
+    '        var group = endpoints.MapGroup("/api/todos").WithTags("Todos");',
+    `        const string basePath = "/api/todos";
+        var group = endpoints.MapGroup(basePath).WithTags("Todos");`,
+    1,
+  );
+  expectPass("todo-api", todoRoot, "const string route-group layout");
+
+  const parentRoot = cloneForMutation("parent-api", "aliased-route-group-layout");
+  replace(
+    parentRoot,
+    "Endpoints/ProductEndpoints.cs",
+    '        var categories = endpoints.MapGroup("/api/categories").WithTags("Categories");',
+    `        var categoryPath = "/api/categories";
+        var categoryBasePath = categoryPath;
+        var categories = endpoints.MapGroup(categoryBasePath).WithTags("Categories");`,
+    1,
+  );
+  replace(
+    parentRoot,
+    "Endpoints/ProductEndpoints.cs",
+    '        var products = endpoints.MapGroup("/api/products").WithTags("Products");',
+    `        const string productPath = "/api/products";
+        var productBasePath = productPath;
+        var products = endpoints.MapGroup(productBasePath).WithTags("Products");`,
+    1,
+  );
+  expectPass("parent-api", parentRoot, "var and aliased route-group layouts");
 }
 
 function testTodoHttpLayouts() {
@@ -1183,6 +1227,15 @@ function todoMutations() {
       "TodoApi.http",
       /\{\{createTodo\.response\.body\.\$\.id\}\}/g,
       "{{createTodo.response.body.$}}",
+    ));
+  mutation("todo-api", "dynamic route-group base", (root) =>
+    replace(
+      root,
+      endpoints,
+      '        var group = endpoints.MapGroup("/api/todos").WithTags("Todos");',
+      `        var basePath = GetTodoBasePath();
+        var group = endpoints.MapGroup(basePath).WithTags("Todos");`,
+      1,
     ));
 }
 
@@ -2104,6 +2157,7 @@ try {
   for (const item of scopeCases) materializeScopeGolden(item);
   scopeMutations();
   testPatchTodoLayout();
+  testRouteGroupConstantLayouts();
   testTodoHttpLayouts();
   testTodoUpdatePatterns();
   testApiMetadataLayouts();
