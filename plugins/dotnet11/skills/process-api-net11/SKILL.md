@@ -32,6 +32,105 @@ New APIs added to `System.Diagnostics.Process` in .NET 11 simplify process manag
 <TargetFramework>net11.0</TargetFramework>
 ```
 
+## Capturing Output Without Pipe Buffer Deadlocks
+
+Redirecting standard output and standard error creates two separate pipes. Each pipe has a finite buffer. If the child fills a pipe, its next write blocks until the parent reads data from that pipe.
+
+### Do Not Wait for Exit Before Reading
+
+With both streams redirected, this code can deadlock:
+
+```csharp
+ProcessStartInfo startInfo = new("dotnet", "--help")
+{
+    RedirectStandardOutput = true,
+    RedirectStandardError = true
+};
+
+using Process process = new() { StartInfo = startInfo };
+process.Start();
+process.WaitForExit();
+
+string output = process.StandardOutput.ReadToEnd();
+string error = process.StandardError.ReadToEnd();
+```
+
+The parent waits for the child to exit without draining either pipe. If the child fills either buffer, it blocks waiting for the parent to read, so neither process can make progress. Small outputs may hide this bug; it is not safe to assume the output will fit in the buffers.
+
+### Do Not Read Standard Output and Standard Error Sequentially
+
+Moving the reads before the wait does not fix the problem:
+
+```csharp
+process.Start();
+
+string output = process.StandardOutput.ReadToEnd();
+string error = process.StandardError.ReadToEnd();
+
+process.WaitForExit();
+```
+
+Here the parent reads stdout until EOF before it starts draining stderr. If the child fills stderr while stdout remains open, the child blocks writing stderr and the parent blocks waiting for stdout to close. Replacing these reads with sequentially awaited `ReadToEndAsync` calls has the same problem.
+
+**Drain both redirected streams concurrently, before waiting for process exit.** The following .NET 11 APIs do this for you. They prevent this pipe-buffer deadlock, not every possible hang: a descendant that retains an inherited pipe writer can still delay EOF.
+
+### Capture Text or Bytes From a Started Process
+
+Use `Process.ReadAllText` or `Process.ReadAllTextAsync` to capture both streams as text. They drain stdout and stderr concurrently and return a tuple containing both strings. Text is decoded using `ProcessStartInfo.StandardOutputEncoding` and `StandardErrorEncoding`, or the defaults when unspecified.
+
+```csharp
+ProcessStartInfo startInfo = new("dotnet", "--help")
+{
+    RedirectStandardOutput = true,
+    RedirectStandardError = true
+};
+
+using Process process = new() { StartInfo = startInfo };
+process.Start();
+
+(string output, string error) = process.ReadAllText();
+process.WaitForExit();
+```
+
+For asynchronous reading, replace the last two lines with:
+
+```csharp
+(string output, string error) = await process.ReadAllTextAsync();
+await process.WaitForExitAsync();
+```
+
+Use `Process.ReadAllBytes` or `Process.ReadAllBytesAsync` instead when the output is binary or you need the original bytes without text decoding. With the same redirection setup, replace the text read with:
+
+```csharp
+(byte[] output, byte[] error) = process.ReadAllBytes();
+process.WaitForExit();
+```
+
+The asynchronous equivalent is:
+
+```csharp
+(byte[] output, byte[] error) = await process.ReadAllBytesAsync();
+await process.WaitForExitAsync();
+```
+
+These instance methods read to EOF; they do not replace waiting for process exit. A child can close its standard streams and keep running. Wait separately when completion or `process.ExitCode` is needed.
+
+### Start, Capture Text, and Wait for Exit in One Call
+
+When you only need to start a process, capture its text output and error, and wait for its exit status, prefer `Process.RunAndCaptureText`:
+
+```csharp
+ProcessTextOutput result = Process.RunAndCaptureText("dotnet", ["--help"]);
+```
+
+Use `Process.RunAndCaptureTextAsync` when asynchronous execution is needed:
+
+```csharp
+ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--help"]);
+```
+
+Both methods combine starting the process, draining both streams, and waiting for exit. Read `result.StandardOutput`, `result.StandardError`, and `result.ExitStatus`; no separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself.
+
 ## New APIs
 
 ### Types
@@ -62,7 +161,7 @@ public static Task<ProcessExitStatus> RunAsync(ProcessStartInfo startInfo, Cance
 ```
 
 ##### `Process.RunAndCaptureText` / `Process.RunAndCaptureTextAsync`
-Starts a process, captures both standard output and error, and waits for it to exit. Extremely useful for avoiding deadlocks on stream redirection. On timeout or cancellation, the process is killed.
+Use when starting a process, capturing both streams as text, and waiting for its exit status is the complete operation. The method drains both streams concurrently before completing, avoiding the pipe-buffer deadlocks described above. On timeout or cancellation, the process is killed.
 
 When using the `ProcessStartInfo` overloads, the caller is responsible for setting `RedirectStandardOutput = true` and `RedirectStandardError = true` on `ProcessStartInfo` (because BCL APIs cannot modify the input arguments they were given).
 ```csharp
@@ -84,7 +183,7 @@ public static int StartAndForget(ProcessStartInfo startInfo)
 ```
 
 #### Instance Methods
-These methods are called on a `Process` instance to directly read stdout and stderr, guaranteeing no OS pipe buffer overflow deadlocks.
+These methods drain stdout and stderr concurrently on an already-started `Process`, avoiding pipe-buffer deadlocks. Choose `ReadAllText[Async]` for decoded text, `ReadAllBytes[Async]` for raw bytes, or `ReadAllLines[Async]` for incremental line processing. Wait separately if process completion or its exit code is required.
 
 *Note: Calling these methods requires `RedirectStandardOutput = true` and `RedirectStandardError = true` on the `ProcessStartInfo` passed to `Process.Start`.*
 
@@ -99,7 +198,7 @@ public IAsyncEnumerable<ProcessOutputLine> ReadAllLinesAsync(CancellationToken c
 
 Example of deconstructing the tuple return:
 ```csharp
-var (stdout, stderr) = await process.ReadAllTextAsync();
+(string stdout, string stderr) = await process.ReadAllTextAsync();
 ```
 
 ### ProcessStartInfo Properties
@@ -210,7 +309,7 @@ await foreach (ProcessOutputLine line in process.ReadAllLinesAsync())
 
 ### 4. Read Entire Output Deadlock-Free (Tuple Return)
 
-Start a process with custom `ProcessStartInfo` and read both stdout and stderr into a deconstructed tuple without buffer deadlocks:
+When managing a `Process` instance yourself, read both stdout and stderr into a deconstructed tuple, then wait for process exit. If starting, capturing text, and waiting is all you need, prefer `Process.RunAndCaptureText[Async]`, which also accepts custom `ProcessStartInfo`.
 
 ```csharp
 using System;
@@ -224,9 +323,11 @@ ProcessStartInfo startInfo = new("git", ["diff"])
 };
 
 using Process process = Process.Start(startInfo)!;
-var (stdout, stderr) = await process.ReadAllTextAsync();
+(string stdout, string stderr) = await process.ReadAllTextAsync();
+await process.WaitForExitAsync();
 
 Console.WriteLine($"Diff output: {stdout}");
+Console.Error.WriteLine(stderr);
 ```
 
 ### 5. Start and Forget (Fire & Forget)
