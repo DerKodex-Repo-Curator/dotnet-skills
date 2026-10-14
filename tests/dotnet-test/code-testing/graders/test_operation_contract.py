@@ -10,10 +10,72 @@ from unittest.mock import patch
 
 import yaml
 
-from operation_contract import check_files, digest, main, rust_runtime_bytes
+from operation_contract import check_files, check_mutation, digest, main, rust_runtime_bytes
 
 
 class ScopeTests(unittest.TestCase):
+    def test_mutation_copy_preserves_other_languages_target_directories(self):
+        for case in ("go", "new-regression"):
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "source.txt").write_text("original")
+                (root / "target").mkdir()
+                (root / "target" / "test_input.py").write_text("must not be discarded")
+
+                def run_tests(argv, copied, *args):
+                    self.assertTrue((copied / "target" / "test_input.py").is_file())
+                    return "expected result"
+
+                with patch("operation_contract.command", side_effect=run_tests):
+                    check_mutation(root, "source.txt", "original", "mutated",
+                                   ["not-executed"], 0, "expected result", case=case)
+
+    def test_scope_exemptions_and_additions_are_operation_specific(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "original.txt").write_bytes(b"unchanged")
+            expected = {"original.txt": digest(b"unchanged")}
+            python_cases = {"repair", "regression", "new-regression"}
+            for case in ("repair", "regression", "new-regression", "rust", "go"):
+                for name, allowed in (
+                    ("target/helper.py", {"rust"}),
+                    ("nested/target/helper.py", set()),
+                    ("Cargo.lock", {"rust"}),
+                    ("nested/Cargo.lock", set()),
+                    ("unrequested_test.go", {"go"}),
+                    ("test_boundary.py", {"new-regression"}),
+                    ("__pycache__/module.cpython-314.pyc", python_cases),
+                    (".pytest_cache/CACHEDIR.TAG", python_cases),
+                ):
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"addition")
+                    with self.subTest(case=case, path=name):
+                        if case in allowed:
+                            check_files(root, expected, case)
+                        else:
+                            with self.assertRaisesRegex(AssertionError, "Unexpected files"):
+                                check_files(root, expected, case)
+                    path.unlink()
+
+    def test_repair_rejects_cross_operation_additions_after_execution(self):
+        for name in ("target/helper.py", "unrequested_test.go"):
+            with self.subTest(path=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "work"
+                arguments, _ = self.repair_fixture(root)
+
+                def run_tests(*args):
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("unauthorized addition")
+                    return ""
+
+                with patch.object(sys, "argv", arguments[2:]), patch(
+                    "operation_contract.command", side_effect=run_tests,
+                ), patch("operation_contract.check_mutation"):
+                    with self.assertRaisesRegex(AssertionError, "Unexpected files"):
+                        main()
+
     def test_missing_rust_boundary_and_go_absence_assertions_are_rejected(self):
         suite = Path(__file__).resolve().parents[1]
         replay_spec = importlib.util.spec_from_file_location(
@@ -54,7 +116,7 @@ class ScopeTests(unittest.TestCase):
             source = external / "limit.py"
             source.write_bytes(b"unchanged")
             expected = {"limit.py": digest(source.read_bytes())}
-            check_files(external, expected, set())
+            check_files(external, expected, "regression")
             workspace = parent / "work"
             workspace.mkdir()
             link = workspace / "src"
@@ -79,7 +141,7 @@ class ScopeTests(unittest.TestCase):
                         with self.subTest(kind=kind, root=root), self.assertRaisesRegex(
                             AssertionError, "Symlink.*fixture scope"
                         ):
-                            check_files(root, files, set())
+                            check_files(root, files, "regression")
                 finally:
                     if kind == "junction":
                         link.rmdir()
@@ -234,10 +296,10 @@ class ScopeTests(unittest.TestCase):
             cache = root / ".pytest_cache" / "v" / "cache"
             cache.mkdir(parents=True)
             (cache / "nodeids").write_text("[]")
-            check_files(root, expected, set(), python_tests=True)
+            check_files(root, expected, "new-regression")
             (cache / "hidden.py").write_text("unauthorized source")
             with self.assertRaises(AssertionError):
-                check_files(root, expected, set(), python_tests=True)
+                check_files(root, expected, "new-regression")
 
     def test_python_cache_excludes_only_generated_bytecode(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -248,15 +310,15 @@ class ScopeTests(unittest.TestCase):
             cache = root / "__pycache__"
             cache.mkdir()
             (cache / "limit.cpython-314.pyc").write_bytes(b"generated bytecode")
-            for python_tests in (False, True):
-                check_files(root, expected, set(), python_tests=python_tests)
+            for case in ("regression", "new-regression"):
+                check_files(root, expected, case)
                 for name in ("test_helper.py", "notes.txt"):
                     added = cache / name
                     added.write_bytes(b"unauthorized source")
-                    with self.subTest(python_tests=python_tests, name=name), self.assertRaisesRegex(
+                    with self.subTest(case=case, name=name), self.assertRaisesRegex(
                         AssertionError, "Unexpected files"
                     ):
-                        check_files(root, expected, set(), python_tests=python_tests)
+                        check_files(root, expected, case)
                     added.unlink()
 
     def test_new_test_does_not_authorize_existing_test_or_product_edits(self):
@@ -267,12 +329,12 @@ class ScopeTests(unittest.TestCase):
             expected = {name: digest((root / name).read_bytes())
                         for name in ("limit.py", "test_existing.py")}
             (root / "test_boundary.py").write_text("new test")
-            check_files(root, expected, set(), python_tests=True)
+            check_files(root, expected, "new-regression")
             for name in expected:
                 with self.subTest(path=name):
                     (root / name).write_bytes(b"changed")
                     with self.assertRaises(AssertionError):
-                        check_files(root, expected, set(), python_tests=True)
+                        check_files(root, expected, "new-regression")
                     (root / name).write_bytes(b"original")
 
 

@@ -46,12 +46,14 @@ POLICY_DENIAL = re.compile(
     r"not permitted by.*(?:policy|allowlist)|tool.*(?:not allowed|explicitly denied)",
     re.I,
 )
-EXECUTION_TOOLS = {
-    "bash", "powershell", "shell", "task", "run_in_terminal", "run_command",
-    "terminal", "create_agent", "create_session", "write_agent", "send_session_message",
+SHELL_TOOLS = {
+    "bash", "powershell", "execute", "shell", "run_shell_command", "local_shell",
+    "run_in_terminal", "run_command", "terminal",
+}
+EXECUTION_TOOLS = SHELL_TOOLS | {
+    "task", "create_agent", "create_session", "write_agent", "send_session_message",
     "author_factory", "run_factory", "apply_patch", "edit", "create",
 }
-SHELL_TOOLS = {"bash", "powershell", "shell", "run_in_terminal", "run_command", "terminal"}
 
 
 def policy_evidence(events):
@@ -66,7 +68,7 @@ def policy_evidence(events):
             identity = data.get("toolCallId")
             if identity:
                 assert identity not in starts, "Duplicate tool-call identity"
-                starts[identity] = data.get("toolName", "").split(".")[-1].lower()
+                starts[identity] = re.split(r"[.:]", data.get("toolName", ""))[-1].lower()
         error = data.get("error") or {}
         explicit_denial = (
             isinstance(error, dict) and error.get("code") == "denied"
@@ -85,7 +87,7 @@ def policy_evidence(events):
             if starts.get(identity) in SHELL_TOOLS:
                 shell_denials.append({"tool": starts[identity], "tool_call_id": identity})
         if denied and event["type"] == "tool.execution_start":
-            name = data.get("toolName", "").split(".")[-1].lower()
+            name = re.split(r"[.:]", data.get("toolName", ""))[-1].lower()
             if name in EXECUTION_TOOLS or "delegate" in name:
                 retries.append({"tool": name, "tool_call_id": data.get("toolCallId")})
     return {
@@ -99,7 +101,8 @@ def tree(root):
     return {
         path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted(root.rglob("*"))
-        if path.is_file() and not {"__pycache__", ".git"}.intersection(path.relative_to(root).parts)
+        if path.is_file() and ".git" not in path.relative_to(root).parts
+        and not (path.suffix == ".pyc" and "__pycache__" in path.relative_to(root).parts)
     }
 
 

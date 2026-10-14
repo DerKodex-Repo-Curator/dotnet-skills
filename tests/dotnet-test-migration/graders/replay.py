@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -10,6 +11,23 @@ import subprocess
 import tempfile
 
 import yaml
+
+
+def grader_timeout(config, default_seconds):
+    value = config.get("timeout")
+    if value is None:
+        return default_seconds
+    match = (
+        re.fullmatch(r"\s*([0-9]+\.?[0-9]*)\s*(ms|s|m|h|d)\s*", value)
+        if isinstance(value, str) else None
+    )
+    if not match:
+        raise ValueError(f"Invalid grader timeout: {value!r}")
+    unit_ms = {"ms": 1, "s": 1000, "m": 60000, "h": 3600000, "d": 86400000}
+    milliseconds = float(match[1]) * unit_ms[match[2]]
+    if not math.isfinite(milliseconds) or milliseconds <= 0:
+        raise ValueError(f"Grader timeout must be finite and positive: {value!r}")
+    return milliseconds / 1000
 
 
 def materialize(spec, stimulus, workspace):
@@ -74,7 +92,7 @@ def run_graders(stimulus, workspace, response=None):
                 result = subprocess.run(
                     [config["program"], *config.get("args", [])],
                     cwd=workspace, capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=360,
+                    encoding="utf-8", errors="replace", timeout=grader_timeout(config, 60),
                     env=dict(os.environ, EVALUATE_WORKSPACE=str(workspace),
                              EVALUATE_GRADER_INPUT=str(input_path)),
                 )
@@ -86,7 +104,7 @@ def run_graders(stimulus, workspace, response=None):
         assert kind == "run-command", f"Unsupported deterministic grader: {kind}"
         result = subprocess.run(
             config["command"], cwd=workspace, shell=True, capture_output=True,
-            text=True, encoding="utf-8", errors="replace", timeout=360,
+            text=True, encoding="utf-8", errors="replace", timeout=grader_timeout(config, 30),
         )
         if result.returncode != config.get("expected_exit_code", 0):
             raise AssertionError((config["command"], result.stdout, result.stderr))

@@ -7,7 +7,7 @@ stimuli:
   - name: Leave an already current MSTest project unchanged
     tags: {capability: already-current-noop, risk: unnecessary-migration, journey: assess-current-project}
     constraints:
-      reject_tools: [bash, powershell, execute, run_shell_command, task, edit, create, apply_patch]
+      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, edit, create, apply_patch]
     prompt: |
       Check whether work still needs an MSTest v3-to-v4 upgrade.
       Only inspect the files: do not edit, restore packages, build, or run tests.
@@ -38,7 +38,7 @@ stimuli:
       - type: tool-calls
         config:
           disallowed:
-            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|task)$'
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|shell|run_shell_command|local_shell|run_in_terminal|run_command|terminal|task)$'
       - type: prompt
     rubric:
       - Recognizes the already-v4 project and leaves the complete file set unchanged without executing the test toolchain.

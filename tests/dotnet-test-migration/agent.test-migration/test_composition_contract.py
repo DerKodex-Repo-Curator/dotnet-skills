@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import tempfile
 import unittest
 
 
@@ -21,11 +22,45 @@ def complete(text):
 
 
 class PermissionContractTests(unittest.TestCase):
+    def test_native_alias_denials_and_retries_are_always_detected(self):
+        for alias in ("execute", "run_shell_command", "local_shell"):
+            for name in (alias, "functions." + alias, "MCP:" + alias.upper()):
+                with self.subTest(tool=name):
+                    denied = composition.policy_evidence([
+                        start(name, "denied"), complete("Permission was denied"),
+                    ])
+                    self.assertEqual([{"tool": alias, "tool_call_id": "denied"}],
+                                     denied["shell_denials"])
+                    retry = composition.policy_evidence([
+                        start("powershell", "denied"), complete("Permission was denied"),
+                        start(name, "retry"),
+                    ])
+                    self.assertEqual([{"tool": alias, "tool_call_id": "retry"}],
+                                     retry["execution_after_denial"])
+
+    def test_tree_only_excludes_generated_python_bytecode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "original.py").write_text("original")
+            expected = composition.tree(root)
+            cache = root / "__pycache__"
+            cache.mkdir()
+            (cache / "original.cpython-314.pyc").write_bytes(b"bytecode")
+            self.assertEqual(expected, composition.tree(root))
+            source = cache / "helper.py"
+            source.write_text("source")
+            with_source = composition.tree(root)
+            self.assertNotEqual(expected, with_source)
+            source.write_text("changed source")
+            self.assertNotEqual(with_source, composition.tree(root))
+            source.unlink()
+            self.assertEqual(expected, composition.tree(root))
+
     def test_mstest_read_only_guard_covers_shell_aliases(self):
         path = composition.ROOT / "tests" / "dotnet-test-migration" / "migrate-mstest-v3-to-v4" / "eval.yaml"
         case = next(case for case in composition.yaml.safe_load(path.read_text(encoding="utf-8"))["stimuli"]
                     if case["name"] == "Leave an already current MSTest project unchanged")
-        aliases = {"bash", "powershell", "execute", "run_shell_command", "task"}
+        aliases = composition.SHELL_TOOLS | {"task"}
         self.assertLessEqual(aliases, set(case["constraints"]["reject_tools"]))
         patterns = [entry["name"] for grader in case["graders"] if grader["type"] == "tool-calls"
                     for entry in grader["config"]["disallowed"]]

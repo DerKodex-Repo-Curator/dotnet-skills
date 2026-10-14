@@ -74,40 +74,48 @@ def is_linked_path(path):
     return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
 
 
-def check_files(root, expected, mutable, python_tests=False, repair=False):
-    assert not is_linked_path(root), f"Symlink or junction in fixture scope: {root}"
-    paths = list(root.rglob("*"))
-    assert not any(is_linked_path(path) for path in paths), (
-        f"Symlink or junction in fixture scope: {root}"
-    )
-    ignored = {"target", ".git"}
+def generated_path(relative, case):
+    if relative.parts[0] == ".git":
+        return True
+    if case == "rust":
+        return relative.parts[0] == "target" or relative.as_posix() == "Cargo.lock"
     pytest_outputs = {
         ".pytest_cache/.gitignore", ".pytest_cache/CACHEDIR.TAG",
         ".pytest_cache/README.md", ".pytest_cache/v/cache/nodeids",
         ".pytest_cache/v/cache/lastfailed", ".pytest_cache/v/cache/stepwise",
     }
+    return case in {"repair", "regression", "new-regression"} and (
+        relative.as_posix() in pytest_outputs
+        or (relative.suffix == ".pyc" and "__pycache__" in relative.parts)
+    )
+
+
+def check_files(root, expected, case):
+    assert case in {"repair", "regression", "new-regression", "rust", "go"}, f"Unknown operation: {case}"
+    assert not is_linked_path(root), f"Symlink or junction in fixture scope: {root}"
+    paths = list(root.rglob("*"))
+    assert not any(is_linked_path(path) for path in paths), (
+        f"Symlink or junction in fixture scope: {root}"
+    )
     actual = {
         path.relative_to(root).as_posix(): path
         for path in paths
-        if path.is_file() and not ignored.intersection(path.relative_to(root).parts)
-        and not (path.suffix == ".pyc" and "__pycache__" in path.relative_to(root).parts)
-        and path.name != "Cargo.lock"
-        and path.relative_to(root).as_posix() not in pytest_outputs
+        if path.is_file() and not generated_path(path.relative_to(root), case)
     }
     assert expected.keys() <= actual.keys(), "An original file was removed"
     for name, expected_hash in expected.items():
-        if name in mutable:
+        if case == "rust" and name == "src/lib.rs":
             continue
         assert not actual[name].is_symlink(), name
         content = actual[name].read_bytes()
-        if repair and name == "test_total.py":
+        if case == "repair" and name == "test_total.py":
             content = content.replace(b"from amounts import total", b"from amount import total")
         assert digest(content) == expected_hash, f"Out-of-scope edit: {name}"
     extra = actual.keys() - expected.keys()
     assert all(
         not {"__pycache__", ".pytest_cache"}.intersection(Path(name).parts)
-        and (name.endswith("_test.go") or (
-            python_tests and Path(name).name.startswith("test_") and name.endswith(".py")
+        and ((case == "go" and name.endswith("_test.go")) or (
+            case == "new-regression" and Path(name).name.startswith("test_") and name.endswith(".py")
         )) for name in extra
     ), f"Unexpected files: {extra}"
 
@@ -123,10 +131,12 @@ def command(argv, root, expected_exit=0, environment=None):
     return result.stdout + result.stderr
 
 
-def check_mutation(root, filename, old, new, argv, exit_code, outcome_pattern, environment=None):
+def check_mutation(root, filename, old, new, argv, exit_code, outcome_pattern, environment=None, *, case):
     with tempfile.TemporaryDirectory(prefix="operation-mutation-") as temporary:
         mutated = Path(temporary) / "work"
-        shutil.copytree(root, mutated, ignore=shutil.ignore_patterns("target", "__pycache__", ".git"))
+        shutil.copytree(root, mutated, ignore=lambda directory, names: [
+            name for name in names if generated_path(Path(directory).relative_to(root) / name, case)
+        ])
         path = mutated / filename
         content = path.read_text(encoding="utf-8")
         assert content.count(old) == 1, f"Mutation anchor changed: {filename}"
@@ -143,11 +153,7 @@ def main():
     parser.add_argument("--runtime-sha256")
     args = parser.parse_args()
     expected = dict(value.split("=", 1) for value in args.file)
-    mutable = {"src/lib.rs"} if args.case == "rust" else set()
-    check_files(
-        args.root, expected, mutable,
-        python_tests=args.case == "new-regression", repair=args.case == "repair",
-    )
+    check_files(args.root, expected, args.case)
     if args.case in {"repair", "regression", "new-regression"}:
         program = (
             "import json,unittest,sys;"
@@ -164,15 +170,18 @@ def main():
             check_mutation(
                 args.root, "amounts.py", "return sum(values)", "return 0",
                 [sys.executable, "-B", "-m", "unittest", "-v"], 1, r"FAIL: test_total",
+                case=args.case,
             )
         if args.case == "new-regression":
             check_mutation(
                 args.root, "limit.py", "return value > 10", "return value >= 10",
                 [sys.executable, "-B", "-m", "unittest", "-v"], 0, r"\bOK\b",
+                case=args.case,
             )
             check_mutation(
                 args.root, "limit.py", "return value > 10", "return value == 10 or value > 11",
                 [sys.executable, "-B", "-m", "unittest", "-v"], 1, r"FAIL:",
+                case=args.case,
             )
     elif args.case == "rust":
         source = (args.root / "src" / "lib.rs").read_bytes()
@@ -185,6 +194,7 @@ def main():
             check_mutation(
                 args.root, "src/lib.rs", "subtotal >= 50", cutoff,
                 ["cargo", "test", "--offline"], 101, r"test result: FAILED",
+                case=args.case,
             )
         assert digest(rust_runtime_bytes(
             (args.root / "src" / "lib.rs").read_bytes()
@@ -218,11 +228,9 @@ def main():
                 args.root, "client.go", old, new,
                 ["go", "test", "-json", "-count=1", "./..."], 1,
                 r'"Action":"fail".*"Test":', environment,
+                case=args.case,
             )
-    check_files(
-        args.root, expected, mutable,
-        python_tests=args.case == "new-regression", repair=args.case == "repair",
-    )
+    check_files(args.root, expected, args.case)
     print(f"OPERATION_CONTRACT: {args.case} passed")
 
 

@@ -13,7 +13,7 @@ stimuli:
       file unchanged and explain the detected setup. Do not restore, build,
       or execute tests for this inspection.
     constraints:
-      reject_tools: [bash, powershell, execute, run_shell_command, task, edit, create, apply_patch]
+      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, edit, create, apply_patch]
     environment:
       files:
         - src: ../fixtures/current-native

@@ -144,12 +144,18 @@ missing prerequisites and blocked host execution visible. Compare total tokens,
 wall time, retries, false findings and escaped defects per correctly completed
 task, not raw test counts or fewer tool calls.
 
+Offline replay honors each grader's declared timeout, using the production
+fallbacks of 60 seconds for program graders and 30 seconds for command graders.
+Invalid or expired budgets fail rather than silently extending a golden run.
+
 The composition command accepts `plan`, `missing-dependency`, `migration`,
 `repair`, `regression`, `rust`, `go`, and `denied-run` cases. It uses isolated host
 configuration, fingerprints the actual plugin layout, retains events and
 failed attempts, and replays the corresponding deterministic outcome graders.
 The missing-dependency lane also requires the final response to name an unavailable
 `dotnet-test` dependency; merely avoiding its invocation is insufficient.
+Composition fingerprints retain source files inside cache directories and exclude
+only generated Python bytecode, not the whole `__pycache__` tree.
 Authentication and each case's real language toolchain are prerequisites.
 It does not silently install them or increase the declared five-minute model
 budget. Run separate executor families for behavior sensitivity; these smoke
