@@ -109,8 +109,23 @@ stimuli:
               if (/--filter\b|\bVSTestTestCaseFilter\b/i.test(content)) {
                 throw new Error('do not add test filters anywhere in the fixture pipeline, including variable values');
               }
-              const commands = content.split(/\r?\n/)
-                .map(l => l.replace(/^\s*-?\s*script:\s*/, '').trim().replace(/["']/g, ''))
+              if (/&&|\|\||[;|]\s*dotnet\b|\$\((?![A-Za-z_][\w.-]*\))|`/.test(content)) {
+                throw new Error('keep one invocation per script; shell chaining hides extra restores');
+              }
+              const invocations = content.split(/\r?\n/)
+                .map(l => l.replace(/^\s*-?\s*script:\s*/, '').trim())
+                .filter(l => /^dotnet\b/.test(l));
+              for (const invocation of invocations) {
+                let quote = '', escaped = false;
+                for (const ch of invocation) {
+                  if (escaped) { escaped = false; continue; }
+                  if (ch === '\\' && quote !== "'") { escaped = true; continue; }
+                  if (quote) { if (ch === quote) quote = ''; continue; }
+                  if (ch === '"' || ch === "'") { quote = ch; continue; }
+                  if (';&|'.includes(ch)) throw new Error('shell operators are not allowed outside quoted MSBuild arguments');
+                }
+              }
+              const commands = invocations.map(l => l.replace(/["']/g, ''))
                 .filter(l => /^dotnet (msbuild|build|test|publish)\b/.test(l));
               for (const command of commands) {
                 const targets = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
@@ -348,7 +363,7 @@ stimuli:
             - |
               const fs = require('fs');
               const cmds = fs.readFileSync('rid-mismatch/build.sh', 'utf8').split(/\r?\n/)
-                .map(l => l.trim()).filter(l => /^dotnet\s/.test(l));
+                .map(l => l.trim().replace(/["']/g, '')).filter(l => /^dotnet\s/.test(l));
               if (cmds.some(c => /^dotnet build\b/.test(c) && /(?:^|\s)--no-build(?:\s|$)/.test(c))) {
                 throw new Error('dotnet build does not support --no-build');
               }
@@ -356,7 +371,29 @@ stimuli:
                 throw new Error('dotnet restore does not support --no-restore or --no-build');
               }
               const gateway = c => /(?:^|\s)(?:\.\/)?src\/Gateway\/Gateway\.csproj(?:\s|$)/.test(c);
-              const rid = c => /(?:^|\s)(-r|--runtime)[ =]+linux-x64(?:\s|$)/.test(c);
+              const option = (c, names) => [...c.matchAll(new RegExp('(?:^|\\s)(?:' + names + ')[ =]+([^\\s]+)', 'g'))].at(-1)?.[1];
+              const runtimeProperty = c => [...c.matchAll(/(?:^|\s)(?:--?|\/)(?:p|property):([^\s]+)/gi)]
+                .flatMap(m => m[1].split(/[;,]/))
+                .filter(p => /^RuntimeIdentifier=/i.test(p)).at(-1)?.split('=').slice(1).join('=');
+              let hostRid;
+              const currentRid = () => {
+                if (hostRid === undefined) {
+                  const info = require('child_process').execFileSync('dotnet', ['--info'], { encoding: 'utf8' });
+                  hostRid = /^\s*RID:\s*(\S+)/m.exec(info)?.[1];
+                  if (hostRid === undefined) throw new Error('cannot determine the SDK host RID for derived runtime inputs');
+                }
+                return hostRid;
+              };
+              const rid = c => {
+                const explicit = option(c, '-r|--runtime') ?? runtimeProperty(c);
+                if (explicit !== undefined) return explicit === 'linux-x64';
+                const os = option(c, '--os'), arch = option(c, '-a|--arch');
+                if (os === undefined && arch === undefined &&
+                    !/(?:^|\s)--(?:ucr|use-current-runtime)(?:[ =]+true)?(?=\s|$)/.test(c)) return false;
+                if (os !== undefined && arch !== undefined) return os + '-' + arch === 'linux-x64';
+                const parts = currentRid().split('-'), currentArch = parts.pop();
+                return (os ?? parts.join('-')) + '-' + (arch ?? currentArch) === 'linux-x64';
+              };
               const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
               const release = c => /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(c);
               const buildIndex = cmds.findIndex(c => /^dotnet build\b/.test(c) && gateway(c));
