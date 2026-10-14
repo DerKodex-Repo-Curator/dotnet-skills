@@ -1,6 +1,6 @@
 ---
 name: find-repeated-build-work
-description: "Remove work MSBuild repeats inside one build. USE FOR: same Exec or task in every project (git stamp), performance summary calls above project count, shared project rebuilt via global properties, per-item Exec, racy run-once guards. DO NOT USE FOR: no-op rebuild reruns, restores, slow evaluation, or idle nodes and serial dependency chains without repeated work (use build-parallelism)."
+description: "Deduplicate tasks/projects within one MSBuild invocation only. USE FOR: invariant per-project Exec (git stamp), global-property project instances, per-item Exec, racy run-once guards, call-count audits. DO NOT USE FOR: NuGet restores across restore/build/test commands (use build-perf-diagnostics), reruns on a second unchanged build (use incremental-build), slow evaluation (use eval-performance), or idle nodes/serial chains without duplicates (use build-parallelism)."
 license: MIT
 ---
 
@@ -21,7 +21,7 @@ MSBuild runs targets once per project instance. Work that does not depend on the
 - Targets that run again on a second, unchanged build: use `incremental-build`
 - Slow evaluation before any target runs: use `eval-performance`
 - Idle nodes or a serial dependency chain: use `build-parallelism`
-- Repeated restores across build steps: use `build-perf-diagnostics`
+- NuGet restore repeated across separate `dotnet restore`, `dotnet build` and `dotnet test` commands: use `build-perf-diagnostics`
 - Unranked "why is my build slow": start with `build-perf-baseline`, then `build-perf-diagnostics`
 
 ## Workflow
