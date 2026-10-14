@@ -728,3 +728,338 @@ stimuli:
         repeating package work in later build steps
       - Recommended caching the NuGet package folder or using a nearby feed or mirror
       - Did not apply or recommend --no-restore, -restore:false, or removing the required first restore
+
+  - name: Match configuration-conditioned packages before reusing assets
+    prompt: |
+      configuration-conditioned/ci.yml restores packages twice. Make it build
+      once and run its Release test with just one restore, without changing
+      the dependency selected for Release. Only edit ci.yml. Preserve all
+      project and source files; use a temporary copy for any execution.
+    tags:
+      capability: configuration-conditioned-packages
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./configuration-conditioned/ci.yml
+          dest: configuration-conditioned/ci.yml
+        - src: ./configuration-conditioned/Contoso.Core.csproj
+          dest: configuration-conditioned/src/Contoso.Core/Contoso.Core.csproj
+        - src: ./configuration-conditioned/BuildMarker.cs
+          dest: configuration-conditioned/src/Contoso.Core/BuildMarker.cs
+        - src: ./rsp-inherited/tests/Contoso.Tests/Contoso.Tests.csproj
+          dest: configuration-conditioned/tests/Contoso.Tests/Contoso.Tests.csproj
+        - src: ./configuration-conditioned/SmokeTests.cs
+          dest: configuration-conditioned/tests/Contoso.Tests/SmokeTests.cs
+    golden_patch:
+      path: ./references/configuration-conditioned.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-configuration"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Core selects Newtonsoft.Json 13.0.2 by default but 13.0.3 for Release. Suppressing Build's restore without matching Configuration would reuse the wrong package, which the real test detects. I passed -p:Configuration=Release to the first restore, added --no-restore to the Release build, and kept the no-build Release test. One of two restores is removed; only ci.yml changed.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - &restore_state |
+              const fs = require('fs');
+              const root = process.argv[1], kind = process.argv[2];
+              const steps = fs.readFileSync(root + '/ci.yml', 'utf8').split(/\r?\n/)
+                .filter(l => /^\s*-?\s*script:/.test(l))
+                .map(l => l.replace(/^\s*-?\s*script:\s*/, '').trim().replace(/["']/g, '').replace(/\\/g, '/'));
+              const flag = (l, name) => new RegExp('(?:^|\\s)' + name + '(?:\\s|$)').test(l);
+              const property = (l, name) => [...l.matchAll(/(?:^|\s)(?:--?|\/)(?:p|property):([^\s]+)/gi)]
+                .flatMap(m => m[1].split(/[,;](?=[A-Za-z_]\w*=)/))
+                .reduce((value, p) => {
+                  const match = /^([^=]+)=(.*)$/.exec(p);
+                  return match && match[1].toLowerCase() === name.toLowerCase() ? decodeURIComponent(match[2]) : value;
+                }, undefined);
+              const project = (l, name) => l.split(/\s+/).some(t => t.replace(/^\.\//, '') === name);
+              const release = l => property(l, 'Configuration') !== undefined ?
+                property(l, 'Configuration') === 'Release' : /(?:^|\s)(?:-c|--configuration)[ =]Release(?:\s|$)/.test(l);
+              const restoreSwitches = l => l.match(/(?:^|\s)(?:--?|\/)(?:restore(?::(?:true|false))?|r:(?:true|false))(?=\s|$)/gi) || [];
+              const restoreOff = l => /:false$/i.test(restoreSwitches(l).at(-1) || '');
+              const restores = steps.filter(l => /^dotnet restore\b/.test(l));
+              const builds = steps.filter(l => /^dotnet (build|msbuild)\b/.test(l));
+              const tests = steps.filter(l => /^dotnet test\b/.test(l));
+              if (restores.length !== 1 || builds.length !== 1 || tests.length < 1 ||
+                  tests.length > (kind === 'frameworks' ? 2 : 1) || steps.length !== 2 + tests.length) {
+                throw new Error('keep one explicit restore, one build, and complete test coverage');
+              }
+              const [restore] = restores, [build] = builds;
+              const entry = 'tests/Contoso.Tests/Contoso.Tests.csproj';
+              if (!project(restore, entry) || !tests.every(l => project(l, entry)) ||
+                  !project(build, kind === 'orchestrated' ? 'Build.proj' : entry) ||
+                  steps.indexOf(restore) > steps.indexOf(build) || tests.some(l => steps.indexOf(build) > steps.indexOf(l))) {
+                throw new Error('restore the complete child graph before building and testing it');
+              }
+              if (flag(restore, '(?:--no-(?:restore|build)|-c|--configuration)') || !release(build) ||
+                  !tests.every(l => release(l) && flag(l, '--no-build')) ||
+                  (/^dotnet build\b/.test(build) && flag(build, '--no-build'))) {
+                throw new Error('preserve valid restore, Release build, and no-build test modes');
+              }
+              if ([build, ...tests].some(l => restoreSwitches(l).length && !restoreOff(l))) throw new Error('restore is re-enabled');
+              if (/^dotnet msbuild\b/.test(build) ? !restoreOff(build) || flag(build, '--no-restore')
+                  : !flag(build, '--no-restore')) throw new Error('the build must not restore');
+              if ([build, ...tests].some(l => [...l.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .some(m => m[1].split(/[;,]/).some(t => t.toLowerCase() === 'restore')))) {
+                throw new Error('an explicit Restore target still repeats restore');
+              }
+              if (kind === 'configuration' && property(restore, 'Configuration') !== 'Release') {
+                throw new Error('restore must select Release packages with a supported MSBuild property');
+              }
+              if (kind === 'frameworks') {
+                const required = ['net10.0', 'net10.0-windows'];
+                const coverage = l => {
+                  const single = property(l, 'TargetFramework') ??
+                    /(?:^|\s)(?:-f|--framework)[ =]([^\s]+)/.exec(l)?.[1];
+                  return single !== undefined ? [single] : property(l, 'TargetFrameworks')?.split(';') ?? required;
+                };
+                const tested = tests.flatMap(coverage);
+                if (![restore, build].every(l => required.every(t => coverage(l).includes(t))) ||
+                    !required.every(t => tested.includes(t)) || tested.some(t => !required.includes(t)) ||
+                    (tests.length === 2 && !tests.every(l => coverage(l).length === 1))) {
+                  throw new Error('both declared frameworks must be restored, built, and tested');
+                }
+              }
+              if (kind === 'artifacts' && !steps.every(l => /(?:^|\s)--artifacts-path[ =](?:\.\/)?artifacts(?:\s|$)/.test(l))) {
+                throw new Error('restore must write assets to the retained artifacts output layout');
+              }
+              if (kind === 'orchestrated' && (!/^dotnet msbuild\b/.test(build) || property(build, 'ChildTargets') !== 'Build')) {
+                throw new Error('task-invoked children must build without repeating their explicit Restore targets');
+              }
+            - configuration-conditioned
+            - configuration
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *execution_modes, configuration-conditioned/ci.yml]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - configuration-conditioned
+            - >-
+              {"src/Contoso.Core/BuildMarker.cs":"d54dd569c7d7b53726d251e543eef1ae652c463c5a182a381302e816d099b88b",
+              "src/Contoso.Core/Contoso.Core.csproj":"a26d770959e689b08a73f04a118bb36aa710c6b116131efd41c2ada4d5ef6630",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.Tests/SmokeTests.cs":"d333f3dcb0509ebd578b11daf952131cc672e1b03f6e3824b7b88851db2706a0"}
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Recognized that Configuration changes the package version, not just the output folder
+      - Matched the first restore to Release before suppressing the later restore
+      - Built once and ran the unchanged test, preserving the 13.0.3 runtime dependency
+      - Changed only ci.yml and retained the required first restore
+
+  - name: Restore the full framework set before building and testing both targets
+    prompt: |
+      multi-framework/ci.yml repeats package work. Reduce it to one restore
+      and one build, while still running the existing test on both declared
+      target frameworks. Only edit ci.yml; do not narrow the project targets
+      or change source. Use a temporary copy if you execute the pipeline.
+    tags:
+      capability: multi-framework-assets-coverage
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./multi-framework/ci.yml
+          dest: multi-framework/ci.yml
+        - src: ./multi-framework/Contoso.Core.csproj
+          dest: multi-framework/src/Contoso.Core/Contoso.Core.csproj
+        - src: ./rsp-inherited/src/Contoso.Core/BuildMarker.cs
+          dest: multi-framework/src/Contoso.Core/BuildMarker.cs
+        - src: ./multi-framework/Contoso.Tests.csproj
+          dest: multi-framework/tests/Contoso.Tests/Contoso.Tests.csproj
+        - src: ./rsp-inherited/tests/Contoso.Tests/SmokeTests.cs
+          dest: multi-framework/tests/Contoso.Tests/SmokeTests.cs
+    golden_patch:
+      path: ./references/multi-framework.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-frameworks"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The initial restore overrides TargetFrameworks to net10.0, but both projects declare net10.0 and net10.0-windows. Those assets do not cover the second target. I removed the narrowing restore property, added --no-restore to the single Release build, and kept the no-build test without a framework filter so both test runs remain. Only ci.yml changed; the required restore remains and one of two restores is removed.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *restore_state, multi-framework, frameworks]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *execution_modes, multi-framework/ci.yml]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - multi-framework
+            - >-
+              {"src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"af6c68e15c156381a234916b05951bfc8b5e6807826dff450e6d7a92268c593b",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"3d94a123ad016785cb0ffd765a1022108234c088efe913655bdaca470cceb0c9",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419"}
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Distinguished a restore limited to one framework from coverage of both declared frameworks
+      - Kept both frameworks in the restore, build, and test phases
+      - Built once and executed both existing framework-specific test assemblies without rebuilding
+      - Changed only ci.yml, keeping the first restore and the project/source graph intact
+
+  - name: Align restored assets with the artifacts output layout
+    prompt: |
+      artifacts-location/ci.yml repeats restore during Build. Remove the
+      repeat while preserving --artifacts-path artifacts on Build and Test,
+      the Release outputs, and the actual test. Only edit ci.yml; keep the
+      projects and source unchanged. Validate in a temporary copy if needed.
+    tags:
+      capability: restore-output-location
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./artifacts-location/ci.yml
+          dest: artifacts-location/ci.yml
+        - src: ./rsp-inherited/src/Contoso.Core/Contoso.Core.csproj
+          dest: artifacts-location/src/Contoso.Core/Contoso.Core.csproj
+        - src: ./rsp-inherited/src/Contoso.Core/BuildMarker.cs
+          dest: artifacts-location/src/Contoso.Core/BuildMarker.cs
+        - src: ./rsp-inherited/tests/Contoso.Tests/Contoso.Tests.csproj
+          dest: artifacts-location/tests/Contoso.Tests/Contoso.Tests.csproj
+        - src: ./rsp-inherited/tests/Contoso.Tests/SmokeTests.cs
+          dest: artifacts-location/tests/Contoso.Tests/SmokeTests.cs
+    golden_patch:
+      path: ./references/artifacts-location.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-artifacts"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The first restore writes ordinary obj assets, while Build uses the artifacts intermediate layout. Same project and package inputs are not enough when the assets are in a different location. I gave Restore the same --artifacts-path artifacts, suppressed Build's restore, and retained the Release no-build test and output layout. One of two restores is removed, and only ci.yml changed.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *restore_state, artifacts-location, artifacts]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *execution_modes, artifacts-location/ci.yml]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - artifacts-location
+            - >-
+              {"src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419"}
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Recognized the restore-output location mismatch rather than assuming project identity proves coverage
+      - Wrote the first restore's assets into the artifacts layout before suppressing Build's restore
+      - Preserved the requested output-path flags and the Release build/test execution
+      - Changed only ci.yml and kept exactly one required restore
+
+  - name: Cover MSBuild-task children without changing local orchestration defaults
+    prompt: |
+      orchestrated-children/ci.yml already uses -restore:false, but the
+      orchestrated Build still restores both child projects. Reduce CI to one
+      restore and one build, preserving the child outputs, the orchestration
+      marker, and the test. Only edit ci.yml: local developers still need
+      Build.proj's default behavior. Use a temporary copy for execution.
+    tags:
+      capability: msbuild-task-child-closure
+      risk: high
+      journey: apply-fix
+    environment:
+      files:
+        - src: ./orchestrated-children/ci.yml
+          dest: orchestrated-children/ci.yml
+        - src: ./orchestrated-children/Build.proj
+          dest: orchestrated-children/Build.proj
+        - src: ./rsp-inherited/src/Contoso.Core/Contoso.Core.csproj
+          dest: orchestrated-children/src/Contoso.Core/Contoso.Core.csproj
+        - src: ./rsp-inherited/src/Contoso.Core/BuildMarker.cs
+          dest: orchestrated-children/src/Contoso.Core/BuildMarker.cs
+        - src: ./rsp-inherited/tests/Contoso.Tests/Contoso.Tests.csproj
+          dest: orchestrated-children/tests/Contoso.Tests/Contoso.Tests.csproj
+        - src: ./rsp-inherited/tests/Contoso.Tests/SmokeTests.cs
+          dest: orchestrated-children/tests/Contoso.Tests/SmokeTests.cs
+    golden_patch:
+      path: ./references/orchestrated-children.patch
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "eliminate-redundant-restores-orchestrated"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Restoring Build.proj does not cover projects invoked through its MSBuild tasks. Also, -restore:false does not suppress the explicit child Restore task. I restored the test entry project first, covering Core through ProjectReference, then passed -p:ChildTargets=Build only in CI. The orchestrator still builds both children and writes its marker, Test still executes, and local Restore;Build defaults are unchanged. Two of three restore invocations are removed; only ci.yml changed.
+    graders:
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *restore_state, orchestrated-children, orchestrated]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args: [-e, *execution_modes, orchestrated-children/ci.yml]
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - orchestrated-children
+            - >-
+              {"Build.proj":"0e08b7d609f86e3f22ef5eea7b3be689bdbd985ffa2a45281d1be800f064bb26",
+              "src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419"}
+          expected_exit_code: 0
+      - type: prompt
+    rubric:
+      - Recognized that the orchestrator's own restore does not cover MSBuild-task children
+      - Distinguished explicit task-invoked Restore targets from the top-level -restore switch
+      - Restored the complete child graph first and suppressed child restores only in the CI invocation
+      - Kept Build.proj unchanged, including its local defaults and orchestration marker
+      - Built once, ran the existing test, and changed only ci.yml
