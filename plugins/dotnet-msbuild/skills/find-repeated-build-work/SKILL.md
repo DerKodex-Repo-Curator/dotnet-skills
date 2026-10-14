@@ -1,6 +1,6 @@
 ---
 name: find-repeated-build-work
-description: "Remove work MSBuild repeats inside one build. USE FOR: same Exec or task in every project (git stamp), performance summary calls above project count, shared project rebuilt via global properties, per-item Exec, racy run-once guards. DO NOT USE FOR: no-op rebuild reruns, restores, slow evaluation."
+description: "Remove work MSBuild repeats inside one build. USE FOR: same Exec or task in every project (git stamp), performance summary calls above project count, shared project rebuilt via global properties, per-item Exec, racy run-once guards. DO NOT USE FOR: no-op rebuild reruns, restores, slow evaluation, or idle nodes and serial dependency chains without repeated work (use build-parallelism)."
 license: MIT
 ---
 

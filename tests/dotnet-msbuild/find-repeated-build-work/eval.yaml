@@ -73,6 +73,8 @@ stimuli:
                          for o in task.findall('Output')), 'the fallback must supply GitCommit'
               bash = shutil.which('bash')
               assert bash, 'Bash is required to check build.sh with mocked git and dotnet'
+              dotnet = shutil.which('dotnet')
+              assert dotnet, 'the .NET SDK is required to check the commit before its first consumer'
               with tempfile.TemporaryDirectory() as tmp:
                   bin_dir = pathlib.Path(tmp)
                   mocks = {
@@ -83,6 +85,18 @@ stimuli:
                       path = bin_dir / name
                       path.write_text(text, encoding='utf-8', newline='\n')
                       path.chmod(0o755)
+                  if os.name == 'nt':
+                      (bin_dir / 'git.cmd').write_text(
+                          '@echo off\necho %*>>"%MOCK_BIN%\\git-calls"\necho %EXPECTED_COMMIT%\n',
+                          encoding='utf-8', newline='\r\n',
+                      )
+                  probe = ET.Element('Project')
+                  for name in ['Directory.Build.props', 'Directory.Build.targets']:
+                      ET.SubElement(probe, 'Import', Project=str(pathlib.Path('git-stamp', name).resolve()))
+                  consumer = ET.SubElement(probe, 'Target', Name='GetAssemblyAttributes')
+                  ET.SubElement(ET.SubElement(consumer, 'PropertyGroup'), 'ObservedInformationalVersion').text = '$(InformationalVersion)'
+                  probe_path = bin_dir / 'stamp.proj'
+                  ET.ElementTree(probe).write(probe_path, encoding='utf-8')
                   for _ in range(2):
                       commit = uuid.uuid4().hex[:7]
                       for path in [bin_dir / 'git-calls', *bin_dir.glob('dotnet-call.*')]:
@@ -103,6 +117,21 @@ stimuli:
                       assignments = [p for value in values for p in value.split(';')]
                       assert all(p.partition('=')[2] == '3.2.0' for p in assignments if p.partition('=')[0].lower() == 'version'), 'the build must not override the base version'
                       assert all(p.partition('=')[2] == '3.2.0+' + commit for p in assignments if p.partition('=')[0].lower() == 'informationalversion'), 'the build must not override the stamped version'
+                      for supplied in [False, True]:
+                          (bin_dir / 'git-calls').unlink(missing_ok=True)
+                          command = [dotnet, 'msbuild', str(probe_path), '-nologo', '-verbosity:quiet',
+                                     '-nodeReuse:false', '-target:GetAssemblyAttributes', '-getProperty:ObservedInformationalVersion']
+                          if supplied:
+                              command.append('-p:GitCommit=' + commit)
+                          result = subprocess.run(
+                              command, cwd=bin_dir, env=dict(env, PATH=tmp + os.pathsep + os.environ['PATH']),
+                              capture_output=True, text=True, timeout=30,
+                          )
+                          assert result.returncode == 0, result.stdout + result.stderr
+                          assert result.stdout.strip() == '3.2.0+' + commit, 'the commit and version must be ready before GetAssemblyAttributes consumes them'
+                          log = bin_dir / 'git-calls'
+                          calls = log.read_text().splitlines() if log.exists() else []
+                          assert calls == ([] if supplied else ['rev-parse --short HEAD']), 'the fallback must run once only when GitCommit is absent'
           expected_exit_code: 0
       - type: output-matches
         config:
@@ -158,7 +187,7 @@ stimuli:
           args:
             - -c
             - |
-              import fnmatch, pathlib, re
+              import fnmatch, json, pathlib, re, shutil, subprocess, tempfile
               import xml.etree.ElementTree as ET
               base = pathlib.Path('shared-project-instances')
               build = ET.parse(base / 'Build.proj').getroot()
@@ -211,6 +240,7 @@ stimuli:
                   if child is None or child.get('Condition'):
                       return default
                   return child.text or ''
+              component_properties = {}
               for component in ['Web', 'Api', 'Worker']:
                   component_path = normalize(f'{component}/{component}.csproj')
                   passes_name = False
@@ -223,6 +253,7 @@ stimuli:
                               passes_name = True
                           elif assignment.strip() == 'ComponentName=' + component and roots == {component_path}:
                               passes_name = True
+                  component_properties[component] = ['-p:ComponentName=' + component] if passes_name else []
                   root = ET.parse(base / component / (component + '.csproj')).getroot()
                   title = root.findtext('.//AssemblyTitle', '')
                   name = root.findtext('.//ComponentName', '')
@@ -242,6 +273,26 @@ stimuli:
                           if pattern and any(fnmatch.fnmatchcase(normalize(ref.get('Include')), normalize(p.strip())) for p in pattern.split(';')):
                               metadata = removal_metadata(update, metadata)
                       assert 'ComponentName' in [p.strip() for p in metadata.split(';')], 'ComponentName still reaches Core: removal must be metadata on its ProjectReference'
+              dotnet = shutil.which('dotnet')
+              assert dotnet, 'the .NET SDK is required to query effective project references'
+              with tempfile.TemporaryDirectory() as tmp:
+                  work = (pathlib.Path(tmp) / 'work').resolve()
+                  shutil.copytree(base, work, ignore=shutil.ignore_patterns('bin', 'obj'))
+                  for component, properties in component_properties.items():
+                      result = subprocess.run(
+                          [dotnet, 'msbuild', str(work / component / (component + '.csproj')),
+                           '-nologo', '-verbosity:quiet', '-nodeReuse:false', '-getItem:ProjectReference', *properties],
+                          cwd=work, capture_output=True, text=True, timeout=30,
+                      )
+                      assert result.returncode == 0, result.stdout + result.stderr
+                      refs = [r for r in json.loads(result.stdout)['Items']['ProjectReference']
+                              if pathlib.Path(r['FullPath']).resolve() == work / 'Core' / 'Core.csproj']
+                      assert refs, 'the evaluated component must still reference Core'
+                      for ref in refs:
+                          for name in ['ReferenceOutputAssembly', 'BuildReference', 'Private']:
+                              assert ref.get(name, '').lower() in ['', 'true'], name + ' must preserve Core compilation, build and copy outputs'
+                          if properties:
+                              assert 'ComponentName' in [p.strip() for p in ref.get('GlobalPropertiesToRemove', '').split(';')], 'effective reference metadata must remove ComponentName'
           expected_exit_code: 0
       - type: output-matches
         config:
@@ -300,14 +351,14 @@ stimuli:
           args:
             - -c
             - |
-              import os, pathlib, shutil, subprocess, tempfile, uuid
+              import hashlib, os, pathlib, shutil, subprocess, tempfile, uuid
               import xml.etree.ElementTree as ET
               base = pathlib.Path('exists-sentinel-race')
               root = ET.parse(base / 'Directory.Build.targets').getroot()
               assert any(c.get('Include') == '$(MSBuildThisFileDirectory)obj/buildinfo.g.cs' and not c.get('Condition')
                          for group in root.findall('ItemGroup') if not group.get('Condition')
                          for c in group.findall('Compile')), 'every project must still compile buildinfo.g.cs'
-              assert (base / 'tools/make-buildinfo.sh').is_file(), 'preserve the generator'
+              assert hashlib.sha256((base / 'tools/make-buildinfo.sh').read_bytes()).hexdigest() == '8dac8ea8ec16e52259c72d0b91a36c4ea91212d92ed6067e1743c15616c927e1', 'preserve the submitted generator before instrumenting it'
               bash = shutil.which('bash')
               assert bash, 'Bash is required to exercise build.sh'
               with tempfile.TemporaryDirectory() as tmp:
@@ -395,8 +446,21 @@ stimuli:
           args:
             - -c
             - |
-              import json, os, pathlib, re, shlex, shutil, subprocess, sys, tempfile
+              import hashlib, json, os, pathlib, re, shlex, shutil, subprocess, sys, tempfile
               import xml.etree.ElementTree as ET
+              base = pathlib.Path('per-file-exec')
+              expected = {
+                  'perf-summary.txt': 'a7a87a9f72d2a3ea5e94a0b98ce895e08c6b73b7c41ad772da5c67dc96e018ba',
+                  'schemas/Customer.json': '67eb0f87e3e7d30e93c695f6309869ad756ec9d3a794fea1f579b53e76588276',
+                  'schemas/Invoice.json': '84fda3aa966679bf270dcb52a962638ccfb0a98a9f8a98fd8412bfb514a7f73d',
+                  'schemas/Order.json': '62e76a2120a81ebf31bd338c87f570619c3f98ceeee8378c139b678cf274297e',
+                  'tools/schemagen.md': '5f1e323d5f5b121037fc94b50a8a7b318b8c91e133efd2d1fa26eff45097d75b',
+              }
+              actual = {p.relative_to(base).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                        for p in base.rglob('*') if p.is_file()
+                        and p.relative_to(base).as_posix() not in ['Schemas.targets', 'Contoso.Schemas.csproj']
+                        and p.relative_to(base).parts[0] not in ['bin', 'obj']}
+              assert actual == expected, 'preserve all schema contents and files outside the project/target edits'
               project = ET.parse('per-file-exec/Contoso.Schemas.csproj').getroot()
               root = ET.parse('per-file-exec/Schemas.targets').getroot()
               properties = {p.tag: p.text or '' for group in project.findall('PropertyGroup') for p in group}
@@ -808,3 +872,41 @@ stimuli:
       - Recommended measuring evaluation and inspecting expensive imports or glob traversal before editing build files
       - Redirected the startup-delay investigation to evaluation-performance analysis
       - Did not apply task deduplication or run-once guards to an evaluation problem
+
+  - name: Decline idle-node questions on a serial project chain
+    prompt: |
+      Our CI runs dotnet msbuild Build.proj -m:16. Its MSBuild task schedules a Projects list of 12 distinct project
+      files with BuildInParallel enabled. The binlog shows each project compiling once, but most worker nodes are idle
+      while Core, Api and Web build one after another along their ProjectReference chain. Raising -m does not reduce
+      elapsed time. How should I investigate and improve this?
+    expect_activation: false
+    tags:
+      capability: dormancy-serial-project-chain
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-parallelism-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The idle nodes and Core -> Api -> Web dependency chain point to scheduling and a serial critical path, not repeated work: every project compiles once. Use build-parallelism to inspect the binlog node timeline and project timings, identify the longest dependency chain, and confirm which references are genuinely needed. More -m workers cannot run a dependent project before its prerequisite finishes. Keep legitimate work and required references; remove only proven unnecessary dependencies or reorganize independent work so it can run concurrently. Per-project run-once guards, merging Exec calls, or removing global properties do not address this evidence.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(critical path|serial.*chain|dependency.*chain)
+      - type: output-matches
+        config:
+          pattern: (?i)(build-parallelism|parallelism analysis|scheduling analysis)
+      - type: prompt
+    rubric:
+      - Recognized idle workers and the serial ProjectReference chain as scheduling or critical-path evidence rather
+        than unnecessary repeated execution
+      - Explained why raising the worker count cannot parallelize required dependencies and recommended inspecting
+        the node timeline and project timings
+      - Did not apply repeated-work fixes such as run-once guards, merging Exec calls or removing global properties
+        to legitimate compilation, and did not remove required references
+      - Redirected the investigation to build-parallelism
