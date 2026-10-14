@@ -106,8 +106,8 @@ stimuli:
             - &execution_modes |
               const fs = require('fs');
               const content = fs.readFileSync(process.argv[1], 'utf8');
-              if (/(?:^\s*(?:-\s*)?|[{,]\s*)(?:["']?VSTestTestCaseFilter["']?\s*:|["']?name["']?\s*:\s*["']?VSTestTestCaseFilter(?:["']|(?=\s|[,}]|$)))/im.test(content)) {
-                throw new Error('do not add environment or pipeline variables that filter fixture tests');
+              if (/--filter\b|\bVSTestTestCaseFilter\b/i.test(content)) {
+                throw new Error('do not add test filters anywhere in the fixture pipeline, including variable values');
               }
               const commands = content.split(/\r?\n/)
                 .map(l => l.replace(/^\s*-?\s*script:\s*/, '').trim().replace(/["']/g, ''))
@@ -118,10 +118,6 @@ stimuli:
                 if (/^dotnet test\b/.test(command)) {
                   const properties = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:p|property|properties):([^\s]+)/gi)]
                     .flatMap(m => m[1].split(/[;,]/));
-                  if (/(?:^|\s)--filter(?:[:=\s]|$)/.test(command) ||
-                      properties.some(p => /^VSTestTestCaseFilter(?:=|$)/i.test(p))) {
-                    throw new Error('do not add test filters; preserve every fixture test: ' + command);
-                  }
                   const listTests = properties.reduce((value, property) => {
                     const match = /^VSTestListTests=(.*)$/i.exec(property);
                     return match ? match[1].toLowerCase() : value;
