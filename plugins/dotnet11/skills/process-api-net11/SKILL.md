@@ -1,11 +1,11 @@
 ---
 name: process-api-net11
 description: >
-  Provides guidance on the new System.Diagnostics.Process APIs introduced in .NET 11:
-  Process.Run, Process.RunAndCaptureText, Process.StartAndForget, Process.ReadAllText/Bytes/Lines,
-  KillOnParentExit, InheritedHandles, and StartDetached.
-  USE FOR: starting, orchestrating, or capturing output from external processes in applications targeting net11.0 or later.
-  DO NOT USE FOR: applications targeting .NET 10 or earlier, or basic pre-.NET 11 Process.Start usage without new APIs.
+  Choose System.Diagnostics.Process APIs for .NET 11 or later, including improving existing Process.Start code.
+  USE FOR: launching executables; preventing redirected stdout/stderr pipe deadlocks; capturing text, bytes, or interleaved lines;
+  waiting for exit status; cancellation and timeouts; redirecting standard handles to files, pipes, or the null device;
+  restricting handle inheritance; custom native process creation; fire-and-forget starts; parent-exit termination; terminal detachment.
+  DO NOT USE FOR: projects that must remain on .NET 10 or earlier, or opening URLs and documents through the operating system's shell.
 license: MIT
 ---
 
@@ -43,6 +43,16 @@ Although `Process.Start` returns `Process?`, it can return `null` only when `Use
 For simple CLI operations that don't need cancellation or async scalability, prefer the synchronous overload. Use asynchronous overloads when cancellation, responsiveness, or scalability requires avoiding a blocked calling thread, and await them directly.
 
 **Never use `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()` to synchronously block on an asynchronous process operation: sync-over-async can deadlock and blocks the calling thread.** Do not call synchronous process-wait methods from asynchronous code either.
+
+## Choosing an API
+
+| Need | Prefer |
+|------|--------|
+| Start, capture bounded text output, and wait for exit | `RunAndCaptureText[Async]`, including its `ProcessStartInfo` overloads for custom configuration |
+| Start and wait without capturing output | `Run[Async]`; use `silent: true` to discard output |
+| Inspect or search output lines while the process runs | `ReadAllLines[Async]` on a started process |
+| Capture bounded output from an already-started process | `ReadAllText[Async]` for text or `ReadAllBytes[Async]` for binary data, followed by a status wait |
+| Forward output to a file or another process without inspecting it | Standard-handle redirection, without parent-side capture |
 
 ## Capturing Output Without Pipe Buffer Deadlocks
 
@@ -105,7 +115,8 @@ public Task<(byte[] StandardOutput, byte[] StandardError)> ReadAllBytesAsync(Can
 ProcessStartInfo startInfo = new("dotnet", "--help")
 {
     RedirectStandardOutput = true,
-    RedirectStandardError = true
+    RedirectStandardError = true,
+    InheritedHandles = []
 };
 
 using Process process = new() { StartInfo = startInfo };
@@ -199,7 +210,7 @@ ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--he
 
 Both methods combine starting the process, draining both streams, and waiting for exit. They return the framework's sealed `ProcessTextOutput` class, with read-only properties `ProcessExitStatus ExitStatus`, `string StandardOutput`, `string StandardError`, and `int ProcessId`. No separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself; the methods do not modify the supplied configuration.
 
-The synchronous overloads accept a timeout; the asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
+The synchronous overloads accept a timeout; the asynchronous overloads accept a cancellation token. If timeout or cancellation interrupts output capture, the helper attempts to kill the process and rethrows `TimeoutException` or `OperationCanceledException`, respectively. If capture has completed and the subsequent exit wait kills the process, the helper returns a result with `result.ExitStatus.Canceled` set to `true`. Do not assume timeout or cancellation always produces a returned result.
 
 ```csharp
 public static ProcessTextOutput RunAndCaptureText(string fileName, IEnumerable<string>? arguments = null, TimeSpan? timeout = null)
@@ -214,7 +225,7 @@ public static Task<ProcessTextOutput> RunAndCaptureTextAsync(ProcessStartInfo st
 
 Use `Process.Run` or `Process.RunAsync` when you need to start a process and wait for its exit status without capturing its output. By default, the child inherits the parent's standard handles, so output remains visible. Pass `silent: true` to redirect all three standard handles (stdin, stdout, and stderr) to the null device (`NUL` on Windows, `/dev/null` on Unix). Writes are discarded and reads receive EOF, without creating pipes that the parent must drain.
 
-Synchronous overloads accept a timeout; asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
+Synchronous overloads accept a timeout; asynchronous overloads accept a cancellation token. When the process is killed due to timeout or cancellation, the helper waits for termination and returns a `ProcessExitStatus` with `Canceled` set to `true`, rather than throwing a timeout or cancellation exception.
 
 ```csharp
 public static ProcessExitStatus Run(string fileName, IEnumerable<string>? arguments = null, bool silent = false, TimeSpan? timeout = null)
@@ -245,7 +256,8 @@ ProcessStartInfo startInfo = new("dotnet", ["build"])
 {
     StandardInputHandle = nullHandle,
     StandardOutputHandle = nullHandle,
-    StandardErrorHandle = nullHandle
+    StandardErrorHandle = nullHandle,
+    InheritedHandles = []
 };
 
 ProcessExitStatus status = Process.Run(startInfo);
@@ -371,13 +383,15 @@ using (SafeFileHandle outputFile = File.OpenHandle("output.txt", FileMode.Create
 {
     ProcessStartInfo producer = new("ls", ["/usr/bin"])
     {
-        StandardOutputHandle = writePipe
+        StandardOutputHandle = writePipe,
+        InheritedHandles = []
     };
 
     ProcessStartInfo consumer = new("grep", ["zip"])
     {
         StandardInputHandle = readPipe,
-        StandardOutputHandle = outputFile
+        StandardOutputHandle = outputFile,
+        InheritedHandles = []
     };
 
     using Process producerProcess = Process.Start(producer)!;
@@ -450,7 +464,7 @@ The returned `Process` supports the same output-reading and status-wait APIs des
 
 **Create the child synchronously inside the callback.** Pointer-backed arguments are valid only during that invocation; do not cache them or defer creation to another thread. Do not call other .NET process-start APIs from inside the callback: the lock is already held, so reentrant starts can deadlock or throw.
 
-This coordination prevents races with cooperating .NET starts; it is not an automatic whitelist for arbitrary native calls. Use the runtime-prepared standard handles or descriptors; do not manually enable inheritance on them. The runtime coordinates their lifetime and callback execution with process-start locking. The native implementation must use those prepared values correctly for its chosen process-creation API. Continue to keep unrelated handles non-inheritable, and route other custom starts through these entry points as well.
+The callback remains responsible for applying the chosen native API's inheritance controls correctly; holding the runtime lock does not itself restrict which handles the child inherits. Keep unrelated handles non-inheritable, and do not manually enable inheritance on the prepared standard handles or descriptors.
 
 ### Restrict Inheritance With ProcessStartInfo.InheritedHandles
 
@@ -461,6 +475,8 @@ public IList<SafeHandle>? InheritedHandles { get; set; }
 ```
 
 **Enable restricted inheritance by default on every platform**: use `InheritedHandles = []` when no additional handles are needed, or an explicit list when they are.
+
+For combined helpers such as `Run[Async]` and `RunAndCaptureText[Async]`, use the `ProcessStartInfo` overloads to configure this restriction; the filename overloads do not expose it.
 
 | Value | Child inherits |
 |-------|----------------|
