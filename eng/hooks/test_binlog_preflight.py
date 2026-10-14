@@ -231,6 +231,81 @@ function taskkill.exe {
                 message = self.context(host, self.run_hook(command))
                 self.assertIn("configured feeds did not provide Microsoft.AITools.BinlogMcp", message)
 
+    def assert_windows_stream_holder_cleanup(self, force_launcher_timeout):
+        hooks = self.plugin / "hooks"
+        shutil.copyfile(hooks / "binlog-preflight.fsx", hooks / "core-preflight.fsx")
+        provider_pid = self.root / "provider.pid"
+        search_pid = self.root / "search.pid"
+        provider_path = str(provider_pid).replace("'", "''")
+        search_path = str(search_pid).replace("'", "''")
+        package_script = f"""
+$info = [Diagnostics.ProcessStartInfo]::new()
+$info.FileName = '{POWERSHELL.replace("'", "''")}'
+$info.Arguments = '-NoProfile -Command "Start-Sleep -Seconds 30"'
+$info.UseShellExecute = $false
+$info.CreateNoWindow = $true
+$info.RedirectStandardInput = $true
+$provider = [Diagnostics.Process]::Start($info)
+$provider.StandardInput.Close()
+[IO.File]::WriteAllText('{provider_path}', $provider.Id.ToString())
+[IO.File]::WriteAllText('{search_path}', $PID.ToString())
+[Console]::Out.WriteLine('{{"searchResult":[{{"packages":[{{"id":"Microsoft.AITools.BinlogMcp","version":"3.0.4"}}]}}]}}')
+exit 0
+"""
+        # Load the shipped runProbe, but replace only the package-search executable with a fixture.
+        (hooks / "binlog-preflight.fsx").write_text(
+            '#load "core-preflight.fsx"\nopen System.Diagnostics\nopen System.IO\n'
+            'open ``Core-preflight``\n'
+            f'let info = ProcessStartInfo({json.dumps(POWERSHELL)})\n'
+            'info.ArgumentList.Add("-NoProfile")\ninfo.ArgumentList.Add("-Command")\n'
+            f'info.ArgumentList.Add({json.dumps(package_script)})\n'
+            'let output = runProbe info |> diagnose |> Option.map (serialize fsi.CommandLineArgs[1]) '
+            '|> Option.defaultValue ""\n'
+            + ('System.Threading.Thread.Sleep(30000)\n' if force_launcher_timeout else '')
+            + 'File.WriteAllText(fsi.CommandLineArgs[2], output)\n',
+            encoding="utf-8")
+
+        def running(pid):
+            result = subprocess.run(
+                [POWERSHELL, "-NoProfile", "-Command",
+                 f"if (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ exit 1 }} else {{ exit 0 }}"],
+                text=True, capture_output=True, timeout=5)
+            self.assertIn(result.returncode, (0, 1), result.stderr)
+            return result.returncode == 1
+
+        for host, command in self.launchers():
+            with self.subTest(host=host, command=command[0], force_launcher_timeout=force_launcher_timeout):
+                sentinel = subprocess.Popen([POWERSHELL, "-NoProfile", "-Command",
+                                             "Start-Sleep -Seconds 30"],
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    message = self.context(host, self.run_hook(command))
+                    if force_launcher_timeout:
+                        self.assertIn("8-second diagnostic launcher budget expired", message)
+                    else:
+                        self.assertRegex(message, "timed out|budget expired")
+                    self.assertNotIn("configured feeds did not provide", message)
+                    self.assertFalse(running(int(search_pid.read_text())), "Search did not exit.")
+                    self.assertFalse(running(int(provider_pid.read_text())), "Stream holder survived.")
+                    self.assertIsNone(sentinel.poll(), "Cleanup killed an unrelated process.")
+                finally:
+                    sentinel.terminate()
+                    sentinel.wait(timeout=5)
+                    for path in (provider_pid, search_pid):
+                        if path.exists():
+                            pid = int(path.read_text())
+                            if running(pid):
+                                os.kill(pid, signal.SIGTERM)
+                            path.unlink()
+
+    @unittest.skipUnless(os.name == "nt", "Windows inherited streams and process ownership")
+    def test_windows_exited_search_stops_stream_holding_descendant(self):
+        self.assert_windows_stream_holder_cleanup(force_launcher_timeout=False)
+
+    @unittest.skipUnless(os.name == "nt", "Windows inherited streams and process ownership")
+    def test_windows_launcher_timeout_stops_orphaned_stream_holder(self):
+        self.assert_windows_stream_holder_cleanup(force_launcher_timeout=True)
+
     def assert_unix_tree_cleanup(self, exit_early):
         fake_bin = self.root / "fake sdk"
         fake_bin.mkdir()

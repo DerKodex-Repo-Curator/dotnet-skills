@@ -26,7 +26,11 @@ An exact, prerelease-inclusive JSON package search has a 5-second budget inside 
 launcher budget and a 10-second host timeout. Successful availability checks are silent.
 The Unix launcher isolates the helper in its own process group and cleans up that group,
 including package-search and credential-provider descendants, on timeout or exit.
-The Windows launcher terminates its owned process tree instead.
+On Windows, the helper joins a kill-on-close Job Object before starting package search.
+Normal exit, early exit, and launcher termination therefore clean up credential-provider
+descendants even when their search parent has already exited. The launcher also terminates
+its owned SDK process tree on timeout. If job ownership cannot be established, the probe
+does not start and reports that availability could not be verified.
 Search does **not** apply package source mapping, unlike `dnx`, and does not verify tool
 download, authentication to mapped sources, runtime compatibility, caches, or MCP initialization.
 An empty search establishes only that the searched feeds did not provide a listed package,

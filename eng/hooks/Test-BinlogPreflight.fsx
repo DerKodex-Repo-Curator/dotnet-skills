@@ -58,6 +58,12 @@ check (diagnose (Completed(1, missing)) |> contains "could not be verified") "No
 check (diagnose TimedOut |> contains "5-second") "Probe timeout must be concrete."
 check (not (diagnose TimedOut |> contains "configured feeds did not provide")) "Timeout is not absence."
 check (diagnose CouldNotStart |> contains ".NET 10+") "Missing dotnet must be intelligible."
+check (diagnose CouldNotOwnProcessTree |> contains "process-tree cleanup") "Windows ownership failure must be explicit."
+check (diagnose CouldNotOwnProcessTree |> contains "probe was not started") "Do not launch an unowned Windows probe."
+check (not (diagnose CouldNotOwnProcessTree |> contains "configured feeds did not provide")) "Ownership failure is not absence."
+check (Runtime.InteropServices.Marshal.SizeOf<WindowsProcessJob.IoCounters>() = 48) "Windows IO_COUNTERS layout."
+check (Runtime.InteropServices.Marshal.SizeOf<WindowsProcessJob.BasicLimits>() = (if IntPtr.Size = 8 then 64 else 48)) "Windows basic job limits layout."
+check (Runtime.InteropServices.Marshal.SizeOf<WindowsProcessJob.ExtendedLimits>() = (if IntPtr.Size = 8 then 144 else 112)) "Windows extended job limits layout."
 for host in [ "copilot"; "claude" ] do
     let message = diagnose (Completed(0, missing)) |> Option.get
     use output = JsonDocument.Parse(serialize host message)

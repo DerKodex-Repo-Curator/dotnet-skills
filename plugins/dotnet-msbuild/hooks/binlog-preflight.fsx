@@ -2,8 +2,76 @@ open System
 open System.ComponentModel
 open System.Diagnostics
 open System.IO
+open System.Runtime.InteropServices
 open System.Text.Json
 open System.Threading.Tasks
+
+module WindowsProcessJob =
+    [<Struct; StructLayout(LayoutKind.Sequential)>]
+    type BasicLimits = {
+        ProcessTime: int64
+        JobTime: int64
+        LimitFlags: uint32
+        MinimumWorkingSet: unativeint
+        MaximumWorkingSet: unativeint
+        ActiveProcesses: uint32
+        Affinity: unativeint
+        PriorityClass: uint32
+        SchedulingClass: uint32
+    }
+
+    [<Struct; StructLayout(LayoutKind.Sequential)>]
+    type IoCounters = {
+        ReadOperations: uint64
+        WriteOperations: uint64
+        OtherOperations: uint64
+        ReadBytes: uint64
+        WriteBytes: uint64
+        OtherBytes: uint64
+    }
+
+    [<Struct; StructLayout(LayoutKind.Sequential)>]
+    type ExtendedLimits = {
+        Basic: BasicLimits
+        Io: IoCounters
+        ProcessMemory: unativeint
+        JobMemory: unativeint
+        PeakProcessMemory: unativeint
+        PeakJobMemory: unativeint
+    }
+
+    [<DllImport("kernel32.dll", EntryPoint = "CreateJobObjectW", CharSet = CharSet.Unicode, SetLastError = true)>]
+    extern nativeint CreateJobObject(nativeint attributes, string name)
+
+    [<DllImport("kernel32.dll", SetLastError = true)>]
+    extern bool SetInformationJobObject(nativeint job, int informationClass, ExtendedLimits& limits, uint32 size)
+
+    [<DllImport("kernel32.dll", SetLastError = true)>]
+    extern bool AssignProcessToJobObject(nativeint job, nativeint process)
+
+    [<DllImport("kernel32.dll")>]
+    extern nativeint GetCurrentProcess()
+
+    [<DllImport("kernel32.dll")>]
+    extern bool CloseHandle(nativeint handle)
+
+    let create () =
+        let job = CreateJobObject(0n, null)
+        if job = 0n then raise (Win32Exception(Marshal.GetLastWin32Error()))
+        let fail () =
+            let error = Marshal.GetLastWin32Error()
+            CloseHandle(job) |> ignore
+            raise (Win32Exception(error))
+        let basic = { Unchecked.defaultof<BasicLimits> with LimitFlags = 0x2000u }
+        let mutable limits = { Unchecked.defaultof<ExtendedLimits> with Basic = basic }
+        // JobObjectExtendedLimitInformation / JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE.
+        if not (SetInformationJobObject(job, 9, &limits, uint32 (Marshal.SizeOf<ExtendedLimits>()))) then fail ()
+        if not (AssignProcessToJobObject(job, GetCurrentProcess())) then fail ()
+        // Keep the non-inheritable handle for this helper's lifetime, not a probe's scope:
+        // OS teardown closes it on normal exit, early exit, or taskkill, killing all descendants.
+        job
+
+    let lifetime = lazy (if OperatingSystem.IsWindows() then create () else 0n)
 
 let packageId = "Microsoft.AITools.BinlogMcp"
 let searchArguments =
@@ -20,29 +88,38 @@ type ProbeResult =
     | Completed of exitCode: int * stdout: string
     | TimedOut
     | CouldNotStart
+    | CouldNotOwnProcessTree
 
 let runProbe (startInfo: ProcessStartInfo) =
     startInfo.UseShellExecute <- false
     startInfo.RedirectStandardOutput <- true
     startInfo.RedirectStandardError <- true
     startInfo.CreateNoWindow <- true
-    use child = new Process(StartInfo = startInfo)
-    try
-        if not (child.Start()) then CouldNotStart
-        else
-            let stdout = child.StandardOutput.ReadToEndAsync()
-            let stderr = child.StandardError.ReadToEndAsync()
-            if not (child.WaitForExit(5000)) then
-                child.Kill(true)
-                child.WaitForExit(500) |> ignore
-                TimedOut
-            elif not (Task.WhenAll(stdout, stderr).Wait(500)) then
-                TimedOut
+    let ownsProcessTree =
+        try
+            WindowsProcessJob.lifetime.Value |> ignore
+            true
+        with :? Win32Exception -> false
+    if not ownsProcessTree then CouldNotOwnProcessTree
+    else
+        use child = new Process(StartInfo = startInfo)
+        try
+            if not (child.Start()) then CouldNotStart
             else
-                Completed(child.ExitCode, stdout.Result)
-    with
-    | :? Win32Exception -> CouldNotStart
-    | :? IOException -> CouldNotStart
+                let budget = Stopwatch.StartNew()
+                let stdout = child.StandardOutput.ReadToEndAsync()
+                let stderr = child.StandardError.ReadToEndAsync()
+                if not (child.WaitForExit(5000)) then
+                    child.Kill(true)
+                    child.WaitForExit(500) |> ignore
+                    TimedOut
+                elif not (Task.WhenAll(stdout, stderr).Wait(max 0 (5000 - int budget.ElapsedMilliseconds))) then
+                    TimedOut
+                else
+                    Completed(child.ExitCode, stdout.Result)
+        with
+        | :? Win32Exception -> CouldNotStart
+        | :? IOException -> CouldNotStart
 
 let unknown =
     "Package availability could not be verified. The selected SDK or NuGet configuration may not support the probe. "
@@ -86,6 +163,7 @@ let diagnose result =
     match result with
     | TimedOut -> Some(context "The 5-second NuGet probe timed out. Package availability could not be verified; this does not establish that MCP startup failed.")
     | CouldNotStart -> Some(context "dotnet could not be started in the workspace. Check that the .NET 10+ SDK is installed and dotnet is on the host's PATH. Package availability could not be verified.")
+    | CouldNotOwnProcessTree -> Some(context "Windows process-tree cleanup could not be established, so the diagnostic probe was not started. Package availability could not be verified. Check the host's Windows process restrictions or run the package-search command locally.")
     | Completed(exitCode, stdout) ->
         try
             use document = JsonDocument.Parse(structuredOutput stdout)
