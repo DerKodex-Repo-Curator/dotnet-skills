@@ -117,6 +117,46 @@ ProcessExitStatus status = await process.WaitForExitStatusAsync();
 
 These instance methods read to EOF; they do not replace waiting for process exit. A child can close its standard streams and keep running. After reading, use `WaitForExitStatus` or await `WaitForExitStatusAsync` to wait for termination and obtain the exit status. See [Waiting for Process Exit](#waiting-for-process-exit) for cancellation and timeout policies.
 
+### Process Output Line by Line With ReadAllLines[Async]
+
+Use `Process.ReadAllLines` or `Process.ReadAllLinesAsync` to read stdout and stderr as one sequence of `ProcessOutputLine` values, interleaved as lines become available. `Content` contains the line's text, and `StandardError` identifies its source. Enable both output and error redirection before starting the process. Consume the sequence with `foreach` or `await foreach` while the process runs; merely obtaining the enumerable does not drain output.
+
+Prefer these methods when the interleaving of output and error matters. Capturing stdout and stderr separately and then concatenating the strings loses that interleaving. For example, a child might print:
+
+```text
+OUT: A
+ERR: B
+OUT: C
+```
+
+Concatenating captured stdout followed by captured stderr instead produces:
+
+```text
+OUT: A
+OUT: C
+ERR: B
+```
+
+The line APIs let you process both streams together instead of grouping all stdout before all stderr. They report the order in which lines become available to the reader, not a guaranteed reconstruction of the child's exact write order across two separate pipes.
+
+Also prefer line-by-line reading when you only need to search for specific text: inspect each line rather than allocating two potentially large strings containing the complete output. With the same process-start and redirection setup as above:
+
+```csharp
+bool found = false;
+await foreach (ProcessOutputLine line in process.ReadAllLinesAsync())
+{
+    if (line.Content.Contains("needle", StringComparison.Ordinal))
+    {
+        found = true;
+    }
+}
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
+```
+
+After finding a match, keep draining if the child should run to completion. If it is long-running and no longer needed, kill it and wait for termination instead. Do not simply stop enumeration and wait for a still-running child: it may block on a full pipe.
+
+Line-by-line reading avoids retaining the entire output, but it is not a strict memory bound for untrusted output: a single arbitrarily long line can still exhaust memory.
+
 ### Start, Capture Text, and Wait for Exit in One Call
 
 When you only need to start a process, capture its text output and error, and wait for its exit status, prefer `Process.RunAndCaptureText`:
