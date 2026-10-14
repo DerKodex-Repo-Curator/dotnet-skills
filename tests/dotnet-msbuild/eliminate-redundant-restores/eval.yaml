@@ -61,6 +61,9 @@ stimuli:
               if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
                 throw new Error('dotnet build does not support --no-build');
               }
+              if (steps.some(l => /^dotnet restore\b/.test(l) && /(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l))) {
+                throw new Error('dotnet restore does not support --no-restore or --no-build');
+              }
               const restoreOff = l => {
                 const switches = l.match(/(?:^|\s)(?:[-/]restore(?::(?:true|false))?|[-/]r:(?:true|false))(?=\s|$)/gi) || [];
                 return /:false$/i.test(switches[switches.length - 1] || '');
@@ -195,6 +198,9 @@ stimuli:
               if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
                 throw new Error('dotnet build does not support --no-build');
               }
+              if (steps.some(l => /^dotnet restore\b/.test(l) && /(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l))) {
+                throw new Error('dotnet restore does not support --no-restore or --no-build');
+              }
               if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
               const packager = l => /(?:^|\s)(?:\.\/)?tools\/Packager\/Packager\.csproj(?:\s|$)/.test(l);
@@ -297,6 +303,9 @@ stimuli:
               if (cmds.some(c => /^dotnet build\b/.test(c) && /(?:^|\s)--no-build(?:\s|$)/.test(c))) {
                 throw new Error('dotnet build does not support --no-build');
               }
+              if (cmds.some(c => /^dotnet restore\b/.test(c) && /(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(c))) {
+                throw new Error('dotnet restore does not support --no-restore or --no-build');
+              }
               const gateway = c => /(?:^|\s)(?:\.\/)?src\/Gateway\/Gateway\.csproj(?:\s|$)/.test(c);
               const rid = c => /(?:^|\s)(-r|--runtime)[ =]+linux-x64(?:\s|$)/.test(c);
               const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
@@ -392,6 +401,9 @@ stimuli:
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
               if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
                 throw new Error('dotnet build does not support --no-build');
+              }
+              if (steps.some(l => /^dotnet restore\b/.test(l) && /(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l))) {
+                throw new Error('dotnet restore does not support --no-restore or --no-build');
               }
               const gen = steps.findIndex(l => /^dotnet run\s+--project\s+(?:\.\/)?tools\/AddAnalyzer(?:\/AddAnalyzer\.csproj)?\s+--\s+(?:\.\/)?src\/Contoso\.Core\/Contoso\.Core\.csproj\s*$/.test(l));
               if (gen < 0) throw new Error('the analyzer tool must still run against src/Contoso.Core/Contoso.Core.csproj');
@@ -495,6 +507,9 @@ stimuli:
               if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
                 throw new Error('dotnet build does not support --no-build');
               }
+              if (steps.some(l => /^dotnet restore\b/.test(l) && /(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l))) {
+                throw new Error('dotnet restore does not support --no-restore or --no-build');
+              }
               const tests = steps.filter(l => /^dotnet test\b/.test(l));
               if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
               for (const project of ['UnitTests', 'IntegrationTests', 'ContractTests']) {
@@ -588,7 +603,15 @@ stimuli:
             - -e
             - *immutable_fixture
             - already-minimal
-            - '{"ci.yml":"939674552702aba23953d56fed641379a814ba4f99e965a105612795edc017d4"}'
+            - >-
+              {"ci.yml":"939674552702aba23953d56fed641379a814ba4f99e965a105612795edc017d4",
+              "Contoso.slnx":"1f4d5020abc9485063c5a2b9eaced3b3d8f9bbb8120b1dfd92531950973da62a",
+              "src/Contoso.Core/BuildMarker.cs":"d07e60bdfce07b5433c4acd721ddf2d8898d21a7e9623a8a64584eda6c4aa585",
+              "src/Contoso.Core/Contoso.Core.csproj":"cb7d7067d5c3c73ea8776e4862de63a4afb7dbe52693654e0da444275cd65e31",
+              "src/Contoso.Core/packages.lock.json":"a29c6aa8cfb81874ff8bb78dc369d7416f28c9b8cc47e99592bfc019b20c41eb",
+              "tests/Contoso.Tests/Contoso.Tests.csproj":"149cb722d1cb67a950caf97d66ea567ec5ae27141bddc50bd4612a3091fbf537",
+              "tests/Contoso.Tests/packages.lock.json":"1a09f5b6f45d070c50a53e778d2628c6f1846cdb44c11c5402a322330933a4a4",
+              "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419"}
           expected_exit_code: 0
       - type: output-matches
         config:
