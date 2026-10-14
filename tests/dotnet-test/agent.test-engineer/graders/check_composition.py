@@ -29,6 +29,8 @@ print("COMPOSITION_RESULT=" + json.dumps({
 
 MUTATIONS = {
     "remote-fee": ("shipping.py", "(8 if remote else 0)", "(0 if remote else 0)"),
+    "remote-paid-fee": ("shipping.py", "(8 if remote else 0)", "(8 if remote and subtotal >= 100 else 0)"),
+    "remote-free-fee": ("shipping.py", "(8 if remote else 0)", "(8 if remote and subtotal < 100 else 0)"),
     "threshold": ("shipping.py", "subtotal < 100", "subtotal <= 100"),
     "reserve-result": ("stock.py", "return True", "return self.quantity == 0"),
     "reserve-state": ("stock.py", "self.quantity -= count", "self.quantity -= count if count == self.quantity else 0"),

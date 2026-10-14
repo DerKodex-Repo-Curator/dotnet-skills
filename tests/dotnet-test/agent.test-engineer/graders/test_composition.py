@@ -76,9 +76,10 @@ class CompositionTests(unittest.TestCase):
 
     def command_result(self, case, root):
         grader = next(g for g in case["graders"] if g["type"] == "run-command")["config"]
+        timeout = int(grader["timeout"][:-1]) * {"s": 1, "m": 60, "h": 3600}[grader["timeout"][-1]]
         result = subprocess.run(
             [sys.executable, *grader["args"]], cwd=root,
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=timeout,
         )
         return grader, result
 
@@ -107,6 +108,30 @@ class CompositionTests(unittest.TestCase):
             with self.subTest(case=case["name"]):
                 text = case["golden_trajectory"]["inline"]["steps"][-1]["message"]
                 self.assertTrue(self.response_errors(case, defect(text)))
+
+    def test_equivalent_plan_formats_and_stale_report_wording(self):
+        responses = [
+            (CASES[0], "1. Freight.Quote(true) -> 13; this covers the missing branch. Label can follow."),
+            (CASES[0], "| # | Target | Input | Expected | Reason |\n"
+             "| 1 | Freight.Quote | true | 13 | Missing remote outcome |\n"
+             "| 2 | Policy.Label | true | Express | Formatting |"),
+            (CASES[1], "| # | Method | CRAP |\n| 1 | Authorize | 14.50 |\n| 2 | Label | 6 |"),
+            (CASES[3], "stale.json covers legacy_stock.py, irrelevant to the current code, so I won't rely on it.\n"
+             "Strengthen reserve(2): True, quantity 2. Unknown/not verified: current coverage."),
+        ]
+        for case, response in responses:
+            with self.subTest(response=response):
+                self.assertEqual([], self.response_errors(case, response))
+        bad = [
+            (CASES[0], "1. Policy.Label(true) -> Express.\n2. Freight.Quote(true) -> 13 closes a missing branch."),
+            (CASES[0], "| 1 | Policy.Label | true | Express |\n| 2 | Freight.Quote | true | 13 | Missing branch |"),
+            (CASES[0], "1. Freight.Quote(true) -> 13; it already has tests."),
+            (CASES[1], "| 1 | Label | 6 |\n| 2 | Authorize | 14.50 |"),
+            (CASES[3], "stale.json proves current coverage is complete. Strengthen reserve(2): True, quantity 2."),
+        ]
+        for case, response in bad:
+            with self.subTest(response=response):
+                self.assertTrue(self.response_errors(case, response))
 
     def test_all_cases_reject_production_edits_and_missing_siblings(self):
         for case in CASES:
@@ -145,6 +170,22 @@ class CompositionTests(unittest.TestCase):
         _, result = self.command_result(case, root)
         self.assertNotEqual(0, result.returncode)
         self.assertIn("Survived: shortage-state", result.stderr)
+
+    def test_quality_repair_requires_both_remote_fee_partitions(self):
+        case = CASES[4]
+        for cases, survivor in (
+            ("((100, 8), (101, 8))", "remote-paid-fee"),
+            ("((0, 13), (99, 13))", "remote-free-fee"),
+        ):
+            with self.subTest(survivor=survivor):
+                root = self.materialize(case)
+                path = root / "parcel/test_shipping.py"
+                original = path.read_text(encoding="utf-8")
+                path.write_text(original.replace("((0, 13), (99, 13), (100, 8), (101, 8))", cases), encoding="utf-8")
+                self.assertFalse(checks.run_suite(root / "parcel")["failures"])
+                _, result = self.command_result(case, root)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(f"Survived: {survivor}", result.stderr)
 
     def test_noop_rejects_even_cosmetic_test_changes(self):
         case = CASES[5]

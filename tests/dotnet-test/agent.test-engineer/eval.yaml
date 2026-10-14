@@ -772,13 +772,13 @@ stimuli:
     graders:
       - type: output-matches
         config:
-          pattern: '(?im)^[# \t]*1[.)]\s*[^\r\n]*Quote'
+          pattern: '(?im)^(?:[# \t]*1[.)]\s*|[ \t]*\|[ \t]*1[ \t]*\|)[^\r\n]*Quote'
       - type: output-matches
         config:
           pattern: '(?is)Quote.{0,120}(true|remote).{0,120}\b13\b'
       - type: output-matches
         config:
-          pattern: '(?is)(?=.*line)(?=.*branch)(?=.*50\s*%)(?=.*(?:100\s*%|full line coverage|line coverage (?:is )?complete))'
+          pattern: '(?is)(missing|uncovered|unexercised).{0,60}(branch|outcome|remote)|(branch|outcome).{0,60}(missing|uncovered|unexercised|50\s*%)'
       - type: run-command
         config:
           command: python
@@ -788,7 +788,7 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
             - adcbca968328816ddd9ce7ff98875a768c6075945a316f8ec8b0eae9eb95f1de
@@ -856,7 +856,7 @@ stimuli:
     graders:
       - type: output-matches
         config:
-          pattern: '(?im)^[# \t]*1[.)]\s*[^\r\n]*Authorize'
+          pattern: '(?im)^(?:[# \t]*1[.)]\s*|[ \t]*\|[ \t]*1[ \t]*\|)[^\r\n]*Authorize'
       - type: output-matches
         config:
           pattern: '(?is)Authorize.{0,500}14\.5'
@@ -872,7 +872,7 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
             - adcbca968328816ddd9ce7ff98875a768c6075945a316f8ec8b0eae9eb95f1de
@@ -953,10 +953,10 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
-            - 6552dad519ef5ab82d6c2e1106ed743d21945f2c18d01637b712a18820dee898
+            - 484e58eef9992358cf2d7cfa18d19c9ef32e18377c72c9fbade7da856cd980e0
             - parcel
             - native
           expected_exit_code: 0
@@ -1021,7 +1021,7 @@ stimuli:
           pattern: '(?i)(stale|legacy_stock|old report|unmapped|does not map)'
       - type: output-matches
         config:
-          pattern: '(?is)(coverage|risk).{0,160}(unknown|unavailable|unmeasured|not measured)|(?:stale|legacy_stock|old report).{0,250}(not useful|cannot|does not|not current|not the current)'
+          pattern: '(?is)(coverage|risk).{0,160}(unknown|unavailable|unmeasured|not measured)|(unknown|not verified).{0,160}coverage|(?:stale|legacy_stock|old report).{0,250}(not useful|irrelevant|cannot|does not|doesn.t apply|won.t rely|not current|not the current)'
       - type: output-matches
         config:
           pattern: '(?is)(reserve|shortage).{0,180}(False|unchanged|quantity)'
@@ -1037,10 +1037,10 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
-            - c4e2b3c08233740005440289b0d5a222c2582545d3bb6e69439440d7d91772b3
+            - 660ca91cf27a618d06264ee3b151b8268580d93a8c1f21500cfc0ac7ae3703a0
             - parcel
             - readonly
           expected_exit_code: 0
@@ -1123,14 +1123,14 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
-            - 4c662e62991fae5d26a746d89c937f85fb85704ec74ef1ff6cb56df66ed70d83
+            - 02257e1b895ed5b36e5b8310f9974d05671bc34359614a306a35f804bc55aa2d
             - parcel
             - quality
           expected_exit_code: 0
-          stdout_matches: 'Composition verified: [1-9][0-9]* tests, 6 rejected mutations'
+          stdout_matches: 'Composition verified: [1-9][0-9]* tests, 8 rejected mutations'
           timeout: 2m
       - type: prompt
     rubric:
@@ -1199,10 +1199,10 @@ stimuli:
             - >-
               import hashlib,pathlib,subprocess,sys;
               h=lambda p:hashlib.sha256(pathlib.Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest();
-              assert h('.eval/check_composition.py')=='956dbe3e272146126fb6e3e3a93305d2c1fa2f6ed799668629d70dd69a819ca8';
+              assert h('.eval/check_composition.py')=='41315036145ac167fd2fc98a02d155a9c05f44297a136b613d3d9a245a70e2cb';
               assert h('.eval/composition-inputs.json')==sys.argv[1];
               subprocess.run([sys.executable,'-B','.eval/check_composition.py','verify',*sys.argv[2:]],check=True)
-            - a33c9f935b3426fc9e042a60e51d966fbf04abca022a75d0507cc946125c53e5
+            - 635224408c016ecf69371b259aca5a5bb4017c330a8b51e23e1baf3a1d46cb3b
             - parcel
             - noop
           expected_exit_code: 0
