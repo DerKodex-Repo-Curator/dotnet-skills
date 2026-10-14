@@ -36,6 +36,12 @@ When starting a process with the APIs or `ProcessStartInfo` features described i
 
 Although `Process.Start` returns `Process?`, it can return `null` only when `UseShellExecute` is `true`. With shell execution disabled, it returns a `Process` on success or throws on failure. Do not add redundant null checks or `?? throw` after `Process.Start` in this case; use `Process.Start(startInfo)!` to express the guarantee.
 
+## Choosing Synchronous or Asynchronous APIs
+
+For simple CLI operations that don't need cancellation or async scalability, prefer the synchronous overload. Use asynchronous overloads when cancellation, responsiveness, or scalability requires avoiding a blocked calling thread, and await them directly.
+
+**Never use `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()` to synchronously block on an asynchronous process operation: sync-over-async can deadlock and blocks the calling thread.** Do not call synchronous process-wait methods from asynchronous code either.
+
 ## Capturing Output Without Pipe Buffer Deadlocks
 
 Redirecting standard output and standard error creates two separate pipes. Each pipe has a finite buffer. If the child fills a pipe, its next write blocks until the parent reads data from that pipe.
@@ -283,8 +289,6 @@ Use `WaitForExitStatus` for synchronous waiting and `WaitForExitStatusAsync` in 
 ### Do Not Use Process.ExitCode as a Wait
 
 `Process.ExitCode` is a synchronous property, not an asynchronous completion operation. It checks process state and throws `InvalidOperationException` if the process is still running. Reading all output does not prove that it has exited. Do not poll this property or use it instead of waiting for termination.
-
-**Never use `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()` to synchronously block on an asynchronous process wait: sync-over-async can deadlock and blocks the calling thread.** Do not call synchronous process-wait methods from asynchronous code either.
 
 In asynchronous code, await `WaitForExitStatusAsync` directly and read the returned object's properties:
 
@@ -564,114 +568,4 @@ When `StartDetached` is `true`, standard handles without explicit redirection ar
 
 ```csharp
 public bool StartDetached { get; set; }
-```
-
----
-
-## Examples
-
-### 1. One-Line Run and Capture Output
-
-Run a process and safely read all output text without stream deadlock risks. For simple CLI operations that don't need cancellation or async scalability, prefer the synchronous overload:
-
-```csharp
-using System;
-using System.Diagnostics;
-
-// Run 'git status' and capture output
-ProcessTextOutput result = Process.RunAndCaptureText("git", ["status"]);
-
-if (result.ExitStatus.ExitCode == 0)
-{
-    Console.WriteLine($"Git Output: {result.StandardOutput}");
-}
-else
-{
-    Console.WriteLine($"Failed with exit code: {result.ExitStatus.ExitCode}");
-    Console.WriteLine($"Error: {result.StandardError}");
-}
-```
-
-### 2. Auto-Killing Child Processes on Parent Exit
-
-On Windows, Linux, and Android, ensure a long-running background worker process is killed when the main application terminates. On other platforms, this example stops before starting the child process:
-
-```csharp
-using System;
-using System.Diagnostics;
-
-ProcessStartInfo startInfo = new("dotnet", ["run", "--project", "BackgroundWorker.csproj"]);
-
-if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsAndroid())
-{
-    startInfo.KillOnParentExit = true;
-}
-else
-{
-    throw new PlatformNotSupportedException("This example requires Windows, Linux, or Android.");
-}
-
-using Process process = Process.Start(startInfo)!;
-// The background worker is now tied to this process's lifecycle
-```
-
-### 3. Read All Lines From Output
-
-Start a process and read its output lines safely:
-
-```csharp
-using System;
-using System.Diagnostics;
-using System.Threading.Tasks;
-
-ProcessStartInfo startInfo = new("ping", ["127.0.0.1"])
-{
-    RedirectStandardOutput = true,
-    RedirectStandardError = true
-};
-
-using Process process = Process.Start(startInfo)!;
-// Read all output lines safely and asynchronously
-await foreach (ProcessOutputLine line in process.ReadAllLinesAsync())
-{
-    string prefix = line.StandardError ? "[Err]" : "[Out]";
-    Console.WriteLine($"{prefix} > {line.Content}");
-}
-ProcessExitStatus status = await process.WaitForExitStatusAsync();
-```
-
-### 4. Read Entire Output Deadlock-Free (Tuple Return)
-
-When managing a `Process` instance yourself, read both stdout and stderr into a deconstructed tuple, then wait for process exit. If starting, capturing text, and waiting is all you need, prefer `Process.RunAndCaptureText[Async]`, which also accepts custom `ProcessStartInfo`.
-
-```csharp
-using System;
-using System.Diagnostics;
-using System.Threading.Tasks;
-
-ProcessStartInfo startInfo = new("git", ["diff"])
-{
-    RedirectStandardOutput = true,
-    RedirectStandardError = true
-};
-
-using Process process = Process.Start(startInfo)!;
-(string stdout, string stderr) = await process.ReadAllTextAsync();
-ProcessExitStatus status = await process.WaitForExitStatusAsync();
-
-Console.WriteLine($"Diff output: {stdout}");
-Console.Error.WriteLine(stderr);
-```
-
-### 5. Start and Forget (Fire & Forget)
-
-Launch a helper executable without holding onto system handle structures:
-
-```csharp
-using System;
-using System.Diagnostics;
-
-// Fire and forget, getting back only the process ID
-int pid = Process.StartAndForget("notepad.exe");
-Console.WriteLine($"Notepad started with PID: {pid}");
 ```
