@@ -1,6 +1,9 @@
 import importlib.util
+from contextlib import redirect_stdout
+from io import StringIO
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -10,31 +13,12 @@ from unittest.mock import patch
 
 import yaml
 
-from operation_contract import check_files, check_mutation, digest, has_go_cleanup, main, rust_runtime_bytes
+from operation_contract import check_files, check_mutation, digest, main, rust_runtime_bytes, verify_go_lifetime
 
 
 class ScopeTests(unittest.TestCase):
-    def test_go_cleanup_check_ignores_unregistered_calls_and_documentation(self):
-        for source in (
-            "server.Close()",
-            "// t.Cleanup(func() { server.Close() })",
-            "/* defer func() { server.Close() }() */",
-            '"t.Cleanup(func() { server.Close() })"',
-            '`defer func() { server.Close() }()`',
-            "t.Cleanup(func() {})\nserver.Close()",
-            "defer func() { if ok { server.Close() }",
-        ):
-            with self.subTest(source=source):
-                self.assertFalse(has_go_cleanup(source))
-        for source in (
-            "t.Cleanup(server.Close)",
-            "defer server.Close()",
-            't.Cleanup(func() { note := "}"; _ = note; /* } */ if ok { server.Close() } })',
-        ):
-            with self.subTest(source=source):
-                self.assertTrue(has_go_cleanup(source))
-
-    def test_go_cleanup_callbacks_pass_native_golden(self):
+    @staticmethod
+    def go_case():
         suite = Path(__file__).resolve().parents[1]
         replay_spec = importlib.util.spec_from_file_location(
             "operation_replay", suite.parent.parent / "dotnet-test-migration" / "graders" / "replay.py"
@@ -44,6 +28,54 @@ class ScopeTests(unittest.TestCase):
         spec = suite / "eval.yaml"
         case = next(case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
                     if case["name"].startswith("Test Go HTTP"))
+        return replay, spec, case
+
+    def test_go_requires_cleanup_for_each_server(self):
+        replay, spec, case = self.go_case()
+        for cleanup in ("t.Cleanup(server.Close)", "defer server.Close()"):
+            with self.subTest(cleanup=cleanup), tempfile.TemporaryDirectory(
+                prefix="go-missing-server-cleanup-"
+            ) as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                tests = root / "work" / "client_test.go"
+                source = tests.read_text(encoding="utf-8")
+                self.assertEqual(1, source.count(cleanup))
+                tests.write_text(source.replace(cleanup, ""), encoding="utf-8")
+                native = subprocess.run(
+                    ["go", "test", "-json", "-count=1", "./..."], cwd=root / "work",
+                    env=dict(os.environ, GOPROXY="off", GOSUMDB="off"),
+                    capture_output=True, text=True, timeout=120,
+                )
+                self.assertEqual(0, native.returncode, native.stdout + native.stderr)
+                with self.assertRaisesRegex(AssertionError, "GO_SERVER_LIFETIME: unclosed server"):
+                    replay.run_graders(case, root)
+
+    def test_go_cleanup_check_ignores_unregistered_calls_and_documentation(self):
+        replay, spec, case = self.go_case()
+        for replacement in (
+            '// t.Cleanup(server.Close)\n\t_ = "server.Close()"',
+            "t.Cleanup(func() { if false { server.Close() } })",
+            "t.Cleanup(func() { server := httptest.NewServer(http.NotFoundHandler()); server.Close() })",
+        ):
+            with self.subTest(replacement=replacement), tempfile.TemporaryDirectory(
+                prefix="go-false-cleanup-"
+            ) as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                tests = root / "work" / "client_test.go"
+                source = tests.read_text(encoding="utf-8")
+                self.assertEqual(1, source.count("t.Cleanup(server.Close)"))
+                tests.write_text(source.replace("t.Cleanup(server.Close)", replacement), encoding="utf-8")
+                before = {path: path.read_bytes() for path in (root / "work").iterdir()}
+                output = StringIO()
+                with redirect_stdout(output), self.assertRaises(AssertionError):
+                    verify_go_lifetime(root / "work", dict(os.environ, GOPROXY="off", GOSUMDB="off"))
+                self.assertIn("GO_SERVER_LIFETIME: unclosed server", output.getvalue())
+                self.assertEqual(before, {path: path.read_bytes() for path in (root / "work").iterdir()})
+
+    def test_go_cleanup_callbacks_pass_native_golden(self):
+        replay, spec, case = self.go_case()
         for callback in (
             "t.Cleanup(func() { server.Close() })",
             "defer func() { server.Close() }()",
@@ -61,6 +93,48 @@ class ScopeTests(unittest.TestCase):
                 tests.write_text(source.replace(
                     "t.Cleanup(server.Close)", callback
                 ).replace("defer server.Close()", callback), encoding="utf-8")
+                replay.run_graders(case, root)
+
+    def test_go_factory_and_cleanup_helpers_keep_test_ownership(self):
+        replay, spec, case = self.go_case()
+        for variant in ("helpers", "parallel-subtests"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory(
+                prefix="go-owned-helpers-"
+            ) as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                tests = root / "work" / "client_test.go"
+                source = tests.read_text(encoding="utf-8")
+                if variant == "helpers":
+                    source = source.replace("httptest.NewServer(", "makeServer(t, ").replace(
+                        "t.Cleanup(server.Close)", "t.Cleanup(func() { closeServer(server) })"
+                    ).replace("defer server.Close()", "defer closeServer(server)")
+                    source += (
+                        "\nfunc makeServer(owner testing.TB, handler http.Handler) *httptest.Server {\n"
+                        "\treturn httptest.NewServer(handler)\n}\n"
+                        "func closeServer(server *httptest.Server) { server.Close() }\n"
+                    )
+                    source = source.replace('"net/http/httptest"', 'webtest "net/http/httptest"').replace(
+                        "httptest.", "webtest."
+                    )
+                else:
+                    source, count = re.subn(
+                        r"^(func Test\w+)\(t \*testing.T\) \{(.*?)^\}",
+                        r'\1(parent *testing.T) { parent.Run("owned", func(t *testing.T) { t.Parallel();\2})}',
+                        source, flags=re.M | re.S,
+                    )
+                    self.assertEqual(2, count)
+                tests.write_text(source, encoding="utf-8")
+                replay.run_graders(case, root)
+
+    def test_go_lifetime_probe_is_authenticated(self):
+        replay, spec, case = self.go_case()
+        with tempfile.TemporaryDirectory(prefix="go-probe-authentication-") as temporary:
+            root = Path(temporary)
+            replay.materialize(spec, case, root)
+            helper = root / ".eval" / "go_server_lifetime.go"
+            helper.write_bytes(helper.read_bytes() + b"\n// changed\n")
+            with self.assertRaisesRegex(AssertionError, "Go lifetime verifier changed"):
                 replay.run_graders(case, root)
 
     def test_mutation_copy_preserves_other_languages_target_directories(self):

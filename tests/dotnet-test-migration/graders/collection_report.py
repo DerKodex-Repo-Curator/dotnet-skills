@@ -26,7 +26,7 @@ def validate_report(policy, response):
     unrelated = r"\b(?:unrelated|other)\s+(?:(?:test\s+)?(?:classes|tests)|collections)\b"
     members = (
         r"\b(?:(?:these|those|the)\s+(?:(?:deferred|serialized|shared|collection|two)\s+)?"
-        r"(?:members|classes|tests)|(?:deferred|serialized)\s+members)\b"
+        r"(?:members|classes|tests)|(?:deferred|serialized)\s+members|FirstMember|SecondMember)\b"
     )
     peers = r"\b(?:each other|one another|themselves)\b"
     parallel = r"\b(?:parallel|concurrent(?:ly)?|overlaps?|overlapping)\b"
@@ -37,13 +37,15 @@ def validate_report(policy, response):
         r"remain|continue|not|never|no longer)\b"
     )
     claims = set()
+    previous_subject = None
+    previous_historical = False
     for sentence in re.split(r"[.!?;\n]+|\b(?:whereas|unlike)\b", normalized, flags=re.I):
         subject = None
         historical = False
         # Keep coordinated overlap targets together, but separate their predicates.
         separator = (
             r",(?=\s*(?:MSTest|xUnit)\b)|\b(?:but|yet|however|while)\b|"
-            rf"\band(?=\s+(?:{continuation}|{unrelated}|{members}\s+(?:can|cannot|may|are)\b))"
+            rf"\band(?=\s+(?:{continuation}|they\s+{continuation}|{unrelated}|{members}\s+(?:can|cannot|may|are)\b))"
         )
         for clause in re.split(separator, sentence, flags=re.I):
             clause = re.sub(r"\s+", " ", clause).strip(" ,")
@@ -51,13 +53,20 @@ def validate_report(policy, response):
                 historical = True
             elif re.match(r"^mstest\b", clause, re.I):
                 historical = False
-            if historical:
-                continue
+            pronoun = re.match(r"^they\s+", clause, re.I)
+            if pronoun and re.search(parallel + "|" + serial, clause, re.I):
+                assert previous_subject, "Scheduling disclosure has an unresolved pronoun"
+                clause = previous_subject + " " + clause[pronoun.end():]
+                historical = previous_historical
             if subject and re.match(continuation, clause, re.I):
                 clause = subject + " " + clause
             actor = re.search(unrelated + "|" + members, clause, re.I)
             if actor:
                 subject = actor[0]
+                previous_subject = subject
+                previous_historical = historical
+            if historical:
+                continue
             if not re.search(unrelated, clause, re.I):
                 continue
             # Member adjectives (for example, "serialized members") are not predicates.

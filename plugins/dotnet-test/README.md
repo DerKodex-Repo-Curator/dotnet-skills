@@ -46,6 +46,14 @@ behavior and have bounded, owned lifetimes; they are not external services.
 Any unavailable language parser or runner must be reported as a prerequisite
 or coverage limitation, never as zero tests or successful execution.
 
+The Go HTTP eval checks server lifetimes in a separate, instrumented replay copy,
+not by searching for one cleanup call. An authenticated standard-library Go AST
+probe tracks each server's listener until its owning test finishes. Direct closes,
+deferred callbacks, subtest owners and helpers accepting `testing.TB` are supported;
+factory helpers without a standard testing-owner parameter are reported as
+unsupported by this fixture probe. This calibration does not modify delivered tests
+or expose a new public analysis tool.
+
 ### Test execution
 
 | Skill | Description |

@@ -145,22 +145,17 @@ def check_mutation(root, filename, old, new, argv, exit_code, outcome_pattern, e
         assert re.search(outcome_pattern, output), "Counterfactual must reach the expected test outcome"
 
 
-def has_go_cleanup(source):
-    source = re.sub(
-        r'//[^\r\n]*|/\*.*?\*/|`[^`]*`|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
-        lambda match: " " * len(match[0]), source, flags=re.S,
-    )
-    if re.search(r"\b(?:Cleanup\s*\(\s*\w+\.Close\s*\)|defer\s+\w+\.Close\s*\(\s*\))", source):
-        return True
-    for match in re.finditer(r"\b(?:Cleanup\s*\(\s*|defer\s+)func\s*\([^)]*\)\s*\{", source):
-        depth = 1
-        end = match.end()
-        while end < len(source) and depth:
-            depth += (source[end] == "{") - (source[end] == "}")
-            end += 1
-        if depth == 0 and re.search(r"\b\w+\.Close\s*\(\s*\)", source[match.end():end - 1]):
-            return True
-    return False
+def verify_go_lifetime(root, environment):
+    helper = Path(__file__).with_name("go_server_lifetime.go")
+    assert digest(helper.read_bytes()) == "5d2cab5994e8a3108da037a5fb142a859fb62820a36514d1c84e7f197ad9c570", "Go lifetime verifier changed"
+    with tempfile.TemporaryDirectory(prefix="go-lifetime-replay-") as temporary:
+        replay = Path(temporary) / "work"
+        shutil.copytree(root, replay)
+        command(["go", "run", str(helper.resolve()), str(replay)], replay, environment=environment)
+        output = command(
+            ["go", "test", "-json", "-count=1", "./..."], replay, environment=environment,
+        )
+        assert "GO_SERVER_LIFETIME: verified " in output, "No owned server lifetime was exercised"
 
 
 def main():
@@ -221,11 +216,7 @@ def main():
         test_sources = list(args.root.glob("*_test.go"))
         assert test_sources, "No Go test file"
         source = "\n".join(path.read_text(encoding="utf-8") for path in test_sources)
-        assert "httptest.NewServer" in source, "Exercise an owned ephemeral HTTP server"
         assert re.search(r"(?:TempDir|MkdirTemp)\s*\(", source), "Use an owned temporary directory"
-        assert has_go_cleanup(source), (
-            "The fixture's HTTP server needs registered cleanup"
-        )
         environment = dict(os.environ, GOPROXY="off", GOSUMDB="off")
         output = command(
             ["go", "test", "-json", "-count=1", "./..."], args.root,
@@ -235,6 +226,7 @@ def main():
         passed = {event["Test"] for event in events
                   if event.get("Action") == "pass" and "Test" in event}
         assert len(passed) >= 2, "Both success and non-success HTTP behavior need tests"
+        verify_go_lifetime(args.root, environment)
         for old, new in (
             ("destination, body, 0600", "destination, append(body, '!'), 0600"),
             ("response.StatusCode != http.StatusOK", "false"),

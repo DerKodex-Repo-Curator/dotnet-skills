@@ -36,12 +36,40 @@ RESOURCE_REPORT = (
     "broader assembly serialization; the resource is disposed after both members finish."
 ) + LIFETIME_REPORT
 DEFERRED_REPORT = (
-    "Unrelated classes may run in parallel with each other, but cannot overlap "
-    "these deferred members. This is coarser scheduling than xUnit collections."
+    "Unrelated classes may run in parallel with each other, but they cannot overlap "
+    "FirstMember or SecondMember. This is coarser scheduling than xUnit collections."
 ) + LIFETIME_REPORT
 
 
 class DefaultCollectionTests(unittest.TestCase):
+    def test_pronouns_and_named_members_keep_scheduling_subject(self):
+        for text in (
+            "Unrelated classes may run in parallel with each other, but they cannot overlap these deferred members.",
+            "Unrelated classes may run in parallel with each other, but cannot overlap FirstMember or SecondMember.",
+            "Unrelated classes may run in parallel with each other. They cannot overlap FirstMember or SecondMember.",
+        ):
+            with self.subTest(report=text):
+                report.validate_report("deferred-members", text)
+        for text in (
+            "Unrelated classes cannot overlap each other, but they may overlap these members.",
+            "Unrelated classes cannot overlap each other. They may overlap FirstMember or SecondMember.",
+            "Unrelated classes cannot overlap each other, and they may overlap these members.",
+        ):
+            with self.subTest(report=text), self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
+                report.validate_report("assembly-serial", text)
+
+    def test_historical_pronouns_do_not_become_mstest_claims(self):
+        report.validate_report(
+            "assembly-serial",
+            "In xUnit unrelated classes can run in parallel. They may overlap these members. "
+            "MSTest serializes unrelated classes under this assembly policy.",
+        )
+        with self.assertRaisesRegex(AssertionError, "unresolved pronoun"):
+            report.validate_report(
+                "assembly-serial",
+                "They may overlap these members. MSTest serializes unrelated classes.",
+            )
+
     def test_assembly_serial_disclosure_must_cover_unrelated_peers(self):
         for text in (
             "Unrelated classes cannot overlap these members.",
@@ -145,8 +173,8 @@ class DefaultCollectionTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                 replay.run_graders(
                     CASE, root,
-                    "The two members serialize; unrelated classes remain parallel "
-                    "and can overlap exactly as in xUnit.",
+                    "Unrelated classes cannot overlap each other, but they may overlap these members."
+                    + LIFETIME_REPORT,
                 )
             source = root / "CollectionTests.cs"
             golden = source.read_text(encoding="utf-8")
