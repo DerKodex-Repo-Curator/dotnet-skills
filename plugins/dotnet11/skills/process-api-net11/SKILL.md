@@ -354,6 +354,97 @@ Start both processes before waiting for either to exit so the consumer can drain
 
 The handle-creation helpers create non-inheritable handles. **Do not manually enable inheritance**: `Process` handles passing the specified standard handles to the child. This avoids unnecessarily exposing them to other processes started concurrently.
 
+## Controlling Handle Inheritance
+
+**A pipe reaches EOF only when all handles to its write end have been closed.** Reading both output streams concurrently prevents pipe-buffer deadlocks, but it cannot force EOF while another process still owns a writer. There are two distinct inheritance problems to consider.
+
+### Accidental Inheritance by a Sibling Process
+
+If two threads start children concurrently, an inheritable handle intended for one child can leak into the other:
+
+```log
+Parent Process
+|- Thread A                          |- Thread B
+|                                    |
+|  1. Create an inheritable pipe     |  1. Create no pipes, just inherit parent standard handles
+|    (read_A, write_A)               |
+|                                    |
+|  2. Start Child A                  |  2. Start Child B
+|     inherits: the pipe             |     inherits: parent standard handles, read_A and write_A (accidental!)
+|                                    |
+|  3. Close write_A (parent copy)    |  3. Keeps running and holds inherited write_A open
+|                                    |
+|  4. Child A exits                  |
+|                                    |
+|  5. Read from read_A               |
+|     ┌──────────────────────┐       |
+|     │  HANGS FOREVER!      │       |
+|     │  write_A is still    │       |
+|     │  open in Child B     │       |
+|     └──────────────────────┘       |
+```
+
+Child B need not write anything to the pipe to keep it open. If it is long-running, the parent's read can remain pending indefinitely after Child A has exited.
+
+.NET creates file handles as non-inheritable by default and coordinates process creation with a global lock on Windows to prevent its temporary inheritable handles from leaking between cooperating starts. Do not undermine these protections by creating inheritable handles yourself: avoid `FileShare.Inheritable`, `HandleInheritability.Inheritable`, Windows P/Invoke handles with `bInheritHandle = true`, or Unix descriptors without `FD_CLOEXEC` unless inheritance is explicitly required and coordinated. Native process-start code does not automatically participate in .NET's lock.
+
+### Restrict Inheritance With ProcessStartInfo.InheritedHandles
+
+Use `InheritedHandles` to specify which additional handles a child may inherit, instead of exposing all inheritable handles in the parent:
+
+| Value | Child inherits |
+|-------|----------------|
+| `null` (default) | Standard handles plus other inheritable handles, preserving the existing behavior |
+| `[]` | Only standard input, output, and error handles |
+| Explicit non-empty list | Standard handles plus the listed handles |
+
+For a child that needs no additional handles:
+
+```csharp
+ProcessStartInfo startInfo = new("dotnet", ["build"])
+{
+    InheritedHandles = []
+};
+
+using Process process = Process.Start(startInfo)!;
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
+```
+
+Apply the restriction to each relevant child start: restricting Child A does not prevent an unrestricted Child B from inheriting other handles. Standard handles are included automatically; do not add them to the list. Only `SafeFileHandle` and `SafePipeHandle` instances are supported, and a non-null list requires `UseShellExecute = false` and an empty `UserName`.
+
+**Do not manually enable inheritance on handles passed in this list.** The runtime manages their inheritance flags during process creation. Do not pass the same handle in concurrent process starts; serialize starts sharing that handle or supply separate handles.
+
+On Windows, explicit lists allow concurrent starts under a shared reader lock rather than serializing them under the default exclusive writer lock. This is not lock-free, and it does not coordinate arbitrary native process-start APIs. On Unix systems without native support for restricting inheritance, process creation with a non-null list throws `PlatformNotSupportedException`; do not silently fall back to `null` when restricted inheritance is required.
+
+### Inheritance by a Grandchild Process
+
+Even with the parent's inheritance restricted, the child receives its standard handles and can pass them to its own children:
+
+```log
+Parent Process                 Child Process                Grandchild Process
+|                              |                            |
+|  1. Create pipe              |                            |
+|     (read, write)            |                            |
+|                              |                            |
+|  2. Start Child              |                            |
+|     inherits: write          |                            |
+|                              |                            |
+|  3. Close write              |  1. Start Grandchild       |
+|     (parent copy)            |     inherits: write        |
+|                              |                            |
+|  4. Read from read...        |  2. Child exits            |
+|     ┌──────────────────┐     |     closes write           |
+|     │  HANGS!          │     |                            |  Still running
+|     │  write is still  │     |                            |  keeps write open
+|     │  open in         │     |                            |
+|     │  Grandchild      │     |                            |
+|     └──────────────────┘     |                            |
+```
+
+**`InheritedHandles = []` does not prevent a child from passing its standard handles to a grandchild.** The parent cannot control how an arbitrary child launches descendants. When you control that code, give an independent grandchild its own standard handles, for example null handles or a log file, instead of inheriting the child's output pipe.
+
+For an arbitrary child, use `WaitForExitStatus[Async]` to observe its termination independently of output EOF. If complete output capture can remain pending on descendant-held writers, define an explicit output-draining cancellation or timeout policy; do not assume killing or waiting for the immediate child closes every writer. Stopping reads before EOF can lose remaining output, so make that tradeoff explicit.
+
 ## New APIs
 
 ### Types
@@ -440,14 +531,16 @@ Provides precise control over which handles (file descriptors) are inherited by 
 - Standard handles (`stdin`, `stdout`, `stderr`) are always included (no need to add them to the list).
 - Setting the list to an empty list means only standard handles get inherited.
 - Only `SafeFileHandle` and `SafePipeHandle` instances are allowed as of today.
-- No global lock is used when spawning new processes on Windows (important for tuning projects that spawn multiple processes in parallel).
+- On Windows, explicit lists use a shared reader lock, allowing concurrent starts instead of serializing them under an exclusive writer lock.
 - Concurrent process starts must not pass the same handle in `InheritedHandles`: the runtime temporarily changes its inheritance flags. Serialize starts that share a handle, or use separate handles for each concurrent start.
 - Do not enable inheritance on the handles before passing them; other process-start APIs could then inherit them unintentionally.
-- On Unix systems without native handle-inheritance control, setting this property can severely reduce process-start performance.
+- On Unix systems without native handle-inheritance control, a non-null list causes process creation to throw `PlatformNotSupportedException`.
 - A non-null list requires `UseShellExecute = false` and cannot be combined with a non-empty `UserName`.
 ```csharp
 public IList<SafeHandle>? InheritedHandles { get; set; }
 ```
+
+See [Controlling Handle Inheritance](#controlling-handle-inheritance) for sibling-inheritance races, the difference between `null` and an empty list, and why restricting inheritance does not prevent grandchild-held standard handles from delaying EOF.
 
 #### `StartDetached`
 Starts the process detached from the parent's terminal or job session, ensuring it survives the parent's exit.
