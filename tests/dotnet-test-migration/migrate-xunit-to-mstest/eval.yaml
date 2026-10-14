@@ -83,7 +83,7 @@ stimuli:
                   active = described = False
                   continuation = (
                       r"^(?:its?\b|(?:this|that|the)\s+(?:source\s+)?(?:setting|option|threshold)\b|"
-                      r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostics?|"
+                      r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostics?|informational|advisory|"
                       r"warns?|fail(?:ures?|s|ing)?|enforc(?:es?|ed|ing)|timeouts?|deadlines?)\b)"
                   )
                   negative = r"\b(?:not|never|no|cannot|can't|doesn't|isn't|wasn't|without)\b"
@@ -96,7 +96,7 @@ stimuli:
                       )
                       if not active:
                           continue
-                      warning = re.search(r"\b(?:diagnostics?(?:-only)?|warnings?|warns?)\b", clause, re.I)
+                      warning = re.search(r"\b(?:diagnostics?(?:-only)?|warnings?|warns?|informational|advisory)\b", clause, re.I)
                       if warning:
                           assert not re.search(negative + r"|\bnon[- ]$", clause[:warning.start()], re.I), "Source diagnostic warning was negated"
                           described = True

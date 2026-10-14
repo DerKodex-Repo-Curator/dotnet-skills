@@ -161,14 +161,14 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/discovery_commands.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='60d06747af5d00131a50a383001178bec9130d0527fe332c26e68378f5a56e85','Command verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='37eeba75a5b300caa10158dbca387c81184fcde2f456ac7f6fa30c3dd33a6b0b','Command verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 1m
       - type: run-command
         config:
           command: >-
             python -c "import hashlib,pathlib;
-            expected={'.eval/discovery_commands.py':'60d06747af5d00131a50a383001178bec9130d0527fe332c26e68378f5a56e85'};
+            expected={'.eval/discovery_commands.py':'37eeba75a5b300caa10158dbca387c81184fcde2f456ac7f6fa30c3dd33a6b0b'};
             actual={p.as_posix():hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in pathlib.Path('.').rglob('*') if p.is_file() and p.parts[0] not in {'.git','.agents','.copilot','.claude'}};
             assert actual==expected, 'Read-only discovery workspace changed'"
           expected_exit_code: 0

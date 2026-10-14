@@ -41,6 +41,10 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds emits a warning instead of failing the test.",
             "longRunningTestSeconds emits diagnostics rather than enforcing a timeout.",
             "longRunningTestSeconds emits diagnostics. It does not fail tests.",
+            "longRunningTestSeconds is informational only and does not fail tests.",
+            "longRunningTestSeconds is advisory, not an enforced timeout.",
+            "longRunningTestSeconds does not fail tests; the setting is informational.",
+            "longRunningTestSeconds is informational. It has no failure deadline.",
         ):
             with self.subTest(valid=response):
                 REPORT["validate_diagnostic_report"](response)
@@ -58,6 +62,10 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds is non-diagnostic.",
             "longRunningTestSeconds was migrated. diagnosticMessages emits warnings.",
             "The project contains diagnostics and timeouts.",
+            "longRunningTestSeconds is not informational; it enforces a timeout.",
+            "longRunningTestSeconds is advisory and fails slow tests.",
+            "longRunningTestSeconds is informational. It also enforces a deadline.",
+            "longRunningTestSeconds was migrated. diagnosticMessages is informational.",
         ):
             with self.subTest(invalid=response), self.assertRaises(AssertionError):
                 REPORT["validate_diagnostic_report"](response)
@@ -72,6 +80,10 @@ const grader = new ProgramGrader();
 for (const [output, passed] of [
   [golden, true],
   ["longRunningTestSeconds emits diagnostics rather than enforcing a timeout.", true],
+  ["longRunningTestSeconds is informational only and does not fail tests.", true],
+  ["longRunningTestSeconds is advisory, not an enforced timeout.", true],
+  ["longRunningTestSeconds is advisory and fails slow tests.", false],
+  ["longRunningTestSeconds is not informational; it enforces a timeout.", false],
   ["longRunningTestSeconds does not emit diagnostics; it enforces a timeout.", false],
   ["longRunningTestSeconds was not a diagnostic warning; it was an enforced timeout.", false],
 ]) {

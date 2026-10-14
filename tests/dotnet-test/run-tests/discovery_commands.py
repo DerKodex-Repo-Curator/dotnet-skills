@@ -138,6 +138,16 @@ def validate_output(response):
             operator for _, operator in tokens(line[caution.end():])
         ):
             continue
+        preface = re.match(
+            r"^(?:Use\s+dotnet\s+test\s+(?:with|for|to|in)\b|"
+            r"(?:These|The(?:\s+following)?)\s+dotnet\s+test\s+commands?\b)",
+            line, re.I,
+        )
+        if not (fenced or code_span or prompted) and preface and line.endswith((".", ":")):
+            assert not any(operator for _, operator in tokens(line)), (
+                "Prose preface cannot contain a command chain"
+            )
+            continue
         if not re.search(r"\bdotnet(?:\.exe)?\b", line, re.I):
             if line and not line.startswith("#"):
                 sentence = bool(re.search(r"[.!?]$", line)) and not line.endswith("./...")

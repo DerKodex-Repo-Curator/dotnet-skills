@@ -356,8 +356,12 @@ import { ProgramGrader } from
   "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/program-grader.js";
 const { config, root, golden } = JSON.parse(readFileSync(0, "utf8"));
 const grader = new ProgramGrader();
+const preface = "Use dotnet test with the discovery flag in each lane:";
+const proseResult = await grader.grade({ config, trajectory: { workDir: root, output: preface + "\\n" + golden } });
+assert.equal(proseResult.passed, true, JSON.stringify(proseResult));
 for (const extra of ["", "\\nnice dotnet test Native.slnx --no-build",
-                    "\\nionice -c 3 dotnet test Native.slnx --no-build"]) {
+                    "\\nionice -c 3 dotnet test Native.slnx --no-build",
+                    "\\nUse dotnet test with the discovery flag; dotnet test:"]) {
   const result = await grader.grade({ config, trajectory: { workDir: root, output: golden + extra } });
   assert.equal(result.passed, extra === "", JSON.stringify(result));
 }
@@ -396,6 +400,28 @@ assert.equal(result.passed, false, JSON.stringify(result));
         for extra in (
             "Avoid running dotnet test without --list-tests; dotnet test",
             "```shell\nAvoid running dotnet test without --list-tests.\n```",
+        ):
+            with self.subTest(extra=extra):
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
+
+    def test_explanatory_prefaces_are_not_wrapped_executable_commands(self):
+        for preface in (
+            "Use dotnet test with the discovery flag in each lane:",
+            "Use dotnet test to list existing tests without rebuilding.",
+            "Use dotnet test with --list-tests for discovery:",
+            "The following dotnet test commands list the built tests:",
+            "These dotnet test commands do not run the test bodies.",
+        ):
+            with self.subTest(preface=preface):
+                self.assertEqual([], self.failed_graders(preface + "\n" + GOLDEN))
+        for extra in (
+            "Use dotnet test Native.slnx --no-build:",
+            "Use dotnet test with discovery; dotnet test:",
+            "Use dotnet test with discovery && dotnet test:",
+            "Use dotnet test with $(dotnet test):",
+            "$ Use dotnet test with discovery:",
+            "`Use dotnet test with discovery:`",
+            "```shell\nUse dotnet test with discovery:\n```",
         ):
             with self.subTest(extra=extra):
                 self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
