@@ -495,10 +495,26 @@ There is a common misconception that when a process is disposed, it's also being
 To make it easier to start a process without the need to worry about disposing it, `Process.StartAndForget` was introduced. The method starts an executable, returns its ID, and immediately releases all handle resources associated with it. Standard handles not supplied through `StandardInputHandle`, `StandardOutputHandle`, or `StandardErrorHandle` go to the null device by default.
 
 `StartAndForget` throws `InvalidOperationException` if `UseShellExecute` or any `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag is true. Use a capture or streaming API if output needs to be read.
+
 ```csharp
 public static int StartAndForget(string fileName, IEnumerable<string>? arguments = null)
 public static int StartAndForget(ProcessStartInfo startInfo)
 ```
+
+## Terminating Child Processes When the Parent Exits
+
+`ProcessStartInfo.KillOnParentExit` ensures that the spawned child process is terminated when the current (parent) process exits (including fatal crash and being force killed). It's supported on Windows, Linux, and Android and requires `UseShellExecute = false`..
+
+```csharp
+public class ProcessStartInfo
+{
+    public bool KillOnParentExit { get; set; }
+}
+```
+
+On Windows, job membership is inherited by default, so `KillOnParentExit` applies to the child's process tree, not just the direct child. Descendants explicitly created to break away from the job are excluded.
+
+On Linux and Android, process starts with `KillOnParentExit` enabled are serialized, even when requested concurrently.
 
 ## New APIs
 
@@ -560,15 +576,6 @@ Example of deconstructing the tuple return:
 ```
 
 ### ProcessStartInfo Properties
-
-#### `KillOnParentExit`
-Ensures that the spawned child process is terminated when the current (parent) process exits (including fatal crash and being force killed). Works across Windows, Linux, and Android.
-```csharp
-public bool KillOnParentExit { get; set; }
-```
-
-In cross-platform code, guard the property assignment with a supported-platform check, not only the assigned value. If automatic teardown is required, fail explicitly on an unsupported platform instead of starting an unprotected child process.
-`KillOnParentExit` requires `UseShellExecute = false`.
 
 #### `InheritedHandles`
 Provides precise control over which handles (file descriptors) are inherited by the child process, preventing accidental resource leaks.
