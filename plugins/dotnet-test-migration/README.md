@@ -89,6 +89,10 @@ Platform-only solution migrations also verify both test projects' resolved
 package versions, authenticate unchanged production/test files before and after
 execution, and require the production library to retain its target framework
 and enabled nullable analysis.
+Both test projects must reference the supplied production library in the
+project graph and compiler metadata. The evaluator rejects additional local
+projects and checks that the copied runtime dependency matches that library's
+verified output.
 
 File hashes alone do not establish compiler participation. Executable migration
 cases bind each project's target-time compile items and actual C# compiler
@@ -107,6 +111,8 @@ run both full and one-member filters. Its lazy run-end cleanup example is
 explicitly limited to an assembly containing that sole collection; the guard
 rejects adding unrelated tests. It is not a generic multi-collection lifetime
 mapping, and no cleanup may depend on every class being selected.
+A deferred-member scheduling fallback must defer both members; a mixed policy
+cannot support a group-wide claim about unrelated-class overlap.
 
 From the repository root:
 

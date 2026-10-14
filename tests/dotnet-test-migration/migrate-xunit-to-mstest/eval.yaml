@@ -13,6 +13,7 @@ stimuli:
       scheduler. Keep both existing test classes and cases. Run the migrated
       tests and explain any scheduling or fixture-scope trade-off, including
       what the chosen policy would mean for unrelated classes.
+      If you choose deferred scheduling, defer both collection members.
       This assembly contains only this collection. A lazy run-scoped cleanup
       fallback is acceptable for this fixture if its sole-collection assumption
       is explicit; do not claim it generalizes to multiple collections.
@@ -67,7 +68,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3c7a8759d2b08bc1ba836701b5f4515b5127413465c3d3a279ea8fce492c2ecf','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='cc05666d0b0647d25a1139afad1249629647d3e5ea52de29daff80545df2bb12','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

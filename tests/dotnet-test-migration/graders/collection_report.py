@@ -102,11 +102,11 @@ def main():
     grading = json.loads(Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
     guard = verified_bytes(
         workspace / ".eval" / "CollectionSchedulingContract.txt",
-        "30247d6be5c87c8a6326012fb74b7746c4c1ce4dbdf4adc598b8eb72095c595c",
+        "15040798bb2f6dbfc1efec782b2324bb1c7591a5518476d03d4189c7d9e60785",
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe",
+        "bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
     runs = []

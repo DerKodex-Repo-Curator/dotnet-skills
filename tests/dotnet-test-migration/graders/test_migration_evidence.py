@@ -16,6 +16,49 @@ SPEC.loader.exec_module(evidence)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_project_graph_binds_global_references_and_runtime_copies(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            library, tests = root / "Library.csproj", root / "Tests.csproj"
+            for project in (library, tests):
+                project.write_text("<Project />")
+            assembly = root / "lib" / "Library.dll"
+            reference = root / "obj" / "ref" / "Library.dll"
+            test_assembly = root / "test" / "Tests.dll"
+            copied = test_assembly.parent / "Library.dll"
+            for path in (assembly, reference, test_assembly, copied):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"verified assembly")
+            binding = {
+                "ReferenceSourceTarget": "ProjectReference",
+                "MSBuildSourceProjectFile": str(library),
+                "FullPath": str(assembly), "ReferenceAssembly": str(reference),
+            }
+            original = {
+                library: {"Properties": {"TargetPath": str(assembly), "TargetRefPath": str(reference)},
+                          "Items": {}},
+                tests: {"Properties": {"TargetPath": str(test_assembly), "TargetRefPath": str(test_assembly)},
+                        "Items": {"ProjectReference": [{"FullPath": str(library)}],
+                                  "ReferencePath": [binding],
+                                  "CscCommandLineArgs": [{"Identity": "/reference:" + str(reference)}]}},
+            }
+            evidence.verify_project_graph(root, original, ["Library.csproj"])
+            for mutation in ("missing-edge", "wrong-metadata", "alias-only", "runtime-copy"):
+                with self.subTest(mutation=mutation):
+                    builds = copy.deepcopy(original)
+                    items = builds[tests]["Items"]
+                    if mutation == "missing-edge":
+                        items["ProjectReference"] = []
+                    elif mutation == "wrong-metadata":
+                        items["ReferencePath"][0]["ReferenceAssembly"] = str(assembly)
+                    elif mutation == "alias-only":
+                        items["CscCommandLineArgs"][0]["Identity"] = "/reference:unused=" + str(reference)
+                    else:
+                        copied.write_bytes(b"substituted assembly")
+                    with self.assertRaisesRegex(AssertionError, "Project reference contract"):
+                        evidence.verify_project_graph(root, builds, ["Library.csproj"])
+                    copied.write_bytes(b"verified assembly")
+
     def compiler_fixture(self, directory):
         root = Path(directory) / "workspace"
         root.mkdir()

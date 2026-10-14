@@ -181,10 +181,11 @@ def main():
         assert re.search(r"test tests::free_shipping_at_threshold\s+\.\.\. ok", output)
         count = re.search(r"test result: ok\.\s+(\d+) passed; 0 failed", output)
         assert count and int(count[1]) >= 2, output
-        check_mutation(
-            args.root, "src/lib.rs", "subtotal >= 50", "subtotal > 50",
-            ["cargo", "test", "--offline"], 101, r"test result: FAILED",
-        )
+        for cutoff in ("subtotal > 50", "subtotal >= 49"):
+            check_mutation(
+                args.root, "src/lib.rs", "subtotal >= 50", cutoff,
+                ["cargo", "test", "--offline"], 101, r"test result: FAILED",
+            )
         assert digest(rust_runtime_bytes(
             (args.root / "src" / "lib.rs").read_bytes()
         )) == args.runtime_sha256, "Runtime Rust region changed"
@@ -209,6 +210,9 @@ def main():
         for old, new in (
             ("destination, body, 0600", "destination, append(body, '!'), 0600"),
             ("response.StatusCode != http.StatusOK", "false"),
+            ('return fmt.Errorf("unexpected status %d", response.StatusCode)',
+             '_ = os.WriteFile(destination, []byte("unexpected error body"), 0600)\n'
+             '\t\treturn fmt.Errorf("unexpected status %d", response.StatusCode)'),
         ):
             check_mutation(
                 args.root, "client.go", old, new,

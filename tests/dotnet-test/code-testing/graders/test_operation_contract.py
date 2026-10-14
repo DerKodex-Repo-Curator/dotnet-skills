@@ -1,3 +1,4 @@
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -7,10 +8,44 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import yaml
+
 from operation_contract import check_files, digest, main, rust_runtime_bytes
 
 
 class ScopeTests(unittest.TestCase):
+    def test_missing_rust_boundary_and_go_absence_assertions_are_rejected(self):
+        suite = Path(__file__).resolve().parents[1]
+        replay_spec = importlib.util.spec_from_file_location(
+            "operation_replay", suite.parent.parent / "dotnet-test-migration" / "graders" / "replay.py"
+        )
+        replay = importlib.util.module_from_spec(replay_spec)
+        replay_spec.loader.exec_module(replay)
+        spec = suite / "eval.yaml"
+        cases = yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+        for prefix, filename, before, after, evidence in (
+            ("Repair and extend Rust", "work/src/lib.rs",
+             "assert_eq!(shipping_cost(49), 10);", "assert_eq!(shipping_cost(50), 0);",
+             "test result: ok"),
+            ("Test Go HTTP", "work/client_test.go",
+             '\tif _, err := os.Stat(destination); !os.IsNotExist(err) {\n'
+             '\t\tt.Fatalf("error response created destination: %v", err)\n\t}\n',
+             "", "TestDownloadRejectsErrorStatus"),
+        ):
+            with self.subTest(case=prefix), tempfile.TemporaryDirectory(
+                prefix="operation-coverage-mutation-"
+            ) as temporary:
+                root = Path(temporary)
+                case = next(case for case in cases if case["name"].startswith(prefix))
+                replay.materialize(spec, case, root)
+                target = root / filename
+                text = target.read_text(encoding="utf-8")
+                self.assertEqual(1, text.count(before))
+                target.write_text(text.replace(before, after), encoding="utf-8")
+                with self.assertRaises(AssertionError) as rejected:
+                    replay.run_graders(case, root)
+                self.assertIn(evidence, str(rejected.exception))
+
     def test_scope_rejects_linked_roots_and_descendants(self):
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary)

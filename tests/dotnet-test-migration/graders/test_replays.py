@@ -17,6 +17,59 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReplayTests(unittest.TestCase):
+    def test_native_and_bridge_bind_the_original_production_reference(self):
+        spec = ROOT / "migrate-vstest-to-mtp" / "eval.yaml"
+        cases = yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+        for prefix in ("Deliver native", "Keep the explicit"):
+            stimulus = next(case for case in cases if case["name"].startswith(prefix))
+            for mutation in ("project", "metadata", "extra-project"):
+                with self.subTest(runner=prefix, mutation=mutation):
+                    with tempfile.TemporaryDirectory(prefix="reference-substitution-") as temporary:
+                        workspace = Path(temporary)
+                        materialize(spec, stimulus, workspace)
+                        fake = workspace / "Alternate"
+                        fake.mkdir()
+                        (fake / "Alternate.csproj").write_text(
+                            '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>'
+                            '<AssemblyName>Library</AssemblyName></PropertyGroup></Project>',
+                            encoding="utf-8",
+                        )
+                        (fake / "Arithmetic.cs").write_text(
+                            (workspace / "Library" / "Arithmetic.cs").read_text().replace(
+                                "checked(left + right)", "left + right"
+                            ), encoding="utf-8",
+                        )
+                        if mutation == "metadata":
+                            built = subprocess.run(
+                                ["dotnet", "build", str(fake / "Alternate.csproj"),
+                                 "--output", str(workspace / "shadow")],
+                                cwd=workspace, capture_output=True, text=True, timeout=120,
+                            )
+                            self.assertEqual(0, built.returncode, built.stdout + built.stderr)
+                            shutil.rmtree(fake)
+                        for name in ("Alpha", "Beta"):
+                            project = workspace / f"{name}.Tests" / f"{name}.Tests.csproj"
+                            text = project.read_text(encoding="utf-8")
+                            if mutation == "project":
+                                text = text.replace("../Library/Library.csproj",
+                                                    "../Alternate/Alternate.csproj")
+                            elif mutation == "metadata":
+                                text = text.replace(
+                                    '<ProjectReference Include="../Library/Library.csproj" />',
+                                    '<ProjectReference Include="../Library/Library.csproj" '
+                                    'ReferenceOutputAssembly="false" />'
+                                    '<Reference Include="Library"><HintPath>../shadow/Library.dll'
+                                    '</HintPath></Reference>',
+                                )
+                            project.write_text(text, encoding="utf-8")
+                        restored = subprocess.run(
+                            ["dotnet", "restore", "Library/Library.csproj"], cwd=workspace,
+                            capture_output=True, text=True, timeout=120,
+                        )
+                        self.assertEqual(0, restored.returncode, restored.stdout + restored.stderr)
+                        with self.assertRaisesRegex(AssertionError, "Project reference contract"):
+                            run_graders(stimulus, workspace)
+
     def compiler_mutation(self, suite, prefix, project, source, before, after,
                           mutation="replacement", baseline=False):
         spec = ROOT / suite / "eval.yaml"

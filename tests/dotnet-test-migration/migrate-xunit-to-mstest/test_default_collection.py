@@ -117,6 +117,22 @@ class DefaultCollectionTests(unittest.TestCase):
                 (root / "TestProject.csproj").read_text(encoding="utf-8"),
             )
 
+    def test_partial_deferral_cannot_claim_group_wide_policy(self):
+        for member in ("FirstMember", "SecondMember"):
+            with self.subTest(member=member), tempfile.TemporaryDirectory(
+                prefix="partial-collection-deferral-"
+            ) as parent:
+                root = self.workspace(parent)
+                source = root / "CollectionTests.cs"
+                text = source.read_text(encoding="utf-8").replace(
+                    "using Microsoft.VisualStudio.TestTools.UnitTesting;",
+                    "using Microsoft.VisualStudio.TestTools.UnitTesting;\n"
+                    "[assembly: Parallelize(Workers = 2, Scope = ExecutionScope.ClassLevel)]",
+                ).replace(f"[DoNotParallelize]\npublic class {member}", f"public class {member}")
+                source.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(AssertionError, "both members must be deferred"):
+                    replay.run_graders(CASE, root, DEFERRED_REPORT)
+
     def test_golden_and_broken_scheduling_and_disposal(self):
         with tempfile.TemporaryDirectory(prefix="collection-contract-") as parent:
             root = self.workspace(parent)
@@ -155,9 +171,6 @@ class DefaultCollectionTests(unittest.TestCase):
                 with self.subTest(deferred_report=invalid):
                     with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                         replay.run_graders(CASE, root, invalid)
-
-            source.write_text(parallel.replace("[DoNotParallelize]\n", "", 1), encoding="utf-8")
-            replay.run_graders(CASE, root, DEFERRED_REPORT)
 
             source.write_text(parallel.replace("Workers = 2", "Workers = 1").replace(
                 "[DoNotParallelize]\n", ""

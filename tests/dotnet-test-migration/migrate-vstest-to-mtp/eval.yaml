@@ -350,7 +350,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner native --mstest-major 4 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 4.4.1 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj
@@ -397,7 +397,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner bridge --mstest-major 3 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 3.8.0 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj

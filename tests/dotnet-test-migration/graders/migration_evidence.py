@@ -319,6 +319,92 @@ def verify_compile_inputs(root, project, expected, build):
     }
 
 
+def verify_project_inventory(root, projects):
+    actual = {
+        compiler_path(root, str(path), root) for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower().endswith("proj")
+    }
+    assert actual == set(projects), (
+        "Project reference contract: uncontracted or missing local projects",
+        sorted(map(str, actual ^ set(projects))),
+    )
+
+
+def verify_project_graph(root, builds, production_projects):
+    verify_project_inventory(root, builds)
+    production = {compiler_path(root, name, root) for name in production_projects}
+    outputs = {}
+    for project, build in builds.items():
+        values = build["Properties"]
+        outputs[project] = {
+            key: compiler_path(project.parent, values[key], root)
+            for key in ("TargetPath", "TargetRefPath")
+        }
+        for key in ("TargetPath", "TargetRefPath") if project in production else ("TargetPath",):
+            path = outputs[project][key]
+            assert path.is_relative_to(root.resolve()) and path.is_file(), (
+                "Project reference contract: missing or external output", str(path)
+            )
+    graph = {}
+    for project, build in builds.items():
+        expected = set() if project in production else production
+        items = build["Items"]
+        actual = {
+            compiler_path(project.parent, item["FullPath"], root)
+            for item in items.get("ProjectReference", [])
+        }
+        assert actual == expected, ("Project reference contract: project edges", str(project), actual, expected)
+        references = set()
+        global_references = set()
+        for item in items.get("CscCommandLineArgs", []):
+            match = re.fullmatch(r"[/-](?:reference|r):(.+)", item["Identity"], re.I)
+            if match:
+                value = match[1].strip('"')
+                aliases, value = value.split("=", 1) if "=" in value else ("global", value)
+                path = compiler_path(project.parent, value, root)
+                references.add(path)
+                if "global" in aliases.split(","):
+                    global_references.add(path)
+        expected_references = {outputs[dependency]["TargetRefPath"] for dependency in expected}
+        local_references = {path for path in references if path.is_relative_to(root.resolve())}
+        assert local_references == expected_references and expected_references <= global_references, (
+            "Project reference contract: compiler references", str(project),
+            sorted(map(str, local_references)), sorted(map(str, expected_references)),
+        )
+        runtime = {}
+        for dependency in expected:
+            bindings = [
+                item for item in items.get("ReferencePath", [])
+                if item.get("ReferenceSourceTarget") == "ProjectReference"
+                and item.get("MSBuildSourceProjectFile")
+                and compiler_path(project.parent, item["MSBuildSourceProjectFile"], root) == dependency
+            ]
+            assert len(bindings) == 1, (
+                "Project reference contract: missing production metadata", str(project), str(dependency)
+            )
+            binding = bindings[0]
+            for metadata, output in (("FullPath", "TargetPath"), ("ReferenceAssembly", "TargetRefPath")):
+                assert binding.get(metadata) and compiler_path(
+                    project.parent, binding[metadata], root
+                ) == outputs[dependency][output], (
+                    "Project reference contract: substituted production metadata", str(project), binding
+                )
+            original = outputs[dependency]["TargetPath"]
+            copied = outputs[project]["TargetPath"].parent / original.name
+            assert copied.is_file() and sha256(copied) == sha256(original), (
+                "Project reference contract: substituted runtime dependency", str(copied)
+            )
+            runtime[copied.name] = sha256(copied)
+        graph[project.relative_to(root.resolve()).as_posix()] = {
+            "projects": [path.relative_to(root.resolve()).as_posix() for path in sorted(expected)],
+            "compiler_references": [
+                path.relative_to(root.resolve()).as_posix() for path in sorted(expected_references)
+            ],
+            "runtime_dependencies": runtime,
+        }
+    return graph
+
+
 def run(args, root=None):
     root = Path.cwd() if root is None else root
     source_invariants = verify_sources(root, args.source_contract)
@@ -378,11 +464,15 @@ def run(args, root=None):
     contracts = compile_contracts(
         root, args.compile_source, [*package_projects, *args.production_project]
     )
+    if contracts and args.production_project:
+        verify_project_inventory(root, contracts)
     compiler_inputs = {}
+    builds = {}
     for index, (filename, expected_sources) in enumerate(contracts.items()):
         build = json.loads(execute(
             ["dotnet", "msbuild", str(filename), "-t:Rebuild", "-p:ProvideCommandLineArgs=true",
-             "-getItem:Compile,CscCommandLineArgs", "-getProperty:MSBuildToolsPath,NuGetPackageRoot"],
+             "-getItem:Compile,CscCommandLineArgs,ProjectReference,ReferencePath",
+             "-getProperty:MSBuildToolsPath,NuGetPackageRoot,TargetPath,TargetRefPath"],
             root, evidence, f"compile-{index}",
         ).stdout)
         verify_unchanged_files(root, args.unchanged_file)
@@ -390,6 +480,10 @@ def run(args, root=None):
         compiler_inputs[filename.relative_to(root.resolve()).as_posix()] = verify_compile_inputs(
             root, filename, expected_sources, build
         )
+        builds[filename] = build
+    project_graph = verify_project_graph(root, builds, args.production_project) if (
+        builds and args.production_project
+    ) else {}
     target = args.solution or str(project)
     no_build = ["--no-build"] if contracts else []
     if args.runner == "vstest":
@@ -424,6 +518,8 @@ def run(args, root=None):
     verify_cases(cases, expected, reasons)
     verify_unchanged_files(root, args.unchanged_file)
     verify_sources(root, args.source_contract)
+    if project_graph:
+        verify_project_graph(root, builds, args.production_project)
     if args.lifecycle:
         events = [
             json.loads(line) for line in (evidence / "lifecycle.jsonl").read_text(
@@ -458,6 +554,7 @@ def run(args, root=None):
         "preserved_files": preserved,
         "source_invariants": source_invariants,
         "compiler_inputs": compiler_inputs,
+        "project_reference_graph": project_graph,
         "reports": {str(report): sha256(report) for report in reports},
     }
     (evidence / "evidence.json").write_text(
