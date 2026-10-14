@@ -72,8 +72,9 @@ Based on files found:
 - Prefer project manifests, language-server references, and deterministic pairing tools over whole-tree text searches.
 - For source-to-test pairing, follow Step 7 at every scope, not only multi-file
   requests. Consume the helper's JSON instead of manually matching names.
-  Preserve its engine-specific legacy shape and diagnostics; do not pass
-  format switches or assume Rust inline regions are paired by the helper.
+  Preserve the requested output format: engine-specific legacy defaults or
+  explicitly selected JSON v1. Inspect status, diagnostics, scope and any
+  unassessed files before reuse; Rust inline regions may share a source file.
 - Batch independent glob, manifest, source, and representative-test reads where
   the available tools support it.
 - Keep a single evidence set for discovered paths, commands, and conventions;
@@ -209,7 +210,7 @@ Create `<TESTAGENT_DIR>/research.md` with this structure:
 - [Heuristic source-to-test references, including unresolved files/regions]
 - [Per requested outcome: named assertion, demonstrated gap, or unknown context]
 - [Measured coverage report/scope when available; otherwise "not measured"]
-- [Helper engine/legacy shape, scan bounds and diagnostics when used; no completeness attestation]
+- [Helper engine/output format, status, scan bounds, input identity and diagnostics when used; hashes are not source-revision attestation]
 - [Priority-changing quality findings and report provenance; stale/unsupported metrics remain unknown]
 
 ## Existing Test Projects

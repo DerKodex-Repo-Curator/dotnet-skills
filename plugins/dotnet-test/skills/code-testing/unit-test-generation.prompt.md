@@ -247,7 +247,7 @@ outcome or a correct oracle. Neither is a reason to skip a requested behavior.
 
 | Available evidence and intent | Conditional composition |
 | --- | --- |
-| Source-to-test pairing or test-location discovery at any scope | Follow the mandatory pairing policy above: invoke the available, supported `find-untested-sources` or reuse a completed, current result covering the same scope. Keep the selected engine's legacy schema, root, bounds and stderr warnings; partial or omitted entries remain unresolved, not a reusable complete inventory. No shared versioned output mode or Rust inline-test pairing guarantee is available. |
+| Source-to-test pairing or test-location discovery at any scope | Follow the mandatory pairing policy above: invoke the available, supported `find-untested-sources` or reuse a completed, current result covering the same scope. Preserve the requested format: engine-specific legacy defaults or explicitly selected JSON v1. Check exit status, diagnostics, root, bounds and unassessed files; partial or omitted entries remain unresolved, not a reusable complete inventory. Rust inline test regions can share a source file. |
 | Usable .NET coverage already supplied or recorded | Use `coverage-analysis` only for the bounded interpretation needed to choose missing paths. Supply the source mapping, report scope and no-collection limit; generation remains owned here. |
 | Risk-prioritization intent plus reliable coverage and complexity for the same source/target | Use `crap-score` for a named .NET target, or `coverage-analysis` for project-wide risk. Compute only from supported, verified inputs; do not call both for the same ranking. |
 | Non-.NET coverage or risk evidence | Use a verified repository-native report format/tool and its actual semantics. The bundled coverage/CRAP skills are .NET-only; unsupported mappings or metrics stay explicitly unsupported. |
@@ -257,8 +257,10 @@ Check report provenance, source/revision mapping, selected tests, exclusions and
 line/branch denominators before using metrics. Separate supplied historical
 evidence from current validation. Missing, stale, contradictory, incomplete or
 unmapped data is **unknown**, not zero coverage, a passing threshold or an
-invented CRAP score. Do not collect metrics, install tools, change dependencies
-or refactor production just to fill these fields. Collection is separately
+invented CRAP score. In helper JSON v1, input hashes identify bytes read, not a
+source revision; keep the source association separately. A complete result with
+truncation is not the whole inventory. Do not collect metrics, install tools,
+change dependencies or refactor production just to fill these fields. Collection is separately
 opt-in; an unavailable optional metric does not block otherwise feasible tests.
 After changing tests, pre-change coverage can explain the original priority but
 cannot prove the new coverage or threshold.
