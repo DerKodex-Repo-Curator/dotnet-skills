@@ -3,8 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "description": "Pinned command-line tools used by the skill evaluation workflow.",
+  "scripts": {
+    "postinstall": "patch-package --error-on-fail"
+  },
   "dependencies": {
     "@github/copilot": "1.0.75",
-    "@microsoft/vally-cli": "0.14.0"
+    "@microsoft/vally-cli": "0.14.0",
+    "patch-package": "8.0.1"
   }
 }

@@ -666,6 +666,8 @@ jobs:
           cp "$RUNNER_TEMP/trusted-validator-src/eng/evaluation-tools/sdk-startup.mjs" \
             "$RUNNER_TEMP/trusted-validator-src/eng/evaluation-tools/vally.mjs" \
             "$RUNNER_TEMP/evaluation-tools/"
+          cp -R "$RUNNER_TEMP/trusted-validator-src/eng/evaluation-tools/patches" \
+            "$RUNNER_TEMP/evaluation-tools/"
           npm ci \
             --prefix "$RUNNER_TEMP/evaluation-tools" \
             --userconfig "$RUNNER_TEMP/evaluation.npmrc" \

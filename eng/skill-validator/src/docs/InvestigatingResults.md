@@ -66,6 +66,13 @@ behavior against the corrected executor.
 > calls. Session-provider errors are harness failures, not skill-quality verdicts.
 > This does not change the historical result schema documented below.
 
+> The pinned Vally 0.14 toolchain also backports the upstream session-logging
+> filesystem fix. Logging leaves native workspace file access intact and exports
+> persisted event history before disconnect; failed exports warn and use raw-event
+> fallback. The managed patch must be staged from the trusted workflow revision.
+> Historical missing-file failures remain harness faults, not skill regressions.
+> Native-agent workspace allowlists and offline write restrictions are unchanged.
+
 > **Vally schema:** Vally adapter results use an independently owned and
 > versioned schema. Consult the current Vally investigation guide for its
 > schema version and fields. `state` is authoritative:

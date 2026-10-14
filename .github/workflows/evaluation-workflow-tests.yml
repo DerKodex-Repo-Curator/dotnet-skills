@@ -109,7 +109,7 @@ jobs:
           node_modules/.bin/copilot --version
           node --input-type=module -e "import.meta.resolve('@github/copilot-linux-x64/sdk')"
 
-      - name: Test SDK startup ordering without model calls
+      - name: Test SDK startup and session logging without model calls
         run: node --test eng/evaluation-tools/*.test.mjs
 
   token-failover:

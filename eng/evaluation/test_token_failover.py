@@ -2117,11 +2117,16 @@ esac
             "import.meta.resolve('@github/copilot-linux-x64/sdk')",
             install_script,
         )
-        for filename in ("sdk-startup.mjs", "vally.mjs"):
+        for filename in ("sdk-startup.mjs", "vally.mjs", "patches"):
             self.assertIn(
                 f'"$RUNNER_TEMP/trusted-validator-src/eng/evaluation-tools/{filename}"',
                 install_script,
             )
+        self.assertLess(
+            install_script.index('/eng/evaluation-tools/patches"'),
+            install_script.index("npm ci"),
+        )
+        self.assertNotIn("--ignore-scripts", install_script)
         self.assertIn('ln -s ../vally.mjs "$RUNNER_TEMP/evaluation-tools/bin/vally"', install_script)
         self.assertGreater(
             install_script.index('echo "$RUNNER_TEMP/evaluation-tools/bin"'),
@@ -2149,7 +2154,7 @@ esac
         self.assertIn("node vally.mjs --version", smoke_script)
         self.assertIn(
             "node --test eng/evaluation-tools/*.test.mjs",
-            steps["Test SDK startup ordering without model calls"]["run"],
+            steps["Test SDK startup and session logging without model calls"]["run"],
         )
         self.assertIn("node_modules/.bin/copilot --version", smoke_script)
         self.assertIn(

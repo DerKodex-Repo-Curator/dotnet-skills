@@ -1,0 +1,209 @@
+diff --git a/node_modules/@microsoft/vally/dist/executor/copilot-sdk-executor.js b/node_modules/@microsoft/vally/dist/executor/copilot-sdk-executor.js
+index a3481cf..7b89387 100644
+--- a/node_modules/@microsoft/vally/dist/executor/copilot-sdk-executor.js
++++ b/node_modules/@microsoft/vally/dist/executor/copilot-sdk-executor.js
+@@ -4,7 +4,7 @@ import { approveAll, CopilotClient } from "@github/copilot-sdk";
+ import { context, isSpanContextValid, propagation, trace } from "@opentelemetry/api";
+ import path from "node:path";
+ import { AsyncLocalStorage } from "node:async_hooks";
+-import { mkdir } from "node:fs/promises";
++import { mkdir, open, rename, rm } from "node:fs/promises";
+ import { mkdirSync, rmSync } from "node:fs";
+ import { stimulusPrompts } from "../eval/types.js";
+ import { computeMetrics } from "../index.js";
+@@ -14,7 +14,6 @@ import { mapCopilotProvider, redactProviderErrorInPlace, validateCopilotProvider
+ import { normalizeExecutorTelemetryConfig } from "./types.js";
+ import { CopilotAdapter } from "../trajectory/copilot-adapter.js";
+ import { createIsolatedCopilotHome } from "./copilot-home.js";
+-import { LocalSessionFsHandler } from "./local-session-fs-handler.js";
+ import { RUNTIME_OTEL_SCHEDULE_DELAY_MS, buildRuntimeEnv, runtimeEnvOverrides, withoutReservedRuntimeKeys, } from "./runtime-telemetry.js";
+ import { SimulationController } from "./simulation-controller.js";
+ import { parseDuration } from "../utils/duration.js";
+@@ -27,20 +26,7 @@ import { parseDuration } from "../utils/duration.js";
+  * awaited (often zero, since grading/reporting runs in between).
+  */
+ const RUNTIME_OTEL_FLUSH_WINDOW_MS = RUNTIME_OTEL_SCHEDULE_DELAY_MS + 250;
+-/**
+- * Session-fs options shared by the session-fs client and the per-run env client
+- * so the two factories can't drift on how session state is laid out.
+- */
+-function buildSessionFsConfig() {
+-    return {
+-        initialCwd: process.cwd(),
+-        sessionStatePath: "session-state",
+-        conventions: process.platform === "win32" ? "windows" : "posix",
+-    };
+-}
+ export { toOtlpTraceUrl } from "./runtime-telemetry.js";
+-/** Subdirectory of the session-fs root for the runtime's large-tool-output spill files. */
+-const LARGE_TOOL_OUTPUT_DIRNAME = "large-tool-output";
+ /**
+  * Executor backed by the Copilot SDK.
+  *
+@@ -168,7 +154,6 @@ export class CopilotSdkExecutor {
+                     env: this.clientEnv(telemetry),
+                     telemetry,
+                     onGetTraceContext,
+-                    sessionFs: buildSessionFsConfig(),
+                 }));
+         this.createEnvClient =
+             options?.createEnvClient ??
+@@ -176,11 +161,6 @@ export class CopilotSdkExecutor {
+                     env: mergedEnv,
+                     telemetry,
+                     onGetTraceContext,
+-                    ...(useSessionFs
+-                        ? {
+-                            sessionFs: buildSessionFsConfig(),
+-                        }
+-                        : {}),
+                 }));
+     }
+     /**
+@@ -418,9 +398,7 @@ export class CopilotSdkExecutor {
+             // Re-arm after any prior shutdown so a reused executor isolates again (and
+             // so resolveIsolatedCopilotHome() may create this run's config home).
+             this.disposed = false;
+-            // Resolve to an absolute path once so the session-fs provider root, the
+-            // mkdir below, and the large-output spill directory can't diverge if the
+-            // process cwd changes before the provider factory runs.
++            // Resolve once so history export agrees with the session-log manager.
+             const sessionLogRootDir = options.sessionLog?.rootDir
+                 ? path.resolve(options.sessionLog.rootDir)
+                 : undefined;
+@@ -434,10 +412,7 @@ export class CopilotSdkExecutor {
+             //   - isolating  → point it at the isolated home (agrees with COPILOT_HOME),
+             //   - opted out  → leave it unset so the spawned runtime uses the host
+             //     `~/.copilot`, even while session logging is on.
+-            // Session-log capture is independent of the config home: the
+-            // SessionFsProvider redirects native session files (e.g. `events.jsonl`) to
+-            // the session-log root regardless of where settings are read from. See
+-            // microsoft/vally#655.
++            // Persisted history is exported independently of the config home.
+             const isolatedCopilotHome = this.resolveIsolatedCopilotHome();
+             const providerConfig = options.executorConfig
+                 ?.provider;
+@@ -462,16 +437,6 @@ export class CopilotSdkExecutor {
+                 ...(sessionLogRootDir
+                     ? {
+                         infiniteSessions: { enabled: false },
+-                        createSessionFsProvider: () => new LocalSessionFsHandler(sessionLogRootDir),
+-                        // The runtime spills large tool outputs to a file and reports its
+-                        // path. Under our session-fs provider that path is session-relative,
+-                        // which the agent's filesystem tools resolve against the working
+-                        // directory and can't find, so it wastes turns hunting for it. Pin
+-                        // spillage to an absolute path inside the provider root (absolute so
+-                        // it's directly openable; in-root because the provider rejects escapes).
+-                        largeOutput: {
+-                            outputDirectory: path.join(sessionLogRootDir, LARGE_TOOL_OUTPUT_DIRNAME),
+-                        },
+                     }
+                     : {}),
+             };
+@@ -484,7 +449,7 @@ export class CopilotSdkExecutor {
+             if (simulation) {
+                 defaultOptions.hooks = { ...defaultOptions.hooks, onPreToolUse: simulation.onPreToolUse };
+             }
+-            return await this.withTraceContext(options.traceContext, () => this.runTurn(stimulus, options, defaultOptions, useSessionFs, startedAt, simulation, runClient, providerSecrets));
++            return await this.withTraceContext(options.traceContext, () => this.runTurn(stimulus, options, defaultOptions, useSessionFs, startedAt, simulation, runClient, sessionLogRootDir, providerSecrets));
+         }
+         finally {
+             if (runClient && this.perRunClients.delete(runClient)) {
+@@ -567,7 +532,7 @@ export class CopilotSdkExecutor {
+             return "unsupported";
+         return "unknown";
+     }
+-    async runTurn(stimulus, options, defaultOptions, useSessionFs, startedAt, simulation, runClient, providerSecrets = []) {
++    async runTurn(stimulus, options, defaultOptions, useSessionFs, startedAt, simulation, runClient, sessionLogRootDir, providerSecrets = []) {
+         const clientForRun = runClient ?? this.getClient(useSessionFs);
+         // A BYOK provider points the session at a custom endpoint whose model
+         // catalog and transport are independent of this client's default catalog.
+@@ -832,7 +797,7 @@ export class CopilotSdkExecutor {
+             }
+             const completedAt = new Date();
+             // Bounded: a wedged backend after a clean stop must not block teardown.
+-            await runBoundedCleanup(() => session.disconnect(), CopilotSdkExecutor.CLEANUP_TIMEOUT_MS);
++            await publishAndReleaseSession(session, clientForRun, sessionLogRootDir, options.sessionID == null, CopilotSdkExecutor.CLEANUP_TIMEOUT_MS);
+             const metrics = computeMetrics(adapter.events);
+             return {
+                 events: adapter.events,
+@@ -864,7 +829,7 @@ export class CopilotSdkExecutor {
+             // only frees in-memory state. Both calls are best-effort and individually
+             // time-bounded so a wedged connection can't block teardown. (issue #112 H2)
+             await runBoundedCleanup(() => session.abort(), CopilotSdkExecutor.CLEANUP_TIMEOUT_MS);
+-            await runBoundedCleanup(() => session.disconnect(), CopilotSdkExecutor.CLEANUP_TIMEOUT_MS);
++            await publishAndReleaseSession(session, clientForRun, sessionLogRootDir, options.sessionID == null, CopilotSdkExecutor.CLEANUP_TIMEOUT_MS);
+             // Trigger recovery for the shared client only; the per-run client is
+             // stopped by execute() after the run. Same split as the session-create
+             // catch above: a dead local JSON-RPC connection always restarts, while
+@@ -1029,6 +994,70 @@ function getActiveTraceContext() {
+         tracestate: undefined,
+     };
+ }
++// Backport microsoft/vally#1109 without changing the 0.14 evaluation schema.
++async function publishAndReleaseSession(session, client, rootDir, deleteCreatedSessionAfterExport, timeoutMs) {
++    const published = await persistSessionHistory(session, rootDir, timeoutMs);
++    const disconnected = await runBoundedCleanup(() => session.disconnect(), timeoutMs);
++    if (!disconnected)
++        console.warn("Vally session disconnect failed or timed out.");
++    if (published && deleteCreatedSessionAfterExport) {
++        const deleted = await runBoundedCleanup(() => client.deleteSession(session.sessionId), timeoutMs);
++        if (!deleted)
++            console.warn("Vally exported session cleanup failed or timed out.");
++    }
++}
++async function persistSessionHistory(session, rootDir, timeoutMs) {
++    if (!rootDir)
++        return false;
++    const events = await getSessionEventsWithin(session, timeoutMs);
++    if (!events || events.length === 0) {
++        console.warn("Vally session history unavailable; retaining SDK session and using raw-event fallback.");
++        return false;
++    }
++    const eventsPath = path.join(rootDir, "events.jsonl");
++    const tempPath = path.join(rootDir, `.events-${crypto.randomUUID()}.tmp`);
++    let handle;
++    try {
++        handle = await open(tempPath, "wx");
++        for (const event of events) {
++            const line = JSON.stringify(event);
++            if (line === undefined)
++                throw new TypeError("Session event is not JSON-serializable");
++            await handle.writeFile(`${line}\n`, "utf8");
++        }
++        await handle.close();
++        handle = undefined;
++        await rename(tempPath, eventsPath);
++        return true;
++    }
++    catch {
++        console.warn("Vally session history export failed; retaining SDK session and using raw-event fallback.");
++        await rm(eventsPath, { force: true });
++        return false;
++    }
++    finally {
++        await handle?.close();
++        await rm(tempPath, { force: true });
++    }
++}
++async function getSessionEventsWithin(session, timeoutMs) {
++    let timer;
++    const retrieval = Promise.resolve()
++        .then(() => session.getEvents())
++        .then((events) => events, () => undefined);
++    try {
++        return await Promise.race([
++            retrieval,
++            new Promise((resolve) => {
++                timer = setTimeout(() => resolve(undefined), timeoutMs);
++            }),
++        ]);
++    }
++    finally {
++        if (timer)
++            clearTimeout(timer);
++    }
++}
+ /**
+  * Runs a best-effort teardown action, swallowing any error and capping how
+  * long we wait for it. Used on the executor's error path so that aborting and

@@ -90,6 +90,34 @@ Both evaluation and comparison commands use this launcher through `PATH`.
 When updating the SDK, reassess the guard and run
 `node --test eng/evaluation-tools/*.test.mjs` before removing it.
 
+### Workspace file failures with session logging
+
+If `view` reports missing fixture files while shell or OS reads succeed, inspect
+the executor filesystem mapping before changing the fixture or increasing its
+timeout. Vally 0.14's logging provider redirected workspace file tools into the
+session-log directory. The pinned toolchain backports
+[microsoft/vally#1109](https://github.com/microsoft/vally/pull/1109) with
+`eng/evaluation-tools/patches/@microsoft+vally+0.14.0.patch`: shared and
+environment-specific clients retain the SDK's native filesystem, and completed
+or failed sessions export authoritative `session.getEvents()` history before
+disconnecting.
+
+History retrieval is bounded. Export writes a temporary JSONL file and
+atomically publishes `events.jsonl`; unavailable or invalid history emits a
+warning and leaves Vally's raw-event fallback in charge. Newly created sessions
+are deleted only after successful export; resumed sessions and failed exports
+remain recoverable. The normal trial budget, concurrency, fixture policy, and
+result schema are unchanged.
+
+`npm ci` applies the version-specific patch with `--error-on-fail`; do not skip
+install scripts in production staging. Both the patch and manifests must come
+from the trusted workflow revision, not evaluated PR content. Remove the
+backport when a repository-compatible Vally migration contains the upstream
+fix, and retain `session-filesystem.test.mjs` coverage. A dependency-only bump is
+not sufficient: newer Vally releases also remove legacy corpus schema fields.
+Older runs with this file-access fault remain invalid; the repair is not
+retroactive proof of a skill's current-head reliability.
+
 ### Investigation steps
 
 1. **Download the results artifacts:** `gh run download <run-id> --repo dotnet/skills --pattern "vally-results-*" --dir ./eval-results`
