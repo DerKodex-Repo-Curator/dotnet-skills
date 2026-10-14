@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "sh \"${PLUGIN_ROOT}/hooks/session-start.sh\" copilot",
+        "powershell": "& \"${PLUGIN_ROOT}\\hooks\\session-start.ps1\"",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
