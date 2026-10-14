@@ -187,7 +187,7 @@ stimuli:
           args:
             - -c
             - |
-              import fnmatch, json, pathlib, re, shutil, subprocess, tempfile
+              import fnmatch, os, pathlib, re, shutil, subprocess, tempfile
               import xml.etree.ElementTree as ET
               base = pathlib.Path('shared-project-instances')
               build = ET.parse(base / 'Build.proj').getroot()
@@ -240,7 +240,6 @@ stimuli:
                   if child is None or child.get('Condition'):
                       return default
                   return child.text or ''
-              component_properties = {}
               for component in ['Web', 'Api', 'Worker']:
                   component_path = normalize(f'{component}/{component}.csproj')
                   passes_name = False
@@ -253,7 +252,6 @@ stimuli:
                               passes_name = True
                           elif assignment.strip() == 'ComponentName=' + component and roots == {component_path}:
                               passes_name = True
-                  component_properties[component] = ['-p:ComponentName=' + component] if passes_name else []
                   root = ET.parse(base / component / (component + '.csproj')).getroot()
                   title = root.findtext('.//AssemblyTitle', '')
                   name = root.findtext('.//ComponentName', '')
@@ -274,25 +272,45 @@ stimuli:
                               metadata = removal_metadata(update, metadata)
                       assert 'ComponentName' in [p.strip() for p in metadata.split(';')], 'ComponentName still reaches Core: removal must be metadata on its ProjectReference'
               dotnet = shutil.which('dotnet')
-              assert dotnet, 'the .NET SDK is required to query effective project references'
+              bash = shutil.which('bash')
+              assert dotnet and bash, 'the .NET SDK and Bash are required to exercise the submitted build'
               with tempfile.TemporaryDirectory() as tmp:
                   work = (pathlib.Path(tmp) / 'work').resolve()
                   shutil.copytree(base, work, ignore=shutil.ignore_patterns('bin', 'obj'))
-                  for component, properties in component_properties.items():
-                      result = subprocess.run(
-                          [dotnet, 'msbuild', str(work / component / (component + '.csproj')),
-                           '-nologo', '-verbosity:quiet', '-nodeReuse:false', '-getItem:ProjectReference', *properties],
-                          cwd=work, capture_output=True, text=True, timeout=30,
-                      )
-                      assert result.returncode == 0, result.stdout + result.stderr
-                      refs = [r for r in json.loads(result.stdout)['Items']['ProjectReference']
-                              if pathlib.Path(r['FullPath']).resolve() == work / 'Core' / 'Core.csproj']
-                      assert refs, 'the evaluated component must still reference Core'
-                      for ref in refs:
-                          for name in ['ReferenceOutputAssembly', 'BuildReference', 'Private']:
-                              assert ref.get(name, '').lower() in ['', 'true'], name + ' must preserve Core compilation, build and copy outputs'
-                          if properties:
-                              assert 'ComponentName' in [p.strip() for p in ref.get('GlobalPropertiesToRemove', '').split(';')], 'effective reference metadata must remove ComponentName'
+                  logs = (pathlib.Path(tmp) / 'logs').resolve()
+                  (logs / 'core').mkdir(parents=True)
+                  core_path = work / 'Core' / 'Core.csproj'
+                  core = ET.parse(core_path)
+                  record = ET.SubElement(core.getroot(), 'Target', Name='_GraderRecordCoreBuild', BeforeTargets='Build')
+                  ET.SubElement(record, 'WriteLinesToFile', Overwrite='true', Encoding='UTF-8',
+                                File=str(logs / 'core' / '$([System.Guid]::NewGuid()).txt'), Lines='$(TargetPath)')
+                  core.write(core_path, encoding='utf-8')
+                  for component in ['Web', 'Api', 'Worker']:
+                      path = work / component / (component + '.csproj')
+                      project = ET.parse(path)
+                      record = ET.SubElement(project.getroot(), 'Target', Name='_GraderRecordComponentBuild', AfterTargets='Build')
+                      ET.SubElement(record, 'WriteLinesToFile', File=str(logs / (component + '.txt')),
+                                    Lines="$(AssemblyTitle);$(TargetPath);@(ReferencePathWithRefAssemblies->'%(FullPath)')",
+                                    Overwrite='true', Encoding='UTF-8')
+                      project.write(path, encoding='utf-8')
+                  result = subprocess.run(
+                      [bash, 'build.sh'], cwd=work, env=dict(os.environ, MSBUILDDISABLENODEREUSE='1'),
+                      capture_output=True, text=True, timeout=120,
+                  )
+                  assert result.returncode == 0, result.stdout + result.stderr
+                  calls = list((logs / 'core').glob('*.txt'))
+                  assert len(calls) == 1, 'the submitted BuildAll path must build Core exactly once'
+                  core_output = pathlib.Path(calls[0].read_text(encoding='utf-8-sig').strip()).resolve()
+                  assert core_output.is_relative_to(work) and core_output.is_file() and core_output.name == 'Core.dll', 'Core must produce its assembly on a clean build'
+                  for component in ['Web', 'Api', 'Worker']:
+                      lines = (logs / (component + '.txt')).read_text(encoding='utf-8-sig').splitlines()
+                      assert lines[0] == 'Contoso ' + component, 'preserve the effective component AssemblyTitle'
+                      output = pathlib.Path(lines[1]).resolve()
+                      assert output.is_relative_to(work) and output.is_file() and output.name == component + '.dll', 'each component must still produce its assembly'
+                      references = [pathlib.Path(p).resolve() for p in lines[2:]]
+                      assert any(p.name == 'Core.dll' and p.is_relative_to(work / 'Core') and p.is_file()
+                                 for p in references), 'Core must remain an actual compilation reference'
+                      assert (output.parent / 'Core.dll').read_bytes() == core_output.read_bytes(), 'each component must retain the built Core copy'
           expected_exit_code: 0
       - type: output-matches
         config:
