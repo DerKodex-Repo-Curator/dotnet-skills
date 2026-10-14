@@ -1,6 +1,6 @@
 ---
 name: find-repeated-build-work
-description: "Deduplicate tasks/projects within one MSBuild invocation only. USE FOR: invariant per-project Exec (git stamp), global-property project instances, per-item Exec, racy run-once guards, call-count audits. DO NOT USE FOR: NuGet restores across restore/build/test commands (use build-perf-diagnostics), reruns on a second unchanged build (use incremental-build), slow evaluation (use eval-performance), or idle nodes/serial chains without duplicates (use build-parallelism)."
+description: "Dedupe within one MSBuild invocation. USE FOR: invariant per-project Exec, global-property instances, per-item Exec, racy run-once guards, call-count audits. DO NOT USE FOR: unranked slow builds (use build-perf-baseline), restores across restore/build/test commands (use build-perf-diagnostics), unchanged second-build reruns (use incremental-build), slow evaluation (use eval-performance), idle nodes/serial chains without duplicates (use build-parallelism)."
 license: MIT
 ---
 

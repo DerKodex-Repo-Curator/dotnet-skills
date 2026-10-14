@@ -572,7 +572,7 @@ stimuli:
                       'assert inputs and all(p.is_relative_to(work) and p.is_file() for p in inputs)\n'
                       'outputs = [output_dir / (p.stem + ".g.cs") for p in inputs]\n'
                       'for output in outputs:\n'
-                      '    output.write_text("// generated placeholder for Compile-item inspection\\n", encoding="utf-8")\n'
+                      '    output.write_bytes(b"// generated placeholder for Compile-item inspection\\n")\n'
                       'with open(os.environ["SCHEMA_LOG"], "a", encoding="utf-8") as stream:\n'
                       '    stream.write(json.dumps({"inputs": [str(p) for p in inputs], "outputs": [str(p) for p in outputs]}) + "\\n")\n',
                       encoding='utf-8', newline='\n',
@@ -607,6 +607,8 @@ stimuli:
                   compiled = {pathlib.Path(item['FullPath']).resolve() for item in json.loads(result.stdout)['Items']['Compile']}
                   assert generated <= compiled, 'every generated output must remain a Compile input'
                   assert all(p.is_file() for p in compiled if p.name.endswith('.g.cs')), 'generated Compile inputs must exist'
+                  assert all(p.read_bytes() == b'// generated placeholder for Compile-item inspection\n'
+                             for p in generated), 'preserve every generated schema output byte-for-byte'
           expected_exit_code: 0
       - type: output-matches
         config:
@@ -620,6 +622,7 @@ stimuli:
         startup dominates
       - Replaced the per-item Exec with one invocation that uses the list option documented in schemagen.md
       - Kept Inputs and Outputs on the target so unchanged schemas are not regenerated
+      - Preserved every generated output byte-for-byte
       - Did not claim the build was run or the saving measured
 
   - name: Preserve a build that already shares incremental generation
@@ -815,6 +818,35 @@ stimuli:
       - Compared the aggregate saving upper bound with the 18 minute wall-clock and concluded it is not worth changing
         without assuming every busy node divides that saving
       - Did not recommend a change to the Exec or invent other repeated work
+
+  - name: Decline an unranked slow-build investigation
+    prompt: |
+      Our .NET solution builds slowly in CI, but we do not have timings or logs that show where the time goes.
+      What should we collect first before deciding what to change?
+    expect_activation: false
+    tags:
+      capability: dormancy-unranked-build-slowness
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-unranked-slowness-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              Establish a baseline before choosing a fix. Record the SDK, original build command, configuration, machine and restore state. Measure comparable cold, warm and unchanged builds at least three times each, resetting the intended state before every sample and reporting medians and ranges. Capture a separate binary log for each sample without changing the original invocation's restore or parallelism behavior. Use those timings and logs to locate the dominant phase; do not assume compilation, restore or duplicate work is the bottleneck.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(measur|baseline|timing|profil|binlog|binary log)
+      - type: prompt
+    rubric:
+      - Recommended collecting repeatable build timings and diagnostic logs before choosing an optimization
+      - Kept the original invocation and build environment comparable across measurements
+      - Did not assume a specific bottleneck or propose deduplication without evidence
 
   - name: Decline second-build rerun questions
     prompt: |
