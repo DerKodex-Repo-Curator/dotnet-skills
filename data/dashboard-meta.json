@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "deployedAt": "2026-10-13T20:29:21Z",
+  "deployedAt": "2026-10-14T17:28:20Z",
   "deployedCommit": {
-    "id": "b0bf1730479858941ae22bdf0b45e88cfa31bcc5",
-    "timestamp": "2026-10-12T20:58:35+02:00",
-    "message": "chore: refresh gh-aw pins and recompile workflows (#1303)",
-    "url": "https://github.com/dotnet/skills/commit/b0bf1730479858941ae22bdf0b45e88cfa31bcc5"
+    "id": "9de888b8ce55da34e76a113bd7b2d463d6b3e1e6",
+    "timestamp": "2026-10-13T11:58:35-07:00",
+    "message": "Merge pull request #1305 from dotnet/abhitejjohn-ef-eval-safeguards",
+    "url": "https://github.com/dotnet/skills/commit/9de888b8ce55da34e76a113bd7b2d463d6b3e1e6"
   }
 }
