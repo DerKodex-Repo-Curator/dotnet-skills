@@ -58,6 +58,7 @@ Avoidable aggregate task time is `(calls - expected) x average ms`. Wall-clock s
 1. Keep the value available before its first consumer.
 2. A fallback `Condition="'$(X)' == ''"` is valid only when the value arrives as a global property (command line or an orchestrator), because those are inherited by every project. It keeps single-project and IDE builds working.
 3. Define the computation in one place.
+4. Preserve generated-file timestamps when content is unchanged. Use a write-if-different generator, or generate to a temporary file and replace only on content change; deduplication must not force dependent recompilation on an unchanged rerun.
 
 ```xml
 <!-- Before: every project launches git -->
@@ -80,7 +81,7 @@ If the value is only a commit id for the informational version, source link alre
 ### Step 5: Validate and report truthfully
 
 1. Capture a new binlog of the same invocation. Calls must have dropped to the expected count.
-2. Confirm outputs are unchanged (the stamped value, generated file contents).
+2. Confirm outputs are unchanged (the stamped value, generated file contents). For generated sources, also check that an unchanged second build stays incremental.
 3. Report timing as the median of at least three runs; if you could not run the build, say "not validated".
 
 ## Output
