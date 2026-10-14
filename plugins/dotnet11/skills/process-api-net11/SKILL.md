@@ -9,22 +9,24 @@ description: >
 license: MIT
 ---
 
-# Process API Improvements — .NET 11
+# Starting and Managing Processes in .NET 11
 
-New APIs added to `System.Diagnostics.Process` in .NET 11 simplify process management, eliminate boilerplate, and prevent common deadlock patterns when capturing output in .NET 11 or later applications.
+Choose the appropriate .NET 11 Process APIs for launching executables, capturing or forwarding output, waiting for termination, and controlling handle inheritance and child lifetime. Recognize common deadlock patterns and preserve the intended output and lifetime behavior.
 
 ## When to Use
 
-- Running or orchestrating external processes in a .NET 11 (or later) project.
-- Needing to start a process, wait for it to exit, and capture its output/error streams without risking deadlocks (`Process.RunAndCaptureText[Async]`).
-- Wanting to ensure child processes are automatically terminated when the parent process exits (`KillOnParentExit`).
-- Requiring lightweight, low-overhead process creation via `SafeProcessHandle` on supported platforms.
-- Requiring fine-grained control over handle inheritance (`InheritedHandles`) or starting detached processes (`StartDetached`).
+For applications targeting .NET 11 or later:
+
+- Starting an executable and waiting for its exit status, with captured, inherited, or discarded output.
+- Reading stdout and stderr as text, bytes, or interleaved lines while avoiding pipe-buffer deadlocks.
+- Redirecting standard handles to files, other processes, or the null device.
+- Controlling handle inheritance, including custom native process creation.
+- Managing cancellation, timeouts, parent-exit termination, or terminal detachment.
 
 ## When Not to Use
 
-- The project targets .NET 10 or earlier — these APIs are not available before .NET 11.
-- The default `Process.Start()` is sufficient and does not require output capturing or advanced lifecycle rules.
+- The project must remain on .NET 10 or earlier; do not introduce APIs unavailable on its target framework.
+- Opening a URL or document through the operating system's shell rather than launching an executable.
 
 ## Target Framework
 
