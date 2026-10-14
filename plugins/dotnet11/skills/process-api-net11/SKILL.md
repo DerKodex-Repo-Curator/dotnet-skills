@@ -516,6 +516,18 @@ On Windows, job membership is inherited by default, so `KillOnParentExit` applie
 
 On Linux and Android, process starts with `KillOnParentExit` enabled are serialized, even when requested concurrently.
 
+## Detaching a Process From the Parent's Terminal
+
+`ProcessStartInfo.StartDetached` starts the process without attachment to the parent's console on Windows, or in a new session without a controlling terminal on Unix.
+
+When `StartDetached` is `true`, standard handles without explicit redirection are redirected to the null device to avoid keeping the parent's standard handles open unnecessarily.
+
+```csharp
+public bool StartDetached { get; set; }
+```
+
+Requires `UseShellExecute = false`.
+
 ## New APIs
 
 ### Types
@@ -592,14 +604,6 @@ public IList<SafeHandle>? InheritedHandles { get; set; }
 ```
 
 See [Controlling Handle Inheritance](#controlling-handle-inheritance) for sibling-inheritance races, the difference between `null` and an empty list, and why restricting inheritance does not prevent grandchild-held standard handles from delaying EOF.
-
-#### `StartDetached`
-Starts the process detached from the parent's terminal or job session, ensuring it survives the parent's exit.
-```csharp
-public bool StartDetached { get; set; }
-```
-
-`StartDetached` requires `UseShellExecute = false`.
 
 ---
 
