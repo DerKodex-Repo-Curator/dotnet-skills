@@ -178,12 +178,12 @@ index a3481cf..7b89387 100644
 +    }
 +    catch {
 +        console.warn("Vally session history export failed; retaining SDK session and using raw-event fallback.");
-+        await rm(eventsPath, { force: true });
 +        return false;
 +    }
 +    finally {
-+        await handle?.close();
-+        await rm(tempPath, { force: true });
++        if (handle)
++            await handle.close().catch(() => undefined);
++        await rm(tempPath, { force: true }).catch(() => undefined);
 +    }
 +}
 +async function getSessionEventsWithin(session, timeoutMs) {
