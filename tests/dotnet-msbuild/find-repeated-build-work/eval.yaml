@@ -112,9 +112,17 @@ stimuli:
                       builds = [call for call in calls if call and call[0] in ['build', 'msbuild']]
                       assert len(builds) == 1 and builds[0][1:2] == ['Contoso.slnx'], 'require exactly one solution build'
                       args = builds[0]
-                      values = [a.split(':', 1)[1] for a in args if re.match(r'[-/]p(?:roperty)?:', a, re.I)]
-                      assert any('GitCommit=' + commit in v.split(';') for v in values), 'pass the actual git result, not an empty, fixed or undefined value'
+                      values = []
+                      for index, arg in enumerate(args):
+                          match = re.fullmatch(r'(?:--property|[-/]p(?:roperty)?)(?::|=)(.+)', arg, re.I)
+                          if match:
+                              values.append(match[1])
+                          elif arg.lower() in ['--property', '-p', '/p', '-property', '/property']:
+                              assert index + 1 < len(args), 'property switches require a value'
+                              values.append(args[index + 1])
                       assignments = [p for value in values for p in value.split(';')]
+                      commits = [p.partition('=')[2] for p in assignments if p.partition('=')[0].lower() == 'gitcommit']
+                      assert commits and commits[-1] == commit, 'pass the actual git result, not an empty, fixed or undefined value'
                       assert all(p.partition('=')[2] == '3.2.0' for p in assignments if p.partition('=')[0].lower() == 'version'), 'the build must not override the base version'
                       assert all(p.partition('=')[2] == '3.2.0+' + commit for p in assignments if p.partition('=')[0].lower() == 'informationalversion'), 'the build must not override the stamped version'
                       for supplied in [False, True]:
@@ -630,7 +638,7 @@ stimuli:
       already-shared-work/perf-summary.txt is the performance summary from
       dotnet msbuild already-shared-work/Build.proj -restore -m. Reduce unnecessary build work without changing what Api
       and Worker compile. Apply a fix if one is needed. You cannot run the build from here, so work from the repository
-      files.
+      files. Do not execute dotnet/MSBuild commands or collect another log; use the supplied summary and repository files.
     tags:
       capability: already-shared-incremental-work
       risk: unnecessary-rewrite
@@ -818,6 +826,65 @@ stimuli:
       - Compared the aggregate saving upper bound with the 18 minute wall-clock and concluded it is not worth changing
         without assuming every busy node divides that saving
       - Did not recommend a change to the Exec or invent other repeated work
+
+  - name: Decline evaluation-only global-property instances
+    prompt: |
+      A binlog shows Shared.csproj evaluated five times under different global properties. Evaluation accounts for
+      almost all the delay, but its targets and tasks execute only once. How should I investigate that cost?
+    expect_activation: false
+    tags:
+      capability: dormancy-property-variant-evaluation
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-property-evaluation-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              The measured cost is project evaluation, not repeated target execution. Compare the evaluated global-property sets, then inspect evaluation timings, import chains, globs and file-I/O property functions. Use preprocessed output to locate expensive imports and preserve property variants that are actually required. Target run-once guards cannot remove this pre-target work.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(evaluat|preprocess|import|glob)
+      - type: prompt
+    rubric:
+      - Identified evaluation as the measured bottleneck rather than duplicate target or task execution
+      - Investigated evaluation work and distinct global-property sets without proposing a per-target run-once guard
+      - Preserved required property variants
+
+  - name: Decline collisions between required project variants
+    prompt: |
+      Build.proj builds Shared.csproj concurrently with PublishReadyToRun=true and PublishReadyToRun=false.
+      We need both variants, but they use the same bin and obj directories and overwrite each other's files.
+      How should I stop the failures without dropping either variant?
+    expect_activation: false
+    tags:
+      capability: dormancy-property-variant-output-collision
+      risk: routing
+      journey: boundary-condition
+    golden_trajectory:
+      inline:
+        schema_version: "ATIF-v1.6"
+        session_id: "find-repeated-build-work-property-collision-dormancy"
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |-
+              These are intentionally different variants, not redundant builds. Give each variant separate output and intermediate paths, setting the intermediate base before SDK imports so restore assets are isolated too. Verify that both configurations still produce their intended assemblies. Do not remove PublishReadyToRun or collapse the builds merely because they share a project path.
+    graders:
+      - type: output-matches
+        config:
+          pattern: (?i)(OutputPath|IntermediateOutputPath|separate|isolat|distinct.*director)
+      - type: prompt
+    rubric:
+      - Identified shared output and intermediate paths as the cause of the collision
+      - Isolated both required variants' outputs and restore intermediates
+      - Did not remove a required global property or collapse the variants into one build
 
   - name: Decline an unranked slow-build investigation
     prompt: |

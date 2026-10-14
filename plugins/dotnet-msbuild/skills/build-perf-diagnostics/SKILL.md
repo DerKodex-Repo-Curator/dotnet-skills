@@ -1,6 +1,6 @@
 ---
 name: build-perf-diagnostics
-description: "Diagnose MSBuild build performance bottlenecks. USE FOR: identifying why builds are slow by analyzing binlog performance summaries, detecting ResolveAssemblyReference (RAR) taking >5s, Roslyn analyzers consuming >30% of Csc time, single targets dominating >50% of build time, node utilization below 80%, excessive Copy tasks, NuGet restore repeated across restore/build/test commands or every build. Covers timeline and Target/Task Performance Summary interpretation. Use after build-perf-baseline has established measurements. DO NOT USE FOR: within-build duplicates (use find-repeated-build-work), establishing initial baselines (use build-perf-baseline first), fixing incremental build issues (use incremental-build), parallelism tuning (use build-parallelism), non-MSBuild build systems."
+description: "Diagnose measured MSBuild bottlenecks after build-perf-baseline. USE FOR: binlog summaries/timelines, ResolveAssemblyReference (RAR) >5s, analyzers >30% of Csc time, targets >50% of build time, excessive Copy, restores across restore/build/test commands or every build. DO NOT USE FOR: within-build duplicate executions (use find-repeated-build-work), measured idle workers or serial critical paths (use build-parallelism), initial baselines (use build-perf-baseline), unchanged-build reruns (use incremental-build), non-MSBuild systems."
 license: MIT
 ---
 
@@ -21,7 +21,7 @@ license: MIT
    grep "Target Performance Summary\|Task Performance Summary" -A 50 full.log
    ```
 4. **Find expensive targets and tasks**: The PerformanceSummary section lists all targets/tasks sorted by cumulative time
-5. **Check for node utilization**: grep for scheduling and node messages
+5. **Spot scheduling symptoms**: hand measured idle workers or serial critical paths to `build-parallelism`; these messages are only an initial triage signal
    ```bash
    grep -i "node.*assigned\|building with\|scheduler" full.log | head -30
    ```
@@ -33,7 +33,7 @@ license: MIT
 ## Key Metrics and Thresholds
 
 - **Build duration**: what's "normal" — small project <10s, medium <60s, large <5min
-- **Node utilization**: ideal is >80% active time across nodes. Low utilization = serialization bottleneck
+- **Node utilization**: below 80% is a scheduling signal, not proof of serialization. Use `build-parallelism` to inspect the node timeline and critical path.
 - **Single target domination**: if one target is >50% of build time, investigate
 - **Analyzer time vs compile time**: analyzers should be <30% of Csc task time. If higher, consider removing expensive analyzers
 - **RAR time**: ResolveAssemblyReference >5s is concerning. >15s is pathological

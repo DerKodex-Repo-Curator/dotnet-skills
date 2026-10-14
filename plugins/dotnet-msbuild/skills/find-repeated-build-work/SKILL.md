@@ -1,6 +1,6 @@
 ---
 name: find-repeated-build-work
-description: "Dedupe within one MSBuild invocation. USE FOR: invariant per-project Exec, global-property instances, per-item Exec, racy run-once guards, call-count audits. DO NOT USE FOR: unranked slow builds (use build-perf-baseline), restores across restore/build/test commands (use build-perf-diagnostics), unchanged second-build reruns (use incremental-build), slow evaluation (use eval-performance), idle nodes/serial chains without duplicates (use build-parallelism)."
+description: "Deduplicate executions within one MSBuild invocation. USE FOR: invariant per-project Exec, redundant global-property project builds, per-item Exec, racy run-once guards, call-count audits. DO NOT USE FOR: unranked slow builds (use build-perf-baseline), evaluation-only repeats (use eval-performance), distinct-variant bin/obj collisions (use check-bin-obj-clash), restores across restore/build/test commands (use build-perf-diagnostics), unchanged second-build reruns (use incremental-build), idle workers/serial chains without duplicates (use build-parallelism)."
 license: MIT
 ---
 
@@ -20,6 +20,7 @@ MSBuild runs targets once per project instance. Work that does not depend on the
 
 - Targets that run again on a second, unchanged build: use `incremental-build`
 - Slow evaluation before any target runs: use `eval-performance`
+- Required project variants colliding in shared bin/obj directories: use `check-bin-obj-clash`
 - Idle nodes or a serial dependency chain: use `build-parallelism`
 - NuGet restore repeated across separate `dotnet restore`, `dotnet build` and `dotnet test` commands: use `build-perf-diagnostics`
 - Unranked "why is my build slow": start with `build-perf-baseline`, then `build-perf-diagnostics`
@@ -76,7 +77,7 @@ Avoidable aggregate task time is `(calls - expected) x average ms`. Wall-clock s
 </Target>
 ```
 
-If the value is only a commit id for the informational version, source link already sets `SourceRevisionId` without an `Exec`.
+If Source Link already supplies `SourceRevisionId`, it can replace an `Exec` only when it is available before the consumer and preserves the existing stamp representation. `SourceRevisionId` normally contains the full commit ID; do not substitute it for `git rev-parse --short HEAD` without retaining the original abbreviation contract.
 
 ### Step 5: Validate and report truthfully
 
