@@ -103,6 +103,29 @@ def tree(root):
     }
 
 
+def verify_missing_dependency_report(response):
+    text = re.sub(r"[`*_]", "", response).replace("\u2019", "'").lower()
+    dependency = r"\b(?:dotnet-test|platform-detection|run-tests|writing-mstest-tests)(?![-\w])"
+    role = r"(?:\s+(?:plugin|skills?|reference|dependency|required|supporting|sibling)){0,3}"
+    missing = r"(?:missing|unavailable|absent|(?:not|isn't|aren't|wasn't|weren't)\s+(?:installed|available|present|loaded|provided|included))"
+    patterns = (
+        rf"{dependency}{role}\s*[:|]?\s*(?:(?:is|are|was|were)\s+)?{missing}\b",
+        rf"{missing}{role}\s*[:|]?\s+{dependency}",
+        rf"\b(?:cannot|can't|could not|couldn't)\s+"
+        rf"(?:access|load|find|locate|invoke|use)\s+(?:the\s+)?{dependency}",
+        rf"\b(?:do not|don't)\s+have\s+(?:access to\s+)?(?:the\s+)?{dependency}",
+    )
+    disclosed = any(
+        not re.search(r"\b(?:not|no|without)\s+(?:(?:a|an|any)\s+)?$", text[:match.start()])
+        for pattern in patterns for match in re.finditer(pattern, text)
+    )
+    available = re.search(
+        rf"{dependency}{role}\s+(?:is|are|was|were)\s+(?:already\s+)?"
+        r"(?:installed|available|present|loaded)\b", text,
+    )
+    assert disclosed and not available, "Final response must disclose the unavailable dotnet-test dependency"
+
+
 def stop_tree(process):
     if os.name == "nt":
         subprocess.run(
@@ -276,6 +299,8 @@ def run(args):
             event["data"]["content"] for event in reversed(events)
             if event["type"] == "assistant.message" and event["data"].get("content")
         )
+        if args.case == "missing-dependency":
+            verify_missing_dependency_report(response)
         if args.case == "denied-run":
             assert re.search(r"denied|blocked|rejected|not permitted|not allowed|restriction", response, re.I), response
         else:

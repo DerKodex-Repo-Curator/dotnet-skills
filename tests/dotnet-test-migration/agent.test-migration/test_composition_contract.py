@@ -21,6 +21,52 @@ def complete(text):
 
 
 class PermissionContractTests(unittest.TestCase):
+    def test_mstest_read_only_guard_covers_shell_aliases(self):
+        path = composition.ROOT / "tests" / "dotnet-test-migration" / "migrate-mstest-v3-to-v4" / "eval.yaml"
+        case = next(case for case in composition.yaml.safe_load(path.read_text(encoding="utf-8"))["stimuli"]
+                    if case["name"] == "Leave an already current MSTest project unchanged")
+        aliases = {"bash", "powershell", "execute", "run_shell_command", "task"}
+        self.assertLessEqual(aliases, set(case["constraints"]["reject_tools"]))
+        patterns = [entry["name"] for grader in case["graders"] if grader["type"] == "tool-calls"
+                    for entry in grader["config"]["disallowed"]]
+        for alias in aliases:
+            for name in (alias, "functions." + alias, "MCP:" + alias.upper()):
+                with self.subTest(tool=name):
+                    self.assertTrue(any(composition.re.search(pattern, name) for pattern in patterns))
+
+    def test_missing_dependency_report_accepts_explicit_disclosure(self):
+        for response in (
+            "The dotnet-test plugin is not installed, so I will use inline detection.",
+            "`platform-detection` is unavailable in this session.",
+            "Missing plugin: dotnet-test.",
+            "I cannot access run-tests here; validation remains unrun.",
+            "The writing-mstest-tests skill isn't available.",
+            "The dotnet-test dependency was not provided.",
+            "The unavailable dotnet-test plugin prevents that handoff.",
+            "Missing required plugin: dotnet-test.",
+            "The platform-detection reference wasn't loaded.",
+            "I don't have access to the dotnet-test plugin.",
+            "The dotnet-test plugin isn't included.",
+        ):
+            with self.subTest(response=response):
+                composition.verify_missing_dependency_report(response)
+
+    def test_missing_dependency_report_rejects_silent_or_reversed_claims(self):
+        for response in (
+            "Upgrade MSTest to v3, then v4, then enable native MTP.",
+            "A configuration file is missing; use the dotnet-test plugin.",
+            "The dotnet-test plugin is available; an unrelated file is missing.",
+            "There is no missing dotnet-test plugin.",
+            "The dotnet-test plugin is not missing.",
+            "Missing plugin: dotnet-test-migration.",
+            "I do not use dotnet-test; here is the migration plan.",
+            "The dotnet-test plugin is unavailable. The dotnet-test plugin is installed.",
+        ):
+            with self.subTest(response=response), self.assertRaisesRegex(
+                AssertionError, "Final response must disclose"
+            ):
+                composition.verify_missing_dependency_report(response)
+
     def test_ordinary_build_failure_can_be_repaired(self):
         result = composition.policy_evidence([
             complete("CS1002: ; expected"), start("powershell", "repair"),
