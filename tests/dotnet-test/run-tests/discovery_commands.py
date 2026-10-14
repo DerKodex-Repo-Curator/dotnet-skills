@@ -155,12 +155,18 @@ def validate_output(response):
         if not re.search(r"\bdotnet(?:\.exe)?\b", line, re.I):
             executable = parse_line(line)[1] if "#" in line else line
             if executable:
-                sentence = bool(re.search(r"[.!?]$", executable)) and not executable.endswith("./...")
-                command_shaped = not sentence and bool(re.fullmatch(
+                assigned = bool(re.match(r"[A-Za-z_][A-Za-z0-9_]*=", executable))
+                if assigned:
+                    words = [value for value, operator in tokens(executable) if not operator]
+                    while words and re.match(r"[A-Za-z_][A-Za-z0-9_]*=", words[0]):
+                        words.pop(0)
+                    executable = " ".join(words)
+                sentence = bool(re.search(r"(?<![./])[.!?](?=\s|$)", executable))
+                command_shaped = assigned or (not sentence and bool(re.fullmatch(
                     r"(?:[./\\]|[A-Za-z]:[\\/])\S+(?:\s+.*)?|"
                     r"[a-z][a-z0-9_.-]*(?:[ \t]+(?:[-./\\\w=#]+|\"[^\"]*\"|'[^']*'))*",
-                    executable,
-                ))
+                    executable, re.I,
+                )))
                 assert not (fenced or code_span or prompted or command_shaped), (
                     "Additional command outside the requested discovery lanes"
                 )

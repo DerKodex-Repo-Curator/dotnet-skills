@@ -4,6 +4,79 @@ type: capability
 defaults:
   timeout: 20m
 stimuli:
+  - name: Preserve asynchronous shared fixture initialization and cleanup
+    tags: {capability: async-collection-lifecycle, risk: unawaited-or-premature-cleanup, journey: migrate-async-shared-resource}
+    prompt: |
+      Migrate this xUnit v2 project to MSTest v4, keeping net8.0 and VSTest.
+      The two classes share a resource with asynchronous setup and cleanup.
+      Preserve both test bodies and the probe, initialize the shared resource
+      once before use, and finish cleanup once after its final use. Keep the
+      collection members serialized. This assembly contains only this collection;
+      run-end cleanup is an acceptable scope, including when either member is
+      selected alone. Run the full suite and each member separately, and explain
+      the scheduling and resource-lifetime trade-off for unrelated classes.
+    environment:
+      files:
+        - src: fixtures/handle-icollectionfixture-explicitly-do-not-silently-widen-scope/TestProject.csproj
+          dest: TestProject.csproj
+        - src: fixtures/async-collection/AsyncCollectionTests.cs
+          dest: AsyncCollectionTests.cs
+        - src: ../graders/AsyncLifecycleProbe.cs
+          dest: AsyncLifecycleProbe.cs
+        - src: ../graders/global-vstest.json
+          dest: global.json
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+        - src: ../graders/CollectionSchedulingContract.cs
+          dest: .eval/CollectionSchedulingContract.txt
+        - src: ../graders/collection_report.py
+          dest: .eval/collection_report.py
+        - src: ../graders/migration_cleanliness.py
+          dest: .eval/migration_cleanliness.py
+        - src: ../graders/async_collection_report.py
+          dest: .eval/async_collection_report.py
+    golden_patch:
+      path: goldens/async-collection.patch
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: mstest-async-shared-collection
+        agent: { name: reference, version: "1.0.0", model_name: curated }
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              Migrated to MSTest v4 on net8.0/VSTest. Both original assertions and
+              the probe are preserved. The lazy shared resource initializes
+              asynchronously once; each selected class awaits the same setup.
+              Assembly cleanup awaits disposal once after the selected members.
+              The full suite and each single-member filter passed with one
+              completed initialization and one completed cleanup in each run.
+
+              This is conservative scheduling: unrelated classes cannot overlap
+              each other or these members under the default serial assembly policy.
+              Run-end cleanup is the explicitly accepted boundary for this sole
+              collection, not a generic mapping for multiple unrelated collections.
+    graders:
+      - type: program
+        config:
+          program: python
+          args:
+            - -c
+            - >-
+              import hashlib,pathlib;
+              p=pathlib.Path('.eval/async_collection_report.py');data=p.read_bytes();
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='3d3308fe92223281d0d71597fe23b482e8862fcd83dd17f140acb2301f865b03','Async verifier changed';
+              exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
+          timeout: 6m
+      - type: prompt
+        config:
+          evidence: [trajectory, diff]
+    rubric:
+      - Preserves the original test assertions and one shared asynchronous resource across both member classes
+      - Completes initialization before every selected use and finishes exactly one cleanup after the last selected member, for both the full run and each single-member filter
+      - Accurately reports execution evidence and the accepted sole-collection run boundary without claiming generic multi-collection scheduling or lifetime equivalence
+
   - name: Keep long-running runner diagnostics separate from enforced timeouts
     tags: {capability: diagnostic-timeout-semantics, risk: warning-becomes-failure, journey: migrate-runner-configuration}
     prompt: |
@@ -83,6 +156,7 @@ stimuli:
                   active = described = False
                   continuation = (
                       r"^(?:its?\b|(?:this|that|the)\s+(?:source\s+)?(?:setting|option|threshold)\b|"
+                      r"(?:an?\s+)(?:diagnostics?|warnings?|informational|advisory|enforced|failure|timeout|deadline)\b|"
                       r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostics?|informational|advisory|"
                       r"warns?|fail(?:ures?|s|ing)?|enforc(?:es?|ed|ing)|timeouts?|deadlines?)\b)"
                   )

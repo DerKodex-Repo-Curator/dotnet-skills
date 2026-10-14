@@ -45,6 +45,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds is advisory, not an enforced timeout.",
             "longRunningTestSeconds does not fail tests; the setting is informational.",
             "longRunningTestSeconds is informational. It has no failure deadline.",
+            "longRunningTestSeconds is not an enforced timeout, but a diagnostic warning.",
+            "longRunningTestSeconds is not a deadline, but an advisory notification.",
         ):
             with self.subTest(valid=response):
                 REPORT["validate_diagnostic_report"](response)
@@ -66,6 +68,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds is advisory and fails slow tests.",
             "longRunningTestSeconds is informational. It also enforces a deadline.",
             "longRunningTestSeconds was migrated. diagnosticMessages is informational.",
+            "longRunningTestSeconds is a diagnostic warning, but an enforced timeout.",
+            "longRunningTestSeconds is advisory, but a failure deadline.",
         ):
             with self.subTest(invalid=response), self.assertRaises(AssertionError):
                 REPORT["validate_diagnostic_report"](response)
@@ -82,6 +86,8 @@ for (const [output, passed] of [
   ["longRunningTestSeconds emits diagnostics rather than enforcing a timeout.", true],
   ["longRunningTestSeconds is informational only and does not fail tests.", true],
   ["longRunningTestSeconds is advisory, not an enforced timeout.", true],
+  ["longRunningTestSeconds is not an enforced timeout, but a diagnostic warning.", true],
+  ["longRunningTestSeconds is a diagnostic warning, but an enforced timeout.", false],
   ["longRunningTestSeconds is advisory and fails slow tests.", false],
   ["longRunningTestSeconds is not informational; it enforces a timeout.", false],
   ["longRunningTestSeconds does not emit diagnostics; it enforces a timeout.", false],

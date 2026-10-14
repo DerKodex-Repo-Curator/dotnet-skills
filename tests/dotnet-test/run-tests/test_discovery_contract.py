@@ -114,6 +114,23 @@ class DiscoveryContractTests(unittest.TestCase):
             GOLDEN + "\nThe three commands list tests only; they do not run test bodies."
         ))
 
+    def test_environment_assignments_and_executable_casing_do_not_hide_commands(self):
+        for prefix, executable, suffix in product(
+            ("", "CI=true ", 'CI="true" MODE=\'test suite\' ', "_SETTING=1 "),
+            ("make test", "MAKE test", "MaKe test", "NPM test", "PyTest"),
+            ("", " # descriptive comment."),
+        ):
+            with self.subTest(prefix=prefix, executable=executable, suffix=suffix):
+                self.assertIn("program", self.failed_graders(
+                    GOLDEN + "\n" + prefix + executable + suffix
+                ))
+        for extra in ("CI=true", 'CI="with # data" make test # prose.'):
+            with self.subTest(extra=extra):
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
+        self.assertEqual([], self.failed_graders(
+            GOLDEN + "\nThese commands only list tests. The existing outputs are reused."
+        ))
+
     def test_shell_comment_punctuation_cannot_disguise_other_commands(self):
         for command, comment in product(
             ("make test", "npm test", "pytest", "./run-tests.sh",
@@ -376,6 +393,7 @@ assert.equal(proseResult.passed, true, JSON.stringify(proseResult));
 for (const extra of ["", "\\nnice dotnet test Native.slnx --no-build",
                     "\\nionice -c 3 dotnet test Native.slnx --no-build",
                     "\\nmake test # extra command.",
+                    "\\nCI=true make test", "\\nMAKE test",
                     "\\nUse dotnet test with the discovery flag; dotnet test:"]) {
   const result = await grader.grade({ config, trajectory: { workDir: root, output: golden + extra } });
   assert.equal(result.passed, extra === "", JSON.stringify(result));
