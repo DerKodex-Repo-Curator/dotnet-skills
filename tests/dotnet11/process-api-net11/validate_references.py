@@ -1,3 +1,4 @@
+import copy
 import pathlib
 import runpy
 
@@ -10,8 +11,8 @@ def main():
     gate = runpy.run_path(str(root / "eng" / "eval-quality" / "check_eval_quality.py"))
     document = yaml.load(spec.read_text(encoding="utf-8"), gate["NoDuplicateKeys"])
     stimuli = document["stimuli"]
-    if len(stimuli) != 12:
-        raise AssertionError("Expected ten preference cases and two dormancy cases.")
+    if len(stimuli) != 15:
+        raise AssertionError("Expected twelve preference cases and three dormancy cases.")
 
     outputs = []
     for stimulus in stimuli:
@@ -34,6 +35,9 @@ def main():
         (9, 1, "silent: true", "silent: false"),
         (10, 1, "StandardOutputHandle = output", "RedirectStandardOutput = true"),
         (11, 2, "1 MiB (1,048,576 bytes)", "an unspecified amount"),
+        (12, 1, "SafeProcessHandle.Start(info)", "Process.Start(info)!.SafeHandle"),
+        (13, 1, "UseShellExecute = true", "UseShellExecute = false"),
+        (14, 1, "silent: true", "silent: false"),
     )
     for stimulus_index, grader_index, original, replacement in mutations:
         output = outputs[stimulus_index]
@@ -51,6 +55,40 @@ def main():
         if passed:
             raise AssertionError(f"Mutation was accepted: {stimuli[stimulus_index]['name']}")
 
+    alternatives = (
+        (
+            0,
+            outputs[2].replace("output.StandardOutput", "output.Item1").replace("output.StandardError", "output.Item2"),
+            "positional tuple members",
+        ),
+        (
+            8,
+            outputs[8].replace("process.WaitForExitStatusAsync()", "process.SafeHandle.WaitForExitAsync()"),
+            "termination-only handle wait",
+        ),
+        (
+            10,
+            outputs[10]
+            .replace(
+                'using SafeFileHandle output = File.OpenHandle("artifact.bin", FileMode.Create, FileAccess.Write);',
+                'using FileStream output = new("artifact.bin", FileMode.Create, FileAccess.Write);',
+            )
+            .replace("StandardOutputHandle = output", "StandardOutputHandle = output.SafeFileHandle"),
+            "writable FileStream handle",
+        ),
+        (
+            11,
+            outputs[11].replace("concurrently", "in parallel"),
+            "parallel-draining paraphrase",
+        ),
+    )
+    for stimulus_index, output, label in alternatives:
+        reference = copy.deepcopy(stimuli[stimulus_index]["golden_trajectory"]["inline"])
+        reference["steps"][-1]["message"] = output
+        gate["check_trajectory_output_graders"](str(spec), stimuli[stimulus_index], reference, label)
+    if gate["errors"]:
+        raise AssertionError("\n".join(gate["errors"]))
+
     inheritance_pattern = stimuli[5]["graders"][3]["config"]["pattern"]
     explanatory_output = outputs[5] + "\nAvoid `InheritedHandles = null` because it preserves unrestricted inheritance."
     if gate["vally_regex_found"](inheritance_pattern, explanatory_output):
@@ -58,6 +96,7 @@ def main():
 
     print(f"PASS: all {len(stimuli)} ATIF golden responses satisfy their deterministic output graders.")
     print(f"PASS: all {len(mutations)} realistic mutations fail the intended grader.")
+    print(f"PASS: all {len(alternatives)} equivalent solutions satisfy their deterministic output graders.")
     print("PASS: inheritance grader permits prose explaining the unsafe default.")
 
 
