@@ -78,9 +78,6 @@ stimuli:
                 throw new Error('Contoso.slnx must be restored, built, then tested in that order');
               }
               const build = steps[buildIndex];
-              if (![build, steps[testIndex]].every(l => /(-c|--configuration)[ =]+Release(?=\s|$)|Configuration=Release(?=[;,\s]|$)/.test(l.replace(/["']/g, '')))) {
-                throw new Error('the solution build and test must keep the Release configuration');
-              }
               if (!/--no-build/.test(steps[testIndex])) throw new Error('the solution test must keep --no-build');
               if (!restoreOff(steps[testIndex])) {
                 throw new Error('the solution test needs -restore:false to override rsp restore on older SDKs');
@@ -178,6 +175,20 @@ stimuli:
               const commands = invocations.map(l => l.replace(/["']/g, ''))
                 .filter(l => /^dotnet (msbuild|build|test|publish)\b/.test(l));
               for (const command of commands) {
+                const configurationProperties = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:p|property):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/));
+                const propertyConfiguration = configurationProperties.reduce((value, property) => {
+                  const match = /^Configuration=(.*)$/i.exec(property);
+                  return match ? decodeURIComponent(match[1]) : value;
+                }, undefined);
+                const cliConfiguration = [...command.matchAll(/(?:^|\s)(?:-c|--configuration)[ =]+([^\s]+)/g)].at(-1)?.[1];
+                // Build/publish forward -c after passthrough properties; test does not.
+                const configuration = /^dotnet (build|publish)\b/.test(command) ?
+                  cliConfiguration ?? propertyConfiguration : /^dotnet msbuild\b/.test(command) ?
+                  propertyConfiguration : propertyConfiguration ?? cliConfiguration;
+                if (configuration !== 'Release') {
+                  throw new Error('build, test and publish must keep the effective Release configuration: ' + command);
+                }
                 const targets = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
                   .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
                 if (/^dotnet test\b/.test(command)) {
@@ -310,6 +321,13 @@ stimuli:
               if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
               const packager = l => /(?:^|\s)(?:\.\/)?tools\/Packager\/Packager\.csproj(?:\s|$)/.test(l);
+              const restores = l => {
+                if (/^dotnet restore\b/.test(l)) return true;
+                if (!/^dotnet (build|test|publish|pack)\b/.test(l)) return false;
+                const switches = l.replace(/["']/g, '').match(/(?:^|\s)(?:--?|\/)(?:restore(?::(?:true|false))?|r:(?:true|false))(?=\s|$)/gi) || [];
+                if (switches.length) return !/:false$/i.test(switches[switches.length - 1]);
+                return !/(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l);
+              };
               const solIndex = steps.findIndex(l => /^dotnet build\b/.test(l) && solution(l));
               const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && solution(l));
               const testIndex = steps.findIndex(l => /^dotnet test\b/.test(l) && solution(l));
@@ -320,18 +338,13 @@ stimuli:
                 throw new Error('the solution must still be tested with --no-build after its build');
               }
               if (pkIndex < 0) throw new Error('the Packager build step is missing');
-              if (![steps[solIndex], steps[testIndex], steps[pkIndex]].every(l =>
-                  /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(l))) {
-                throw new Error('the solution build, solution test, and Packager build must keep Release');
-              }
-              if (/--no-restore/.test(steps[pkIndex])) {
+              if (!restores(steps[pkIndex])) {
                 const restoredBefore = steps.findIndex(l => /^dotnet restore\b/.test(l) && packager(l));
                 if (restoredBefore < 0 || restoredBefore > pkIndex) {
-                  throw new Error('Packager is outside the restored solution but is built with --no-restore');
+                  throw new Error('Packager is outside the restored solution but its required restore is suppressed');
                 }
               }
-              const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
-                (/^dotnet (build|test|publish|pack)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
+              const restoring = steps.filter(restores);
               if (restoring.length !== 2) throw new Error('the solution and Packager must each restore once');
           expected_exit_code: 0
       - type: run-command
@@ -445,20 +458,16 @@ stimuli:
                 return (os ?? parts.join('-')) + '-' + (arch ?? currentArch) === 'linux-x64';
               };
               const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
-              const release = c => /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(c);
               const buildIndex = cmds.findIndex(c => /^dotnet build\b/.test(c) && gateway(c));
               const publishIndex = cmds.findIndex(c => /^dotnet publish\b/.test(c) && gateway(c));
               if (buildIndex < 0 || publishIndex < 0 || buildIndex > publishIndex) {
                 throw new Error('Gateway must still be built before it is published');
               }
-              if (![cmds[buildIndex], cmds[publishIndex]].every(release)) {
-                throw new Error('the build and publish must keep the Release configuration');
-              }
               if (!rid(cmds[publishIndex]) || !selfContained(cmds[publishIndex])) {
                 throw new Error('publish must keep linux-x64 and self-contained output');
               }
               if (/--no-build/.test(cmds[publishIndex]) && !cmds.slice(0, publishIndex).some(c =>
-                  /^dotnet build\b/.test(c) && gateway(c) && rid(c) && selfContained(c) && release(c))) {
+                  /^dotnet build\b/.test(c) && gateway(c) && rid(c) && selfContained(c))) {
                 throw new Error('--no-build publish requires a preceding Release build with linux-x64 and SelfContained=true');
               }
               let restored = null;
@@ -556,10 +565,6 @@ stimuli:
               if (build < 0 || test < 0) throw new Error('the solution build and test steps must remain');
               if (build < gen || test < build || !/--no-build/.test(steps[test])) {
                 throw new Error('the solution must be built after the tool, then tested with --no-build');
-              }
-              if (![steps[build], steps[test]].every(l =>
-                  /(-c|--configuration)[ =]+Release(?:\s|$)|Configuration=Release(?:\s|$)/.test(l))) {
-                throw new Error('the solution build and test must keep the shared Release configuration');
               }
               const restoring = [];
               steps.forEach((l, i) => {
@@ -663,7 +668,6 @@ stimuli:
                 throw new Error('dotnet restore does not support --no-restore or --no-build');
               }
               const tests = steps.filter(l => /^dotnet test\b/.test(l));
-              const release = l => /(-c|--configuration)[ =]+Release(?=\s|$)|Configuration=Release(?=[;,\s]|$)/.test(l.replace(/["']/g, ''));
               if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
               for (const project of ['UnitTests', 'IntegrationTests', 'ContractTests']) {
                 if (!tests.some(l => l.includes('tests/Contoso.' + project + '/Contoso.' + project + '.csproj'))) {
@@ -671,9 +675,6 @@ stimuli:
                 }
               }
               if (!tests.every(l => /--no-build/.test(l))) throw new Error('a test step still rebuilds');
-              if (!tests.every(release)) {
-                throw new Error('a test step dropped the Release configuration');
-              }
               const build = steps.findIndex(l => /^dotnet build\b/.test(l));
               if (build < 0 || build > steps.findIndex(l => /^dotnet test\b/.test(l))) throw new Error('no build step before the tests');
               if (steps.filter(l => /^dotnet build\b/.test(l)).length !== 1 || !/Contoso\.slnx\b/.test(steps[build])) {
@@ -681,9 +682,6 @@ stimuli:
               }
               const restore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
               if (restore < 0 || restore > build) throw new Error('the explicit solution restore must precede the build');
-              if (!release(steps[build])) {
-                throw new Error('the build step is not Release, so --no-build tests would not find the output');
-              }
               const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
                 (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
               if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
@@ -875,8 +873,6 @@ stimuli:
                   return match && match[1].toLowerCase() === name.toLowerCase() ? decodeURIComponent(match[2]) : value;
                 }, undefined);
               const project = (l, name) => l.split(/\s+/).some(t => t.replace(/^\.\//, '') === name);
-              const release = l => property(l, 'Configuration') !== undefined ?
-                property(l, 'Configuration') === 'Release' : /(?:^|\s)(?:-c|--configuration)[ =]Release(?:\s|$)/.test(l);
               const restoreSwitches = l => l.match(/(?:^|\s)(?:--?|\/)(?:restore(?::(?:true|false))?|r:(?:true|false))(?=\s|$)/gi) || [];
               const restoreOff = l => /:false$/i.test(restoreSwitches(l).at(-1) || '');
               const restores = steps.filter(l => /^dotnet restore\b/.test(l));
@@ -893,8 +889,8 @@ stimuli:
                   steps.indexOf(restore) > steps.indexOf(build) || tests.some(l => steps.indexOf(build) > steps.indexOf(l))) {
                 throw new Error('restore the complete child graph before building and testing it');
               }
-              if (flag(restore, '(?:--no-(?:restore|build)|-c|--configuration)') || !release(build) ||
-                  !tests.every(l => release(l) && flag(l, '--no-build')) ||
+              if (flag(restore, '(?:--no-(?:restore|build)|-c|--configuration)') ||
+                  !tests.every(l => flag(l, '--no-build')) ||
                   (/^dotnet build\b/.test(build) && flag(build, '--no-build'))) {
                 throw new Error('preserve valid restore, Release build, and no-build test modes');
               }
