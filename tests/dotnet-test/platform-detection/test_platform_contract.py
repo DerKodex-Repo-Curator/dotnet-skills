@@ -172,6 +172,30 @@ class PlatformContractTests(unittest.TestCase):
             GOLDEN + "\nOn SDK version 10.0.100 the VSTest bridge is supported with MTP 2."
         ))
 
+    def test_negative_word_must_govern_bridge_availability(self):
+        labels = GOLDEN.split("\n\n", 1)[0]
+        for explanation in (
+            "MTP 2 on SDK 10 cannot fail when using the VSTest bridge.",
+            "MTP 2 on SDK 10 never errors when using the VSTest bridge.",
+            "MTP 2 on SDK 10 does not fail while using the VSTest bridge.",
+            "MTP 2 on SDK 10 cannot collect coverage when using the VSTest bridge.",
+            "MTP 2 on SDK 10 removed diagnostics from the VSTest bridge.",
+            "MTP 2 on SDK 10 has unsupported diagnostics for the VSTest bridge.",
+        ):
+            with self.subTest(explanation=explanation):
+                self.assertIn("program", self.failures(labels + "\n\n" + explanation))
+        self.assertIn("program", self.failures(
+            GOLDEN + "\nMTP 2 on SDK 10 cannot fail when using the VSTest bridge."
+        ))
+        for explanation in (
+            "MTP 2 on SDK 10 does not support the VSTest bridge.",
+            "MTP 2 on SDK 10 cannot work through the VSTest bridge.",
+            "On SDK 10 with MTP 2, the VSTest bridge is unavailable.",
+            "The VSTest bridge support was removed in MTP 2 on SDK 10.",
+        ):
+            with self.subTest(explanation=explanation):
+                self.assertEqual([], self.failures(labels + "\n\n" + explanation))
+
     def test_production_report_grader_rejects_wrong_version_relationship(self):
         script = """
 import assert from "node:assert/strict";
@@ -183,6 +207,8 @@ for (const [output, passed] of [
   [golden, true],
   ["MTP 1 cannot bridge on SDK 10; this project uses MTP 2.", false],
   ["MTP 2 cannot bridge on SDK 10.", true],
+  ["MTP 2 on SDK 10 cannot fail when using the VSTest bridge.", false],
+  ["MTP 2 on SDK 10 does not support the VSTest bridge.", true],
 ]) {
   const result = await grader.grade({ config, trajectory: { workDir: root, output } });
   assert.equal(result.passed, passed, JSON.stringify(result));

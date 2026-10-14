@@ -88,6 +88,19 @@ stimuli:
                   text = re.sub(r"[`*_]", "", response).replace("\u2019", "'")
                   text = re.sub(r"(?im)^\s*(?:dotnet test mode|platform|framework)\s*:[^\r\n]*(?:\r?\n|$)", "", text)
                   text = re.sub(r"\s+", " ", text)
+                  bridge = r"(?:VSTest(?:[ -]mode)?(?:\s+bridg(?:e|ing))?|bridg(?:e|ing))\b"
+                  object_ = r"(?:(?:the|a|an|this|legacy)\s+)*" + bridge
+                  unavailable = (
+                      r"\b(?:cannot|can't|does not|doesn't|no longer)\s+"
+                      r"(?:(?:use|run|execute|support|enable|allow|provide|work)\s+"
+                      r"(?:(?:via|through|with|using)\s+)?" + object_ + r"|bridge\b)|"
+                      r"\b(?:removes?|removed)\s+" + object_ + r"|"
+                      r"\b(?:unsupported|unavailable|incompatible)\s+" + object_ + r"|"
+                      + bridge + r"(?:\s+support)?\s+(?:(?:is|was|remains)\s+)?"
+                      r"(?:no longer\s+(?:supported|available|compatible)|not\s+(?:supported|available|compatible|usable)|"
+                      r"unsupported|unavailable|incompatible|removed)\b"
+                  )
+                  found = False
                   for statement in re.split(r"(?<=[.!?])\s+|;", text):
                       mtp = sdk = None
                       for clause in re.split(r",|\b(?:but|yet|however|whereas|while|and)\b", statement, flags=re.I):
@@ -97,12 +110,16 @@ stimuli:
                               mtp = next(iter(versions)) if len(versions) == 1 else None
                           if sdks:
                               sdk = next(iter(sdks)) if len(sdks) == 1 else None
-                          bridge = re.search(r"\b(?:bridg(?:e[sd]?|ing)|VSTest)\b", clause, re.I)
-                          negative = re.search(r"\b(?:cannot|can't|does not|doesn't|no longer|removes?|removed|unsupported|incompatible|not supported|unavailable)\b", clause, re.I)
+                          negative = re.search(unavailable, clause, re.I)
                           reversed_negative = re.search(r"\b(?:not|never)\s+(?:unsupported|incompatible|unavailable)\b", clause, re.I)
-                          if mtp == "2" and sdk == "10" and bridge and negative and not reversed_negative:
-                              return
-                  raise AssertionError("Missing correlated MTP 2 / SDK 10 negative bridge statement")
+                          if mtp == "2" and sdk == "10":
+                              assert not (
+                                  re.search(r"\b(?:cannot|can't|does not|doesn't|never)\s+(?:fail|error|break)\b", clause, re.I)
+                                  and re.search(bridge, clause, re.I)
+                              ), "Negated failure claims bridge availability, not incompatibility"
+                              assert not reversed_negative, "Bridge incompatibility was negated"
+                              found = found or bool(negative)
+                  assert found, "Missing correlated MTP 2 / SDK 10 negative bridge relationship"
 
               if __name__ == "__main__":
                   data = json.loads(pathlib.Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))

@@ -102,6 +102,17 @@ class DiscoveryContractTests(unittest.TestCase):
                 self.assertNotIn("output-matches", failures)
                 self.assertIn("program", failures)
 
+    def test_other_command_lines_and_duplicate_lanes_are_rejected(self):
+        for extra in (
+            "make test", "npm test", "go test ./...", "pytest", "./run-tests.sh",
+            "arbitrary-command --run-tests", "$ make test", "> MAKE test", "`make test`",
+            "```shell\nmake test\n```", COMMANDS[0],
+        ):
+            with self.subTest(extra=extra):
+                self.assertIn("program", self.failed_graders(GOLDEN + "\n" + extra))
+        self.assertEqual([], self.failed_graders(
+            GOLDEN + "\nThe three commands list tests only; they do not run test bodies."
+        ))
     def test_required_options_in_comments_do_not_satisfy_a_lane(self):
         for index, command in (
             (0, "dotnet test VSTest.slnx --no-build # --list-tests"),

@@ -7,6 +7,7 @@ import unittest
 import yaml
 
 import replay
+import migration_cleanliness
 
 
 SPEC = Path(__file__).resolve().parent.parent / "migrate-xunit-to-mstest" / "eval.yaml"
@@ -30,6 +31,84 @@ def check(case, root):
 
 
 class MigrationCleanlinessTests(unittest.TestCase):
+    def test_source_derived_body_contracts_allow_only_migration_and_formatting_changes(self):
+        for case in CASES:
+            diagnostics = case["name"] == NAMES[0]
+            filename = "DiagnosticsTests.cs" if diagnostics else "CollectionTests.cs"
+            names = ("CompletesNormally",) if diagnostics else ("FirstCase", "SecondCase")
+            original_entry = next(item for item in case["environment"]["files"] if item["dest"] == filename)
+            original = (SPEC.parent / original_entry["src"]).read_text(encoding="utf-8")
+            expected = migration_cleanliness.test_body_digest(original, names)
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                replay.materialize(SPEC, case, root)
+                source = root / filename
+                golden = source.read_text(encoding="utf-8")
+                self.assertEqual(expected, migration_cleanliness.test_body_digest(golden, names))
+                self.assertIn(expected, case["graders"][0]["config"]["command"])
+                formatted = golden.replace(
+                    "Assert.", "global::Microsoft.VisualStudio.TestTools.UnitTesting.Assert."
+                ).replace("Environment.", "global::System.Environment.")
+                formatted = formatted.replace("(", " /* unchanged argument */ ( ")
+                if diagnostics:
+                    formatted = formatted.replace("=>", "{").replace(">= 8);", ">= 8); }")
+                source.write_text(formatted, encoding="utf-8")
+                check(case, root)
+
+    def test_weakened_assertions_still_run_but_fail_the_source_invariant(self):
+        for case in CASES:
+            diagnostics = case["name"] == NAMES[0]
+            filename = "DiagnosticsTests.cs" if diagnostics else "CollectionTests.cs"
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                replay.materialize(SPEC, case, root)
+                source = root / filename
+                golden = source.read_text(encoding="utf-8")
+                if diagnostics:
+                    weakened = golden.replace("Assert.IsTrue(Environment.Version.Major >= 8)", "Assert.IsTrue(true)")
+                else:
+                    weakened = golden.replace("Assert.AreEqual(5, 2 + 3);", "").replace(
+                        "Assert.AreEqual(1, -2 + 3);", ""
+                    )
+                self.assertNotEqual(golden, weakened)
+                source.write_text(weakened, encoding="utf-8")
+                runtime_only = dict(case, graders=[
+                    grader for grader in case["graders"]
+                    if grader["type"] in {"program", "run-command"} and
+                    "migration_cleanliness.py" not in grader["config"].get("command", "")
+                ])
+                replay.run_graders(runtime_only, root)
+                with self.assertRaisesRegex(AssertionError, "Original test-body assertions changed"):
+                    check(case, root)
+
+    def test_test_body_mutations_cannot_hide_behind_comments_or_dead_code(self):
+        for case in CASES:
+            diagnostics = case["name"] == NAMES[0]
+            filename = "DiagnosticsTests.cs" if diagnostics else "CollectionTests.cs"
+            statements = (
+                ("Assert.IsTrue(Environment.Version.Major >= 8);",) if diagnostics else
+                ("Assert.AreEqual(5, 2 + 3);", "Assert.AreEqual(1, -2 + 3);")
+            )
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                replay.materialize(SPEC, case, root)
+                source = root / filename
+                golden = source.read_text(encoding="utf-8")
+                if diagnostics:
+                    golden = golden.replace("=>", "{").replace(">= 8);", ">= 8); }")
+                for statement in statements:
+                    for replacement in (
+                        "", "Assert.IsTrue(true);", "/* " + statement + " */",
+                        'var old = "' + statement + '";', "if (false) { " + statement + " }",
+                        "return; " + statement,
+                    ):
+                        with self.subTest(statement=statement, replacement=replacement):
+                            source.write_text(golden.replace(statement, replacement), encoding="utf-8")
+                            with self.assertRaisesRegex(AssertionError, "Original test-body assertions changed"):
+                                check(case, root)
+                source.write_text(golden, encoding="utf-8")
+                check(case, root)
+
     def test_both_goldens_reject_retained_packages(self):
         self.assertEqual(2, len(CASES))
         for case in CASES:

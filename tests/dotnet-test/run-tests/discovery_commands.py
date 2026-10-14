@@ -104,13 +104,16 @@ def validate_command(command):
         assert positional == ["VSTest.slnx"] and after is None, "Invalid VSTest solution"
         assert flags & {"--list-tests", "-t"}, "Missing VSTest discovery"
     assert after is None or "--no-build" not in after, "SDK option forwarded to the application"
+    return solution or positional[0]
 
 
 def validate_output(response):
     assert isinstance(response, str) and response.strip(), "Missing command response"
     fenced = False
+    lanes = []
     for original in response.splitlines():
         line = original.strip()
+        code_span = False
         if line.startswith(("```", "~~~")):
             fenced = not fenced
             continue
@@ -118,11 +121,13 @@ def validate_output(response):
             # Inline code in prose is a mention; a whole-line code span is a command.
             if line.startswith("`") and line.endswith("`") and line.count("`") == 2:
                 line = line[1:-1]
+                code_span = True
             elif not re.search(
                 r"\bdotnet(?:\.exe)?[\"']?\s+\w+", line.split("`", 1)[0], re.I
             ):
                 line = re.sub(r"`[^`]+`", "", line)
-        if line.startswith(("$ ", "> ")):
+        prompted = line.startswith(("$ ", "> "))
+        if prompted:
             line = line[2:].lstrip()
         caution = re.match(
             r"^(?:avoid\s+(?:running|using|executing|invoking|chaining)|"
@@ -134,16 +139,26 @@ def validate_output(response):
         ):
             continue
         if not re.search(r"\bdotnet(?:\.exe)?\b", line, re.I):
-            assert not fenced or not line or line.startswith("#"), (
-                "Unrecognized command in a discovery-only code block"
-            )
+            if line and not line.startswith("#"):
+                sentence = bool(re.search(r"[.!?]$", line)) and not line.endswith("./...")
+                command_shaped = not sentence and bool(re.fullmatch(
+                    r"(?:[./\\]|[A-Za-z]:[\\/])\S+(?:\s+.*)?|"
+                    r"[a-z][a-z0-9_.-]*(?:[ \t]+(?:[-./\\\w=]+|\"[^\"]*\"|'[^']*'))*",
+                    line,
+                ))
+                assert not (fenced or code_span or prompted or command_shaped), (
+                    "Additional command outside the requested discovery lanes"
+                )
             continue
         parsed = tokens(line)
         if not parsed:
             continue
         assert not any(operator for _, operator in parsed), "Compound commands are not standalone"
         command = [value for value, _ in parsed]
-        validate_command(command)
+        lanes.append(validate_command(command))
+    assert sorted(lanes) == ["Bridge.slnx", "Native.slnx", "VSTest.slnx"], (
+        "Expected exactly one command for each discovery lane"
+    )
 
 
 def main():

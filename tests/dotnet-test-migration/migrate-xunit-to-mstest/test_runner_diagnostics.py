@@ -39,6 +39,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds was not a timeout; it warns.",
             "longRunningTestSeconds is a diagnostic warning rather than an enforced timeout.",
             "longRunningTestSeconds emits a warning instead of failing the test.",
+            "longRunningTestSeconds emits diagnostics rather than enforcing a timeout.",
+            "longRunningTestSeconds emits diagnostics. It does not fail tests.",
         ):
             with self.subTest(valid=response):
                 REPORT["validate_diagnostic_report"](response)
@@ -51,6 +53,8 @@ class RunnerDiagnosticTests(unittest.TestCase):
             "longRunningTestSeconds warns, but also enforces a timeout.",
             "longRunningTestSeconds is an enforced timeout rather than a diagnostic warning.",
             "longRunningTestSeconds fails tests instead of warning.",
+            "longRunningTestSeconds does not emit diagnostics; it enforces a timeout.",
+            "longRunningTestSeconds emits diagnostics and fails slow tests.",
             "longRunningTestSeconds is non-diagnostic.",
             "longRunningTestSeconds was migrated. diagnosticMessages emits warnings.",
             "The project contains diagnostics and timeouts.",
@@ -67,6 +71,8 @@ const { config, root, golden } = JSON.parse(readFileSync(0, "utf8"));
 const grader = new ProgramGrader();
 for (const [output, passed] of [
   [golden, true],
+  ["longRunningTestSeconds emits diagnostics rather than enforcing a timeout.", true],
+  ["longRunningTestSeconds does not emit diagnostics; it enforces a timeout.", false],
   ["longRunningTestSeconds was not a diagnostic warning; it was an enforced timeout.", false],
 ]) {
   const result = await grader.grade({ config, trajectory: { workDir: root, output } });

@@ -50,8 +50,9 @@ stimuli:
           command: >-
             python -c "import hashlib,pathlib,sys;
             p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='1e74e999a4d11fd4c9734abd2017544efc54103bb3b6ac6c82a08603707f990c','Migration cleanliness verifier changed';
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='91b71bc7343f3e5013d0c60fc465ad13f1e7bb99729b9b0794adca6594efd0af','Migration cleanliness verifier changed';
             sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" --forbid-timeouts
+            --test-bodies diagnostics:3bcf3897cb941e9e9880a599b332b359c2e1334853af4fd8f742efb62cab8d68:DiagnosticsTests.cs
           expected_exit_code: 0
           timeout: 1m
       - type: run-command
@@ -82,7 +83,7 @@ stimuli:
                   active = described = False
                   continuation = (
                       r"^(?:its?\b|(?:this|that|the)\s+(?:source\s+)?(?:setting|option|threshold)\b|"
-                      r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostic|"
+                      r"(?:(?:also|still|then)\s+)?(?:not|never|does|is|was|only|merely|diagnostics?|"
                       r"warns?|fail(?:ures?|s|ing)?|enforc(?:es?|ed|ing)|timeouts?|deadlines?)\b)"
                   )
                   negative = r"\b(?:not|never|no|cannot|can't|doesn't|isn't|wasn't|without)\b"
@@ -95,7 +96,7 @@ stimuli:
                       )
                       if not active:
                           continue
-                      warning = re.search(r"\b(?:diagnostic(?:-only)?|warnings?|warns?)\b", clause, re.I)
+                      warning = re.search(r"\b(?:diagnostics?(?:-only)?|warnings?|warns?)\b", clause, re.I)
                       if warning:
                           assert not re.search(negative + r"|\bnon[- ]$", clause[:warning.start()], re.I), "Source diagnostic warning was negated"
                           described = True
@@ -171,8 +172,9 @@ stimuli:
           command: >-
             python -c "import hashlib,pathlib,sys;
             p=pathlib.Path('.eval/migration_cleanliness.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='1e74e999a4d11fd4c9734abd2017544efc54103bb3b6ac6c82a08603707f990c','Migration cleanliness verifier changed';
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='91b71bc7343f3e5013d0c60fc465ad13f1e7bb99729b9b0794adca6594efd0af','Migration cleanliness verifier changed';
             sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})"
+            --test-bodies collection:feb5a8647f8474c997768b5dfc61e8eb8f8130e2e3e02d9f1702156c7cf63c20:CollectionTests.cs
           expected_exit_code: 0
           timeout: 1m
       - type: program
