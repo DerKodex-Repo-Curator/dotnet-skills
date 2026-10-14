@@ -90,6 +90,15 @@ package versions, authenticate unchanged production/test files before and after
 execution, and require the production library to retain its target framework
 and enabled nullable analysis.
 
+File hashes alone do not establish compiler participation. Executable migration
+cases bind each project's target-time compile items and actual C# compiler
+arguments to its declared source set, then execute the verified build without
+rebuilding it.
+Excluding an authenticated file or compiling an uncontracted replacement fails
+even when reported case names and outcomes are unchanged.
+These checks are scoped to the Debug/net8.0 fixtures and their known SDK/package
+generated inputs, not a general-purpose MSBuild analyzer or sandbox.
+
 Checkpoint replays copy each checkpoint alone outside the delivered workspace,
 reject symlinks, Windows junctions and external compile/project/import references, and authenticate
 production/test tokens after normalizing only the required framework rewrites.

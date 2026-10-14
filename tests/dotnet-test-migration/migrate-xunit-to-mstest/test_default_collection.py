@@ -270,6 +270,90 @@ public class UnrelatedTests
                     with self.assertRaisesRegex(AssertionError, "Source invariant changed"):
                         replay.run_graders(CASE, root)
 
+    def assert_native_collection_passes(self, root, selections):
+        (root / "CollectionSchedulingContract.cs").write_bytes(
+            (root / ".eval" / "CollectionSchedulingContract.txt").read_bytes()
+        )
+        for selected in selections:
+            command = [
+                sys.executable, ".eval/migration_evidence.py", "run",
+                "--project", "TestProject.csproj", "--runner", "vstest",
+                "--mstest-major", "4", "--lifecycle",
+                "--unchanged-file",
+                "bbadd2d5430f817f830d9a34899bc1bc9d99aae2dcd20815a4d1615b28c2f7b5:LifecycleProbe.cs",
+                "--source-contract",
+                "collection-tests:feb5a8647f8474c997768b5dfc61e8eb8f8130e2e3e02d9f1702156c7cf63c20:CollectionTests.cs",
+            ]
+            for name in selected:
+                command += ["--expect", name + "=Passed"]
+            if len(selected) == 1:
+                command += ["--runner-arg=--filter", "--runner-arg=Name=" + selected[0]]
+            result = subprocess.run(
+                command, cwd=root, capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=210,
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            evidence = json.loads(result.stdout)
+            self.assertEqual(
+                {name: "Passed" for name in selected},
+                {name: case["outcome"] for name, case in evidence["cases"].items()},
+            )
+            self.assertIn("CollectionTests.cs", evidence["source_invariants"])
+            directory = Path(next(iter(evidence["reports"]))).parent
+            self.assertEqual(
+                "assembly-serial",
+                (directory / "lifecycle.scheduling.json").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                "sole-collection-run",
+                (directory / "lifecycle.lifetime.json").read_text(encoding="utf-8"),
+            )
+
+    def test_excluded_authenticated_source_cannot_be_replaced(self):
+        with tempfile.TemporaryDirectory(prefix="collection-source-exclusion-", dir=SPEC.parent) as parent:
+            root = self.workspace(parent)
+            source = root / "CollectionTests.cs"
+            original = source.read_bytes()
+            replacement = original.decode("utf-8").replace(
+                "Assert.AreEqual(5, 2 + 3)", "Assert.IsTrue(true)"
+            ).replace("Assert.AreEqual(1, -2 + 3)", "Assert.IsTrue(true)")
+            self.assertEqual(2, replacement.count("Assert.IsTrue(true)"))
+            (root / "ReplacementTests.cs").write_text(replacement, encoding="utf-8")
+            project = root / "TestProject.csproj"
+            project.write_text(project.read_text(encoding="utf-8").replace(
+                "</Project>",
+                '<ItemGroup><Compile Remove="CollectionTests.cs" /></ItemGroup>\n</Project>',
+            ), encoding="utf-8")
+
+            # Disk invariants and native full/filtered execution alone accept the replacement.
+            self.assert_native_collection_passes(
+                root, (("FirstCase", "SecondCase"), ("FirstCase",), ("SecondCase",))
+            )
+            with self.assertRaisesRegex(AssertionError, "Compiler input contract") as failure:
+                replay.run_graders(CASE, root)
+            self.assertRegex(str(failure.exception), r"missing.*CollectionTests\.cs")
+            self.assertRegex(str(failure.exception), r"uncontracted.*ReplacementTests\.cs")
+            self.assertEqual(original, source.read_bytes())
+
+    def test_extra_compile_source_is_rejected_with_authenticated_source_retained(self):
+        with tempfile.TemporaryDirectory(prefix="collection-extra-source-", dir=SPEC.parent) as parent:
+            root = self.workspace(parent)
+            source = root / "CollectionTests.cs"
+            original = source.read_bytes()
+            (root / "ReplacementAssertions.cs").write_text(
+                "using Microsoft.VisualStudio.TestTools.UnitTesting;\n"
+                "internal static class ReplacementAssertions\n"
+                "{\n"
+                "    internal static void Verify() => Assert.IsTrue(true);\n"
+                "}\n",
+                encoding="utf-8",
+            )
+            self.assert_native_collection_passes(root, (("FirstCase", "SecondCase"),))
+            with self.assertRaisesRegex(AssertionError, "Compiler input contract") as failure:
+                replay.run_graders(CASE, root)
+            self.assertRegex(str(failure.exception), r"uncontracted.*ReplacementAssertions\.cs")
+            self.assertEqual(original, source.read_bytes())
+
     def test_original_xunit_fixture_is_healthy_and_shares_one_resource(self):
         with tempfile.TemporaryDirectory(prefix="collection-baseline-") as parent:
             root = Path(parent)

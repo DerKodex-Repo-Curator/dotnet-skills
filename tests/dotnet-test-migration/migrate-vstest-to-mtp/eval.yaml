@@ -350,10 +350,13 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e03299ec2ea3ba3b4780dfd5a2bce0ee0c0c97a33c055a7bb2a8a31639c67e1e','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner native --mstest-major 4 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 4.4.1 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj
+            --compile-source Alpha.Tests/Alpha.Tests.csproj=Alpha.Tests/AdditionTests.cs
+            --compile-source Beta.Tests/Beta.Tests.csproj=Beta.Tests/BoundaryTests.cs
+            --compile-source Library/Library.csproj=Library/Arithmetic.cs
             --expect alpha-negative=Passed --expect BetaZero=Passed --expect BetaDeferred=NotExecuted
             --skip-reason "BetaDeferred=Requires tracked service TEST-84"
             --unchanged-file 2f8a08e82b141477af710f08bab1ee8d87231aaff9a78a151e67074be50d0c78:Library/Arithmetic.cs
@@ -394,10 +397,13 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='e03299ec2ea3ba3b4780dfd5a2bce0ee0c0c97a33c055a7bb2a8a31639c67e1e','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner bridge --mstest-major 3 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 3.8.0 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj
+            --compile-source Alpha.Tests/Alpha.Tests.csproj=Alpha.Tests/AdditionTests.cs
+            --compile-source Beta.Tests/Beta.Tests.csproj=Beta.Tests/BoundaryTests.cs
+            --compile-source Library/Library.csproj=Library/Arithmetic.cs
             --expect alpha-negative=Passed --expect BetaZero=Passed --expect BetaDeferred=NotExecuted
             --unchanged-file 2e2de8b4bda10afae6b01e15e8dd5e6d98c9871c6a71d10a6dc647190d55a108:Beta.Tests/BoundaryTests.cs
             --unchanged-file 30a13ee040dab198e8f828f506e830b620ce289ef9d5b24aae4d2cd3822e3d43:Alpha.Tests/AdditionTests.cs

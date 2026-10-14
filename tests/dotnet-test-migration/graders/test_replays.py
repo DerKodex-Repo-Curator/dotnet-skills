@@ -1,6 +1,8 @@
 """Real broken-workspace mutations for the scoped migration eval contracts."""
 
 from pathlib import Path
+import copy
+import re
 import subprocess
 import shutil
 import tempfile
@@ -15,6 +17,117 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReplayTests(unittest.TestCase):
+    def compiler_mutation(self, suite, prefix, project, source, before, after,
+                          mutation="replacement", baseline=False):
+        spec = ROOT / suite / "eval.yaml"
+        stimulus = next(case for case in yaml.safe_load(
+            spec.read_text(encoding="utf-8")
+        )["stimuli"] if case["name"].startswith(prefix))
+        with tempfile.TemporaryDirectory(prefix="compiler-mutation-") as temporary:
+            workspace = Path(temporary)
+            materialize(spec, stimulus, workspace)
+            path = workspace / source
+            original = path.read_bytes()
+            replacement = path.parent / "Replacement.cs"
+            if mutation != "missing":
+                text = path.read_text(encoding="utf-8")
+                self.assertIn(before, text)
+                replacement.write_text(
+                    "internal class ExtraFixtureSource {}" if mutation == "extra"
+                    else text.replace(before, after), encoding="utf-8"
+                )
+            project_path = workspace / project
+            checkpoint = project_path.parents[1] if "checkpoints/" in project else workspace
+            condition = f"'$(MSBuildProjectName)' == '{project_path.stem}'"
+            remove = f'<Compile Remove="{path.name}" />'
+            if mutation in {"target-time", "restored"}:
+                items = (
+                    '<ItemGroup><Compile Remove="Replacement.cs" /></ItemGroup>'
+                    f'<Target Name="ReplaceFixture" BeforeTargets="CoreCompile" Condition="{condition}">'
+                    f'<ItemGroup>{remove}<Compile Include="Replacement.cs" /></ItemGroup></Target>'
+                )
+                if mutation == "restored":
+                    items += (
+                        f'<Target Name="RestoreFixtureItems" AfterTargets="CoreCompile" Condition="{condition}">'
+                        '<ItemGroup><Compile Remove="Replacement.cs" />'
+                        f'<Compile Include="{path.name}" /></ItemGroup></Target>'
+                    )
+            else:
+                items = f'<ItemGroup Condition="{condition}">{remove if mutation != "extra" else ""}</ItemGroup>'
+            (checkpoint / "Directory.Build.targets").write_text(
+                f"<Project>{items}</Project>", encoding="utf-8"
+            )
+            if baseline:
+                without_contract = copy.deepcopy(stimulus)
+                for grader in without_contract["graders"]:
+                    if grader["type"] == "run-command":
+                        grader["config"]["command"] = re.sub(
+                            r" --compile-source \S+", "", grader["config"]["command"]
+                        )
+                run_graders(without_contract, workspace)
+                self.assertEqual(original, path.read_bytes())
+            with self.assertRaisesRegex(AssertionError, "Compiler input contract") as rejected:
+                run_graders(stimulus, workspace)
+            diagnostic = rejected.exception.args[0][-1]
+            if mutation == "restored":
+                self.assertIn("disagrees with actual Csc inputs", diagnostic)
+                self.assertIn("Replacement.cs", diagnostic)
+            else:
+                if mutation != "extra":
+                    self.assertRegex(diagnostic, r"'missing': \[[^\]]*" + re.escape(path.name))
+                if mutation != "missing":
+                    self.assertRegex(diagnostic, r"'uncontracted': \[[^\]]*Replacement\.cs")
+            self.assertEqual(original, path.read_bytes())
+
+    def test_each_staged_compilation_requires_the_authenticated_source(self):
+        for stage in ("checkpoints/v3/", "checkpoints/v4/", ""):
+            with self.subTest(stage=stage or "final"):
+                self.compiler_mutation(
+                    "agent.test-migration", "Deliver staged",
+                    stage + "OrderTests/OrderTests.csproj",
+                    stage + "OrderTests/OrderServiceTests.cs",
+                    'Assert.AreEqual("item-1", order.ItemId)', 'Assert.AreEqual("item-1", "item-1")',
+                )
+
+    def test_upgrade_rejects_excluded_missing_extra_and_target_time_sources(self):
+        for mutation in ("replacement", "missing", "extra", "target-time", "restored"):
+            with self.subTest(mutation=mutation):
+                self.compiler_mutation(
+                    "migrate-mstest-v3-to-v4", "Verified MSTest",
+                    "TestProject.csproj", "OrderServiceTests.cs",
+                    "Assert.AreEqual(42, orderId)", "Assert.AreEqual(orderId, orderId)",
+                    mutation=mutation,
+                )
+
+    def test_native_and_bridge_reject_replacements_in_every_project(self):
+        for prefix in ("Deliver native", "Keep the explicit"):
+            for project, source, before, after in (
+                ("Alpha.Tests/Alpha.Tests.csproj", "Alpha.Tests/AdditionTests.cs",
+                 "Assert.AreEqual(expected, Arithmetic.Add(left, right))",
+                 "Assert.AreEqual(expected, expected)"),
+                ("Beta.Tests/Beta.Tests.csproj", "Beta.Tests/BoundaryTests.cs",
+                 "Assert.AreEqual(0, Arithmetic.Add(0, 0))", "Assert.IsTrue(true)"),
+                ("Library/Library.csproj", "Library/Arithmetic.cs",
+                 "checked(left + right)", "left + right"),
+            ):
+                with self.subTest(runner=prefix, project=project):
+                    self.compiler_mutation(
+                        "migrate-vstest-to-mtp", prefix, project, source, before, after,
+                        baseline=(prefix == "Deliver native" and project.startswith("Alpha.")
+                                  or prefix == "Keep the explicit" and project.startswith("Beta.")),
+                    )
+
+    def test_native_and_bridge_reject_missing_and_extra_sources(self):
+        for prefix in ("Deliver native", "Keep the explicit"):
+            for mutation in ("missing", "extra", "target-time"):
+                with self.subTest(runner=prefix, mutation=mutation):
+                    self.compiler_mutation(
+                        "migrate-vstest-to-mtp", prefix,
+                        "Alpha.Tests/Alpha.Tests.csproj", "Alpha.Tests/AdditionTests.cs",
+                        "Assert.AreEqual(expected, Arithmetic.Add(left, right))",
+                        "Assert.AreEqual(expected, expected)", mutation=mutation,
+                    )
+
     def broken_golden(self, suite, name, filename, before, after, failure):
         spec = ROOT / suite / "eval.yaml"
         stimulus = next(case for case in yaml.safe_load(

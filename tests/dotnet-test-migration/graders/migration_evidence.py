@@ -212,6 +212,113 @@ def verify_runner(effective, native, runner):
         assert bridge == (runner == "bridge"), effective
 
 
+def compiler_path(directory, value, root=None):
+    path = directory / value.strip('"').replace("\\", "/")
+    if root is not None:
+        # Inspect links before resolving their targets. Resolve only each link's
+        # parent for scope comparisons so Windows short/long names are equivalent.
+        assert not is_linked_path(root) and not any(
+            is_linked_path(parent) and parent.parent.resolve().is_relative_to(root.resolve())
+            for parent in (path, *path.parents)
+        ), (
+            "Compiler input contract source uses a symlink or junction", str(path)
+        )
+    return path.resolve()
+
+
+def compile_contracts(root, contracts, projects):
+    allowed = {}
+    for contract in contracts:
+        project, source = contract.split("=", 1)
+        paths = []
+        for value in (project, source):
+            assert not PureWindowsPath(value).drive and not Path(value).is_absolute(), (
+                f"Compiler input contract paths must be workspace-relative: {value}"
+            )
+            path = compiler_path(root, value, root)
+            assert path.is_relative_to(root.resolve()) and path.is_file(), (
+                f"Compiler input contract path is missing or external: {value}"
+            )
+            paths.append(path)
+        allowed.setdefault(paths[0], set()).add(paths[1])
+    if contracts:
+        assert set(allowed) == {compiler_path(root, project) for project in projects}, (
+            "Compiler input contract must cover every test and production project", projects
+        )
+    return allowed
+
+
+def verify_compile_inputs(root, project, expected, build):
+    project = compiler_path(root, str(project), root)
+    expected = {compiler_path(root, str(path), root) for path in expected}
+    directory = project.parent
+    properties = build["Properties"]
+    sdk = Path(properties["MSBuildToolsPath"]).resolve()
+    packages = Path(properties["NuGetPackageRoot"]).resolve()
+    assert not sdk.is_relative_to(root.resolve()) and not packages.is_relative_to(root.resolve()), (
+        "Compiler input contract requires external SDK and package generation targets"
+    )
+    intermediate = directory / "obj" / "Debug" / "net8.0"
+    generated = {
+        intermediate / ".NETCoreApp,Version=v8.0.AssemblyAttributes.cs":
+            sdk / "Microsoft.Common.CurrentVersion.targets",
+        intermediate / f"{project.stem}.AssemblyInfo.cs":
+            sdk / "Sdks" / "Microsoft.NET.Sdk" / "targets" / "Microsoft.NET.GenerateAssemblyInfo.targets",
+        intermediate / f"{project.stem}.GlobalUsings.g.cs":
+            sdk / "Sdks" / "Microsoft.NET.Sdk" / "targets" / "Microsoft.NET.GenerateGlobalUsings.targets",
+    }
+    assets = json.loads((directory / "obj" / "project.assets.json").read_text(encoding="utf-8"))
+    for package in assets["libraries"]:
+        name, version = package.split("/", 1)
+        if name.lower() == "microsoft.net.test.sdk":
+            target = packages / name.lower() / version / "build" / "netcoreapp3.1"
+            generated[target / "Microsoft.NET.Test.Sdk.Program.cs"] = target / "Microsoft.NET.Test.Sdk.targets"
+        if name.lower() == "microsoft.testing.platform.msbuild":
+            target = (packages / name.lower() / version / "buildMultiTargeting" /
+                      "Microsoft.Testing.Platform.MSBuild.targets")
+            for filename in ("MicrosoftTestingPlatformEntryPoint.cs", "TestPlatformEntryPoint.cs",
+                             "SelfRegisteredExtensions.cs"):
+                generated[intermediate / filename] = target
+    generated = {path.resolve(): target.resolve() for path, target in generated.items()}
+    items = build["Items"]
+    compile_items = {
+        compiler_path(directory, item["FullPath"], root): item
+        for item in items.get("Compile", [])
+    }
+    # Csc's emitted arguments bind the check to the compilation, not evaluation or a
+    # Compile list restored by an AfterTargets hook. No arbitrary obj/Generated exemption.
+    sources = set()
+    for item in items.get("CscCommandLineArgs", []):
+        value = item["Identity"].strip('"')
+        assert not value.startswith("@"), "Compiler input contract forbids response-file indirection"
+        if not re.match(r"^[/-][A-Za-z][A-Za-z0-9]*[+-]?(?::|$)", value):
+            sources.add(compiler_path(directory, value, root))
+    assert sources and sources == set(compile_items), (
+        "Compiler input contract disagrees with actual Csc inputs", str(project),
+        sorted(map(str, sources)), sorted(map(str, compile_items)),
+    )
+    missing = expected - sources
+    extra = {
+        path for path in sources - expected
+        if path not in generated or compiler_path(
+            directory, compile_items[path].get("DefiningProjectFullPath", "")
+        ) != generated[path]
+    }
+    assert not missing and not extra, (
+        "Compiler input contract", str(project),
+        {"missing": sorted(map(str, missing)), "uncontracted": sorted(map(str, extra))},
+    )
+    for path in sources:
+        assert path.is_file() and (path.is_relative_to(root.resolve()) or path in generated), (
+            "Compiler input contract has missing or external source", str(path)
+        )
+    return {
+        (path.relative_to(root.resolve()).as_posix()
+         if path.is_relative_to(root.resolve()) else path.as_posix()): sha256(path)
+        for path in sorted(sources)
+    }
+
+
 def run(args, root=None):
     root = Path.cwd() if root is None else root
     source_invariants = verify_sources(root, args.source_contract)
@@ -268,17 +375,33 @@ def run(args, root=None):
         if args.mstest_major or args.mstest_version:
             verify_mstest_packages(assets, filename, args.mstest_major, args.mstest_version)
         package_projects[filename] = sorted(assets)
+    contracts = compile_contracts(
+        root, args.compile_source, [*package_projects, *args.production_project]
+    )
+    compiler_inputs = {}
+    for index, (filename, expected_sources) in enumerate(contracts.items()):
+        build = json.loads(execute(
+            ["dotnet", "msbuild", str(filename), "-t:Rebuild", "-p:ProvideCommandLineArgs=true",
+             "-getItem:Compile,CscCommandLineArgs", "-getProperty:MSBuildToolsPath,NuGetPackageRoot"],
+            root, evidence, f"compile-{index}",
+        ).stdout)
+        verify_unchanged_files(root, args.unchanged_file)
+        verify_sources(root, args.source_contract)
+        compiler_inputs[filename.relative_to(root.resolve()).as_posix()] = verify_compile_inputs(
+            root, filename, expected_sources, build
+        )
     target = args.solution or str(project)
+    no_build = ["--no-build"] if contracts else []
     if args.runner == "vstest":
         command = [
-            "dotnet", "test", target, "--logger",
+            "dotnet", "test", target, *no_build, "--logger",
             "trx", "--results-directory", str(evidence),
         ]
     else:
         command = ["dotnet", "test"]
         command += [
             "--solution" if args.solution else "--project", target
-        ] if native else [target, "--"]
+        ] + no_build if native else [target, *no_build, "--"]
         command += [
             "--report-trx", "--results-directory", str(evidence),
         ]
@@ -334,6 +457,7 @@ def run(args, root=None):
         "cases": cases,
         "preserved_files": preserved,
         "source_invariants": source_invariants,
+        "compiler_inputs": compiler_inputs,
         "reports": {str(report): sha256(report) for report in reports},
     }
     (evidence / "evidence.json").write_text(
@@ -409,6 +533,7 @@ def main():
     test.add_argument("--runner-arg", action="append", default=[])
     test.add_argument("--unchanged-file", action="append", default=[])
     test.add_argument("--source-contract", action="append", default=[])
+    test.add_argument("--compile-source", action="append", default=[], metavar="PROJECT=SOURCE")
     args = parser.parse_args()
     if args.operation == "preserve":
         preserve(args.root, {

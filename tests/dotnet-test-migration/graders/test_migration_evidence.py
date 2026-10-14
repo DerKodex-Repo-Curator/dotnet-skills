@@ -1,4 +1,6 @@
 import importlib.util
+import copy
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -14,6 +16,155 @@ SPEC.loader.exec_module(evidence)
 
 
 class EvidenceTests(unittest.TestCase):
+    def compiler_fixture(self, directory):
+        root = Path(directory) / "workspace"
+        root.mkdir()
+        project = root / "Tests.csproj"
+        project.write_text('<Project Sdk="Microsoft.NET.Sdk" />')
+        source = root / "Tests.cs"
+        source.write_text("class Tests {}")
+        generated = root / "obj" / "Debug" / "net8.0" / "Tests.AssemblyInfo.cs"
+        generated.parent.mkdir(parents=True)
+        generated.write_text("// generated assembly attributes")
+        (root / "obj" / "project.assets.json").write_text('{"libraries": {}}')
+        sdk = Path(directory) / "sdk"
+        build = {
+            "Properties": {"MSBuildToolsPath": str(sdk),
+                           "NuGetPackageRoot": str(Path(directory) / "packages")},
+            "Items": {
+                "Compile": [
+                    {"FullPath": str(source), "DefiningProjectFullPath": str(project)},
+                    {"FullPath": str(generated), "DefiningProjectFullPath": str(
+                        sdk / "Sdks" / "Microsoft.NET.Sdk" / "targets" /
+                        "Microsoft.NET.GenerateAssemblyInfo.targets")},
+                ],
+                "CscCommandLineArgs": [
+                    {"Identity": "/reference:Some.Reference.dll"},
+                    {"Identity": str(source)}, {"Identity": str(generated)},
+                    {"Identity": "/warnaserror+:NU1605"},
+                ],
+            },
+        }
+        return root, project, source, build
+
+    def test_compiler_contract_accepts_aliases_and_sdk_generated_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, build = self.compiler_fixture(directory)
+            contracts = evidence.compile_contracts(
+                root, ["./Tests.csproj=./Tests.cs"], ["Tests.csproj"]
+            )
+            build["Items"]["CscCommandLineArgs"][1]["Identity"] = '"./Tests.cs"'
+            actual = evidence.verify_compile_inputs(root, project, contracts[project.resolve()], build)
+            self.assertEqual({"Tests.cs", "obj/Debug/net8.0/Tests.AssemblyInfo.cs"}, set(actual))
+            self.assertEqual({project.resolve(): {source.resolve()}}, contracts)
+
+    def test_compiler_contract_rejects_missing_and_uncontracted_inputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, original = self.compiler_fixture(directory)
+            for mutation in ("missing", "replacement", "extra", "generated-metadata", "obj-file",
+                             "forged-sdk-filename", "restored-after-compile"):
+                build = copy.deepcopy(original)
+                items = build["Items"]
+                replacement = root / ("obj/Debug/net8.0/Replacement.cs"
+                                      if mutation == "obj-file" else "Replacement.cs")
+                replacement.write_text("class Replacement {}")
+                with self.subTest(mutation=mutation):
+                    if mutation in {"missing", "replacement", "restored-after-compile"}:
+                        items["CscCommandLineArgs"].pop(1)
+                        if mutation != "restored-after-compile":
+                            items["Compile"].pop(0)
+                    if mutation not in {"missing", "forged-sdk-filename"}:
+                        items["CscCommandLineArgs"].insert(1, {"Identity": str(replacement)})
+                        if mutation != "restored-after-compile":
+                            items["Compile"].append({
+                                "FullPath": str(replacement), "DefiningProjectFullPath": str(project),
+                                "Generated": str(mutation == "generated-metadata"),
+                                "AutoGen": str(mutation == "generated-metadata"),
+                            })
+                    if mutation == "forged-sdk-filename":
+                        items["Compile"][1]["DefiningProjectFullPath"] = str(project)
+                    with self.assertRaisesRegex(AssertionError, "Compiler input contract"):
+                        evidence.verify_compile_inputs(root, project, {source}, build)
+
+    def test_compiler_contract_accepts_only_exact_package_sources_and_provenance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, build = self.compiler_fixture(directory)
+            package = Path(directory) / "packages" / "microsoft.net.test.sdk" / "17.13.0"
+            target = package / "build" / "netcoreapp3.1"
+            target.mkdir(parents=True)
+            program = target / "Microsoft.NET.Test.Sdk.Program.cs"
+            program.write_text("class Program {}")
+            (root / "obj" / "project.assets.json").write_text(json.dumps(
+                {"libraries": {"Microsoft.NET.Test.Sdk/17.13.0": {}}}
+            ))
+            item = {"FullPath": str(program), "DefiningProjectFullPath": str(
+                target / "Microsoft.NET.Test.Sdk.targets")}
+            build["Items"]["Compile"].append(item)
+            build["Items"]["CscCommandLineArgs"].append({"Identity": str(program)})
+            evidence.verify_compile_inputs(root, project, {source}, build)
+            item["DefiningProjectFullPath"] = str(project)
+            with self.assertRaisesRegex(AssertionError, "Compiler input contract"):
+                evidence.verify_compile_inputs(root, project, {source}, build)
+
+    def test_compiler_contract_rejects_response_files_and_linked_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, build = self.compiler_fixture(directory)
+            build["Items"]["CscCommandLineArgs"].append({"Identity": "@sources.rsp"})
+            with self.assertRaisesRegex(AssertionError, "response-file"):
+                evidence.verify_compile_inputs(root, project, {source}, build)
+            link = root / "Linked.cs"
+            link.symlink_to(source)
+            with self.assertRaisesRegex(AssertionError, "symlink or junction"):
+                evidence.compile_contracts(root, ["Tests.csproj=Linked.cs"], ["Tests.csproj"])
+
+    def test_compiler_contract_covers_every_project_and_stays_in_workspace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, build = self.compiler_fixture(directory)
+            for contracts, projects in (
+                (["Tests.csproj=Tests.cs"], ["Tests.csproj", "Omitted.csproj"]),
+                (["Tests.csproj=../outside.cs"], ["Tests.csproj"]),
+                ([f"Tests.csproj={source}"], ["Tests.csproj"]),
+            ):
+                with self.subTest(contracts=contracts), self.assertRaisesRegex(
+                    AssertionError, "Compiler input contract"
+                ):
+                    evidence.compile_contracts(root, contracts, projects)
+
+    def test_compiler_paths_reject_linked_directories_before_canonicalizing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, project, source, build = self.compiler_fixture(directory)
+            link = root / "LinkedDirectory"
+            if os.name == "nt":
+                subprocess.run(
+                    ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
+                     "New-Item -ItemType Junction -Path $env:COMPILE_LINK "
+                     "-Target $env:COMPILE_TARGET | Out-Null"],
+                    env=dict(os.environ, COMPILE_LINK=str(link), COMPILE_TARGET=str(root)),
+                    check=True, capture_output=True, text=True, timeout=30,
+                )
+                self.assertTrue(link.is_junction())
+            else:
+                link.symlink_to(root, target_is_directory=True)
+            try:
+                for directory_arg, root_arg, value in (
+                    (root, root, "LinkedDirectory/Tests.cs"),
+                    (link, root, "Tests.cs"),
+                    (link, link, "Tests.cs"),
+                    (root.resolve(), root, str(link / "Tests.cs")),
+                ):
+                    with self.subTest(directory=directory_arg, root=root_arg, value=value):
+                        with self.assertRaisesRegex(AssertionError, "symlink or junction"):
+                            evidence.compiler_path(directory_arg, value, root_arg)
+                with self.assertRaisesRegex(AssertionError, "symlink or junction"):
+                    evidence.verify_compile_inputs(
+                        root, link / project.name, {link / source.name}, build
+                    )
+            finally:
+                if os.name == "nt":
+                    link.rmdir()
+                else:
+                    link.unlink()
+
     def test_source_contract_normalizes_only_required_framework_rewrites(self):
         root = Path(__file__).resolve().parents[1]
         staged = (root / "agent.test-migration/fixtures/mstest-v2-vstest/OrderServiceTests.cs").read_text()

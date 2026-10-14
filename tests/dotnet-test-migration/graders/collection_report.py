@@ -106,7 +106,7 @@ def main():
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "e03299ec2ea3ba3b4780dfd5a2bce0ee0c0c97a33c055a7bb2a8a31639c67e1e",
+        "42e6109c3dfdd48a48fd159485d89aaaa430b371e3bae7e82dca33ef4af31cfe",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
     runs = []
@@ -115,6 +115,9 @@ def main():
             sys.executable, ".eval/migration_evidence.py", "run",
             "--project", "TestProject.csproj", "--runner", "vstest",
             "--mstest-major", "4", "--lifecycle",
+            "--compile-source", "TestProject.csproj=CollectionTests.cs",
+            "--compile-source", "TestProject.csproj=LifecycleProbe.cs",
+            "--compile-source", "TestProject.csproj=CollectionSchedulingContract.cs",
             "--unchanged-file",
             "bbadd2d5430f817f830d9a34899bc1bc9d99aae2dcd20815a4d1615b28c2f7b5:LifecycleProbe.cs",
             "--source-contract", "collection-tests:feb5a8647f8474c997768b5dfc61e8eb8f8130e2e3e02d9f1702156c7cf63c20:CollectionTests.cs",
