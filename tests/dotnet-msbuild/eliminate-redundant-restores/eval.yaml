@@ -78,7 +78,7 @@ stimuli:
                 throw new Error('Contoso.slnx must be restored, built, then tested in that order');
               }
               const build = steps[buildIndex];
-              if (![build, steps[testIndex]].every(l => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(l))) {
+              if (![build, steps[testIndex]].every(l => /(-c|--configuration)[ =]+Release(?=\s|$)|Configuration=Release(?=[;,\s]|$)/.test(l.replace(/["']/g, '')))) {
                 throw new Error('the solution build and test must keep the Release configuration');
               }
               if (!/--no-build/.test(steps[testIndex])) throw new Error('the solution test must keep --no-build');
@@ -576,6 +576,7 @@ stimuli:
                 throw new Error('dotnet restore does not support --no-restore or --no-build');
               }
               const tests = steps.filter(l => /^dotnet test\b/.test(l));
+              const release = l => /(-c|--configuration)[ =]+Release(?=\s|$)|Configuration=Release(?=[;,\s]|$)/.test(l.replace(/["']/g, ''));
               if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
               for (const project of ['UnitTests', 'IntegrationTests', 'ContractTests']) {
                 if (!tests.some(l => l.includes('tests/Contoso.' + project + '/Contoso.' + project + '.csproj'))) {
@@ -583,7 +584,7 @@ stimuli:
                 }
               }
               if (!tests.every(l => /--no-build/.test(l))) throw new Error('a test step still rebuilds');
-              if (!tests.every(l => /(-c|--configuration)[ =]+Release|Configuration=Release/.test(l))) {
+              if (!tests.every(release)) {
                 throw new Error('a test step dropped the Release configuration');
               }
               const build = steps.findIndex(l => /^dotnet build\b/.test(l));
@@ -593,7 +594,7 @@ stimuli:
               }
               const restore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
               if (restore < 0 || restore > build) throw new Error('the explicit solution restore must precede the build');
-              if (!/(-c|--configuration)[ =]+Release|Configuration=Release/.test(steps[build])) {
+              if (!release(steps[build])) {
                 throw new Error('the build step is not Release, so --no-build tests would not find the output');
               }
               const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
@@ -828,10 +829,10 @@ stimuli:
                   return single !== undefined ? [single] : property(l, 'TargetFrameworks')?.split(';') ?? required;
                 };
                 const tested = tests.flatMap(coverage);
-                if (![restore, build].every(l => required.every(t => coverage(l).includes(t))) ||
-                    !required.every(t => tested.includes(t)) || tested.some(t => !required.includes(t)) ||
+                const complete = targets => required.every(t => targets.includes(t)) && targets.every(t => required.includes(t));
+                if (![restore, build].every(l => complete(coverage(l))) || !complete(tested) ||
                     (tests.length === 2 && !tests.every(l => coverage(l).length === 1))) {
-                  throw new Error('both declared frameworks must be restored, built, and tested');
+                  throw new Error('preserve exactly the declared framework set in restore, build, and tests');
                 }
               }
               if (kind === 'artifacts' && !steps.every(l => /(?:^|\s)--artifacts-path[ =](?:\.\/)?artifacts(?:\s|$)/.test(l))) {
