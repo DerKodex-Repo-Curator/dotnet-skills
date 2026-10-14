@@ -488,6 +488,18 @@ Parent Process                 Child Process                Grandchild Process
 
 For an arbitrary child, use `WaitForExitStatus[Async]` to observe its termination independently of output EOF. If complete output capture can remain pending on descendant-held writers, define an explicit output-draining cancellation or timeout policy. This can be achieved by consuming `ReadAllLinesAsync` with a cancellation token and canceling that token when a concurrent `WaitForExitStatusAsync` completes. Do not assume killing or waiting for the immediate child closes every writer. Stopping reads before EOF can lose remaining output, so make that tradeoff explicit.
 
+## Starting a Process Without Retaining Its Resources
+
+There is a common misconception that when a process is disposed, it's also being killed. `Process` implements `IDisposable`, but `Process.Dispose` only releases the resources associated with the process; it does not kill it. Dispose it as soon as you no longer need to interact with the process or read its output, typically with a `using` statement, to release the resources held by the wrapper.
+
+To make it easier to start a process without the need to worry about disposing it, `Process.StartAndForget` was introduced. The method starts an executable, returns its ID, and immediately releases all handle resources associated with it. Standard handles not supplied through `StandardInputHandle`, `StandardOutputHandle`, or `StandardErrorHandle` go to the null device by default.
+
+`StartAndForget` throws `InvalidOperationException` if `UseShellExecute` or any `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag is true. Use a capture or streaming API if output needs to be read.
+```csharp
+public static int StartAndForget(string fileName, IEnumerable<string>? arguments = null)
+public static int StartAndForget(ProcessStartInfo startInfo)
+```
+
 ## New APIs
 
 ### Types
@@ -526,17 +538,6 @@ public static ProcessTextOutput RunAndCaptureText(string fileName, IEnumerable<s
 public static Task<ProcessTextOutput> RunAndCaptureTextAsync(string fileName, IEnumerable<string>? arguments = null, CancellationToken cancellationToken = default)
 public static ProcessTextOutput RunAndCaptureText(ProcessStartInfo startInfo, TimeSpan? timeout = null)
 public static Task<ProcessTextOutput> RunAndCaptureTextAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken = default)
-```
-
-##### `Process.StartAndForget`
-There is a common misconception that when a process is disposed, it's also being killed. This is not the case, as `Process.Dispose` only releases the resources associated with the process, but does not kill it.
-
-To make it easier to start a process without the need to worry about disposing it, `Process.StartAndForget` was introduced. The method starts an executable, returns its ID, and immediately releases all handle resources associated with it. Standard handles not supplied through `StandardInputHandle`, `StandardOutputHandle`, or `StandardErrorHandle` go to the null device by default.
-
-`StartAndForget` throws `InvalidOperationException` if `UseShellExecute` or any `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag is true. Use a capture or streaming API if output needs to be read.
-```csharp
-public static int StartAndForget(string fileName, IEnumerable<string>? arguments = null)
-public static int StartAndForget(ProcessStartInfo startInfo)
 ```
 
 #### Instance Methods
