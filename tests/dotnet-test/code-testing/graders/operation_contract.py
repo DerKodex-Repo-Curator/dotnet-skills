@@ -70,8 +70,8 @@ def rust_runtime_bytes(source):
     raise AssertionError("Unclosed inline test module")
 
 
-def check_files(root, expected, mutable, python_tests=False):
-    ignored = {"__pycache__", "target", ".git"}
+def check_files(root, expected, mutable, python_tests=False, repair=False):
+    ignored = {"target", ".git"}
     pytest_outputs = {
         ".pytest_cache/.gitignore", ".pytest_cache/CACHEDIR.TAG",
         ".pytest_cache/README.md", ".pytest_cache/v/cache/nodeids",
@@ -82,6 +82,7 @@ def check_files(root, expected, mutable, python_tests=False):
         path.relative_to(root).as_posix(): path
         for path in root.rglob("*")
         if path.is_file() and not ignored.intersection(path.relative_to(root).parts)
+        and not (path.suffix == ".pyc" and "__pycache__" in path.relative_to(root).parts)
         and path.name != "Cargo.lock"
         and path.relative_to(root).as_posix() not in pytest_outputs
     }
@@ -90,11 +91,17 @@ def check_files(root, expected, mutable, python_tests=False):
         if name in mutable:
             continue
         assert not actual[name].is_symlink(), name
-        assert digest(actual[name].read_bytes()) == expected_hash, f"Out-of-scope edit: {name}"
+        content = actual[name].read_bytes()
+        if repair and name == "test_total.py":
+            content = content.replace(b"from amounts import total", b"from amount import total")
+        assert digest(content) == expected_hash, f"Out-of-scope edit: {name}"
     extra = actual.keys() - expected.keys()
-    assert all(name.endswith("_test.go") or (
-        python_tests and Path(name).name.startswith("test_") and name.endswith(".py")
-    ) for name in extra), f"Unexpected files: {extra}"
+    assert all(
+        not {"__pycache__", ".pytest_cache"}.intersection(Path(name).parts)
+        and (name.endswith("_test.go") or (
+            python_tests and Path(name).name.startswith("test_") and name.endswith(".py")
+        )) for name in extra
+    ), f"Unexpected files: {extra}"
 
 
 def command(argv, root, expected_exit=0, environment=None):
@@ -128,10 +135,11 @@ def main():
     parser.add_argument("--runtime-sha256")
     args = parser.parse_args()
     expected = dict(value.split("=", 1) for value in args.file)
-    mutable = {"test_total.py"} if args.case == "repair" else (
-        {"src/lib.rs"} if args.case == "rust" else set()
+    mutable = {"src/lib.rs"} if args.case == "rust" else set()
+    check_files(
+        args.root, expected, mutable,
+        python_tests=args.case == "new-regression", repair=args.case == "repair",
     )
-    check_files(args.root, expected, mutable, args.case == "new-regression")
     if args.case in {"repair", "regression", "new-regression"}:
         program = (
             "import json,unittest,sys;"
@@ -199,7 +207,10 @@ def main():
                 ["go", "test", "-json", "-count=1", "./..."], 1,
                 r'"Action":"fail".*"Test":', environment,
             )
-    check_files(args.root, expected, mutable, args.case == "new-regression")
+    check_files(
+        args.root, expected, mutable,
+        python_tests=args.case == "new-regression", repair=args.case == "repair",
+    )
     print(f"OPERATION_CONTRACT: {args.case} passed")
 
 

@@ -67,7 +67,7 @@ class EvidenceTests(unittest.TestCase):
             with self.assertRaisesRegex(AssertionError, "Checkpoint symlink"):
                 evidence.validate_checkpoint(root)
 
-    def test_checkpoint_rejects_linked_directories(self):
+    def test_checkpoint_and_preservation_reject_linked_directories(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "checkpoint"
             root.mkdir()
@@ -93,12 +93,40 @@ class EvidenceTests(unittest.TestCase):
                         AssertionError, "Checkpoint symlink|Invalid checkpoint root"
                     ):
                         evidence.validate_checkpoint(checkpoint)
+                expected = {"Test.csproj": evidence.sha256(external / "Test.csproj")}
+                evidence.preserve(external, expected)
+                for preserved, files in (
+                    (link, expected),
+                    (root, {"OrderTests/Test.csproj": expected["Test.csproj"]}),
+                ):
+                    with self.subTest(preserved=preserved), self.assertRaisesRegex(
+                        AssertionError, "Symlink or junction in preserved scope"
+                    ):
+                        evidence.preserve(preserved, files)
             finally:
                 if os.name == "nt":
                     link.rmdir()
                 else:
                     link.unlink()
             self.assertTrue((external / "Test.csproj").is_file())
+
+    def test_preservation_rejects_symlinked_root(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            external = root / "external"
+            external.mkdir()
+            source = external / "test.cs"
+            source.write_bytes(b"original test\n")
+            expected = {"test.cs": evidence.sha256(source)}
+            evidence.preserve(external, expected)
+            link = root / "preserved"
+            link.symlink_to(external, target_is_directory=True)
+            try:
+                with self.assertRaisesRegex(AssertionError, "Symlink or junction in preserved scope"):
+                    evidence.preserve(link, expected)
+            finally:
+                link.unlink()
+            self.assertEqual(b"original test\n", source.read_bytes())
 
     def test_framework_and_adapter_are_checked_for_each_project(self):
         assets = {"MSTest.TestFramework/4.4.1": {}, "MSTest.TestAdapter/4.4.1": {}}

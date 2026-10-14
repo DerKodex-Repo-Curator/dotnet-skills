@@ -112,6 +112,18 @@ class ReplayTests(unittest.TestCase):
             "OutputType",
         )
 
+    def test_platform_migration_preserves_production_nullable_configuration(self):
+        for name in (
+            "Deliver native MTP migration with fresh reports from both projects",
+            "Keep the explicit SDK 10 compatibility bridge while enabling MTP",
+        ):
+            for replacement in ("", "<Nullable>disable</Nullable>"):
+                with self.subTest(case=name, replacement=replacement):
+                    self.broken_golden(
+                        "migrate-vstest-to-mtp", name, "Directory.Build.props",
+                        "<Nullable>enable</Nullable>", replacement, "Nullable",
+                    )
+
     def test_staged_delivery_cannot_drop_a_parameterized_case(self):
         self.broken_golden(
             "agent.test-migration",

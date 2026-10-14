@@ -19,12 +19,15 @@ def sha256(path):
 
 def preserve(root, expected):
     root = Path(root)
+    assert not is_linked_path(root), f"Symlink or junction in preserved scope: {root}"
+    paths = list(root.rglob("*"))
+    assert not any(is_linked_path(path) for path in paths), (
+        f"Symlink or junction in preserved scope: {root}"
+    )
     actual = {
         path.relative_to(root).as_posix(): sha256(path)
-        for path in root.rglob("*") if path.is_file()
+        for path in paths if path.is_file()
     }
-    if any(path.is_symlink() for path in root.rglob("*")):
-        raise AssertionError(f"Symlink in preserved scope: {root}")
     assert actual == expected, {"expected": expected, "actual": actual}
 
 
@@ -218,7 +221,7 @@ def run(args, root=None):
     properties = (
         "TargetFramework,OutputType,EnableMSTestRunner,"
         "UseMicrosoftTestingPlatformRunner,TestingPlatformDotnetTestSupport,"
-        "IsTestingPlatformApplication,UseVSTest"
+        "IsTestingPlatformApplication,UseVSTest,Nullable"
     )
     evaluation = execute(
         ["dotnet", "msbuild", str(project), "-getProperty:" + properties],
@@ -236,6 +239,8 @@ def run(args, root=None):
             root, evidence, f"production-{index}",
         ).stdout)["Properties"]
         assert values["OutputType"] == "Library", values
+        assert values["TargetFramework"] == "net8.0", (filename, values)
+        assert values["Nullable"] == "enable", (filename, values)
         for name in ("EnableMSTestRunner", "UseMicrosoftTestingPlatformRunner",
                      "TestingPlatformDotnetTestSupport", "IsTestingPlatformApplication"):
             assert values[name].lower() != "true", (filename, values)

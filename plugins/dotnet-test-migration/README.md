@@ -76,6 +76,7 @@ eval companions verify logical case identities (including data rows), outcomes
 and skip reasons where exported, effective runner mode, fresh parsed reports,
 shared-resource lifetime, and preserved production files. Plan-only and no-op
 checks compare complete in-scope file sets, not just a package substring.
+They reject symlinks and Windows junctions at preserved roots and descendants.
 Opaque framework-generated test IDs can legitimately change; do not compare
 those as if they were stable cross-framework identities.
 
@@ -85,7 +86,8 @@ rebuilds and runs each checkpoint with its own runner and package requirements;
 a final-only edit cannot satisfy the stage contract. This proves the delivered
 checkpoints are valid, not an inferred chronology from the final response.
 Platform-only solution migrations also verify both test projects' resolved
-package versions and preserve every supplied test source byte.
+package versions, preserve every supplied test source byte, and require the
+production library to retain its target framework and enabled nullable analysis.
 
 Checkpoint replays copy each checkpoint alone outside the delivered workspace,
 reject symlinks, Windows junctions and external compile/project/import references, and authenticate
