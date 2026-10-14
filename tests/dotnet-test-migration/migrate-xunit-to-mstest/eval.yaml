@@ -63,7 +63,7 @@ stimuli:
             assert hashlib.sha256(guard.replace(b'\r\n',b'\n')).hexdigest()=='45d48abdd4a7bbadd0f11a6db07c69df6aa7f4c1051b0c55468dcfbd7867d290','Diagnostic verifier changed';
             pathlib.Path('DiagnosticTimeoutContract.cs').write_bytes(guard);
             p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();
-            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446','Evaluator code changed';
+            assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='9ded8edba1cdcdad78385a79b58919cf394758a1768d79662a9260595f8f5ed2','Evaluator code changed';
             sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project TestProject.csproj --runner vstest
             --mstest-major 4 --expect CompletesNormally=Passed
           expected_exit_code: 0
@@ -185,7 +185,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='51bb6d55ba174eb95ea6fac1a78fe61ae199a97445c0ac30c52d8c862aa9d956','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='779ef768bd0779294fe48e73052052a47fc0953ffde41bc30568abf5f87f070e','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

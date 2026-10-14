@@ -1,5 +1,6 @@
 """The repair no-op must preserve every supplied file, not merely pass tests."""
 
+import json
 from pathlib import Path
 import shlex
 import subprocess
@@ -20,6 +21,42 @@ FILES = DOCUMENT["environment"]["files"] + CASE["environment"]["files"]
 
 
 class RepairNoopTests(unittest.TestCase):
+    def test_inspection_contract_does_not_treat_harness_execution_as_agent_execution(self):
+        config = next(
+            grader["config"] for grader in CASE["graders"] if grader["type"] == "tool-calls"
+        )
+        golden = CASE["golden_trajectory"]["inline"]["steps"][-1]["message"]
+        self.assertIn("fix anything that is actually broken", CASE["prompt"])
+        self.assertIn("Do not execute tests or shell commands", CASE["prompt"])
+        self.assertIn("did not execute tests", golden)
+        self.assertNotIn("passed", golden)
+        script = """
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { ToolCallGrader } from "./eng/evaluation-tools/node_modules/@microsoft/vally/dist/graders/static/tool-call-grader.js";
+const config = JSON.parse(readFileSync(0, "utf8"));
+const grader = new ToolCallGrader();
+for (const name of ["view", "read_file", "glob", "functions.view",
+                    "bash", "powershell", "execute", "run_shell_command", "task",
+                    "functions.execute", "functions.powershell", "functions.task"]) {
+  const allowed = ["view", "read_file", "glob", "functions.view"].includes(name);
+  const data = { toolName: name, toolCallId: "one",
+                 arguments: { command: "cd NoopRepair && python -m unittest -v" } };
+  for (const success of [true, false]) {
+    const result = await grader.grade({ config, trajectory: { events: [
+      { type: "tool_call", data }, { type: "tool_result", data: { ...data, success, result: "Ran 2 tests OK" } }
+    ] } });
+    assert.equal(result.passed, allowed, name);
+  }
+}
+assert.equal((await grader.grade({ config, trajectory: { events: [] } })).passed, true);
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script], cwd=SPEC.resolve().parents[3],
+            input=json.dumps(config), capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_healthy_golden_and_every_file_mutation(self):
         with tempfile.TemporaryDirectory(prefix="repair-noop-") as directory:
             root = Path(directory)

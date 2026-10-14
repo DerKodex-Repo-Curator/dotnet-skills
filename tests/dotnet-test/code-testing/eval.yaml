@@ -28,9 +28,10 @@ stimuli:
   - name: Leave already-correct tests unchanged during a repair request
     prompt: |
       I suspect NoopRepair/test_amounts.py still needs repair after the module
-      was renamed. Check it, fix anything that is actually broken, and run
-      python -m unittest -v from NoopRepair. Keep the existing test intent,
-      production behavior and unrelated files intact; do not modernize the suite.
+      was renamed. Inspect the files and fix anything that is actually broken.
+      Keep the existing test intent, production behavior and unrelated files
+      intact; do not modernize the suite. Do not execute tests or shell commands
+      for this review; report what the file inspection establishes.
     tags:
       capability: repair-already-correct-tests
       risk: unnecessary-test-rewrite
@@ -51,9 +52,10 @@ stimuli:
             source: agent
             message: |
               No repair was needed: test_amounts.py already imports amounts.
-              I left both source files unchanged. `python -m unittest -v` from
-              NoopRepair passed test_total and test_empty (2 tests).
+              I left both source files unchanged after inspecting the import
+              and assertions. I did not execute tests or shell commands.
     graders:
+      # Evaluator-owned execution verifies fixture health, not agent execution.
       - type: run-command
         config:
           command: >-
@@ -68,11 +70,17 @@ stimuli:
       - type: output-matches
         config:
           pattern: '(?i)no (?:repair|changes?|fix)(?: (?:was|were|is|are))? (?:needed|required)|already (?:correct|imports|uses)|unchanged'
+      - type: tool-calls
+        config:
+          disallowed:
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|task)$'
       - type: prompt
     rubric:
       - Recognizes that the existing import and tests are already correct instead of forcing a repair
       - Preserves all fixture source files and test intent without adding compatibility modules or unrelated rewrites
-      - Runs the existing unittest entry point and reports the actual result
+      - Reports inspection-only findings without claiming tests were executed or passed
+    constraints:
+      reject_tools: [bash, powershell, execute, run_shell_command, task]
 
   - name: Generate a project-wide pytest suite across multiple modules
     prompt: |

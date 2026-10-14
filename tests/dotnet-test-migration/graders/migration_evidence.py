@@ -67,16 +67,21 @@ def execute(command, root, evidence, name, environment=None, expected_exit=0):
     return result
 
 
-def run(args):
-    root = Path.cwd()
-    preserved = {}
-    for item in args.unchanged_file:
+def verify_unchanged_files(root, contracts):
+    verified = {}
+    for item in contracts:
         expected, filename = item.split(":", 1)
-        path = Path(filename)
-        assert not path.is_symlink() and path.is_file(), filename
+        path = root / filename
+        assert not path.is_symlink() and path.is_file(), f"Preserved fixture missing or aliased: {filename}"
         actual = hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
         assert actual == expected, f"Preserved fixture changed: {filename}"
-        preserved[filename] = actual
+        verified[filename] = actual
+    return verified
+
+
+def run(args):
+    root = Path.cwd()
+    preserved = verify_unchanged_files(root, args.unchanged_file)
     artifacts = root / ".eval" / "results"
     artifacts.mkdir(parents=True, exist_ok=True)
     evidence = Path(tempfile.mkdtemp(prefix="migration-", dir=artifacts))
@@ -164,6 +169,7 @@ def run(args):
     expected = dict(value.rsplit("=", 1) for value in args.expect)
     reasons = dict(value.split("=", 1) for value in args.skip_reason)
     verify_cases(cases, expected, reasons)
+    preserved = verify_unchanged_files(root, args.unchanged_file)
     if args.lifecycle:
         events = [
             json.loads(line) for line in (evidence / "lifecycle.jsonl").read_text(

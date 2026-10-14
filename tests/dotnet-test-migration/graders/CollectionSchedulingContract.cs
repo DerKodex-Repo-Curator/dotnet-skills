@@ -26,11 +26,17 @@ internal static class CollectionSchedulingContract
                 .Concat(member.GetMethod(methods[index])!.GetCustomAttributes(inherit: true))
                 .ToArray()).ToArray();
 
-        // One deferred member cannot overlap the other in MSTest's parallel phase.
-        if (policies.Any(attributes => attributes.Any(a => a is DoNotParallelizeAttribute)))
+        var deferred = policies.Select(attributes =>
+            attributes.Any(a => a is DoNotParallelizeAttribute)).ToArray();
+        if (deferred.All(value => value))
         {
             RecordPolicy("deferred-members");
             return;
+        }
+        if (deferred.Any(value => value))
+        {
+            throw new InvalidOperationException(
+                "Collection scheduling contract: both members must be deferred for a group-wide deferred disclosure.");
         }
 
         var resources = policies.Select(attributes => attributes

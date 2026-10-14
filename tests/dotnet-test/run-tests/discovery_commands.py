@@ -6,7 +6,7 @@ from pathlib import Path
 import re
 
 
-def tokens(line):
+def parse_line(line):
     result = []
     word = []
     started = False
@@ -53,7 +53,11 @@ def tokens(line):
     assert quote is None, "Unclosed quote in command"
     if started:
         result.append(("".join(word), False))
-    return result
+    return result, line[:index].rstrip()
+
+
+def tokens(line):
+    return parse_line(line)[0]
 
 
 def validate_command(command):
@@ -149,12 +153,13 @@ def validate_output(response):
             )
             continue
         if not re.search(r"\bdotnet(?:\.exe)?\b", line, re.I):
-            if line and not line.startswith("#"):
-                sentence = bool(re.search(r"[.!?]$", line)) and not line.endswith("./...")
+            executable = parse_line(line)[1] if "#" in line else line
+            if executable:
+                sentence = bool(re.search(r"[.!?]$", executable)) and not executable.endswith("./...")
                 command_shaped = not sentence and bool(re.fullmatch(
                     r"(?:[./\\]|[A-Za-z]:[\\/])\S+(?:\s+.*)?|"
-                    r"[a-z][a-z0-9_.-]*(?:[ \t]+(?:[-./\\\w=]+|\"[^\"]*\"|'[^']*'))*",
-                    line,
+                    r"[a-z][a-z0-9_.-]*(?:[ \t]+(?:[-./\\\w=#]+|\"[^\"]*\"|'[^']*'))*",
+                    executable,
                 ))
                 assert not (fenced or code_span or prompted or command_shaped), (
                     "Additional command outside the requested discovery lanes"

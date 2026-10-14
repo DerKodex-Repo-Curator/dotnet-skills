@@ -113,6 +113,20 @@ class DiscoveryContractTests(unittest.TestCase):
         self.assertEqual([], self.failed_graders(
             GOLDEN + "\nThe three commands list tests only; they do not run test bodies."
         ))
+
+    def test_shell_comment_punctuation_cannot_disguise_other_commands(self):
+        for command, comment in product(
+            ("make test", "npm test", "pytest", "./run-tests.sh",
+             'make test --label "# quoted."', "make test#suffix", r"make test\#suffix"),
+            ("# extra command.", "# prose!", "# explanation?", '# unmatched " comment.'),
+        ):
+            with self.subTest(command=command, comment=comment):
+                self.assertIn("program", self.failed_graders(GOLDEN + f"\n{command} {comment}"))
+        for command in ('make test --label "# quoted."', "make test#suffix", r"make test\#suffix"):
+            with self.subTest(command=command):
+                _, segment = discovery_commands.parse_line(command + " # actual comment.")
+                self.assertEqual(command, segment)
+        self.assertEqual([], self.failed_graders(GOLDEN + "\n# make test # comment only."))
     def test_required_options_in_comments_do_not_satisfy_a_lane(self):
         for index, command in (
             (0, "dotnet test VSTest.slnx --no-build # --list-tests"),
@@ -361,6 +375,7 @@ const proseResult = await grader.grade({ config, trajectory: { workDir: root, ou
 assert.equal(proseResult.passed, true, JSON.stringify(proseResult));
 for (const extra of ["", "\\nnice dotnet test Native.slnx --no-build",
                     "\\nionice -c 3 dotnet test Native.slnx --no-build",
+                    "\\nmake test # extra command.",
                     "\\nUse dotnet test with the discovery flag; dotnet test:"]) {
   const result = await grader.grade({ config, trajectory: { workDir: root, output: golden + extra } });
   assert.equal(result.passed, extra === "", JSON.stringify(result));

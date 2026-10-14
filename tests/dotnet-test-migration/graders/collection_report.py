@@ -111,11 +111,11 @@ def main():
     grading = json.loads(Path(os.environ["EVALUATE_GRADER_INPUT"]).read_text(encoding="utf-8"))
     guard = verified_bytes(
         workspace / ".eval" / "CollectionSchedulingContract.txt",
-        "b8171dd9e7aff92ec6b5f5e4d7537fb427d2b8036ce14839f9a79a6f2d4ba430",
+        "0a47547396ad65fc8373f5b8a559e171ba20ad5696362c2a5fae4f01ade543d3",
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "76b8749c16c1e220c476899af6978d50ac13de496b2c1fa908142ecae4f46446",
+        "9ded8edba1cdcdad78385a79b58919cf394758a1768d79662a9260595f8f5ed2",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
     result = subprocess.run(

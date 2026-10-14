@@ -101,8 +101,14 @@ class DefaultCollectionTests(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, "Scheduling disclosure"):
                         replay.run_graders(CASE, root, invalid)
 
-            source.write_text(parallel.replace("[DoNotParallelize]\n", "", 1), encoding="utf-8")
-            replay.run_graders(CASE, root, DEFERRED_REPORT)
+            for member in ("FirstMember", "SecondMember"):
+                with self.subTest(partially_deferred=member):
+                    source.write_text(parallel.replace(
+                        f"[DoNotParallelize]\npublic class {member}",
+                        f"public class {member}",
+                    ), encoding="utf-8")
+                    with self.assertRaisesRegex(AssertionError, "both members must be deferred"):
+                        replay.run_graders(CASE, root, DEFERRED_REPORT)
 
             resource_locks = parallel.replace(
                 "[DoNotParallelize]", '[ResourceLock("Shared")]'
