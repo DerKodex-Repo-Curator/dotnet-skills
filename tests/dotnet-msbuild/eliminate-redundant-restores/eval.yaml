@@ -14,7 +14,8 @@ stimuli:
       changes between the steps. Update the pipeline so the Build step stops
       repeating that earlier work, while keeping the same build and test
       coverage. The repository is also used for local development. Only edit
-      ci.yml; leave all other files unchanged.
+      ci.yml; leave all other files unchanged. These pipeline command patterns
+      are also reused by repositories on .NET 8.
     tags:
       capability: rsp-inherited-restore
       risk: high
@@ -57,6 +58,15 @@ stimuli:
               }
               const steps = fs.readFileSync('rsp-inherited/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
+                throw new Error('dotnet build does not support --no-build');
+              }
+              const restoreOff = l => {
+                const switches = l.match(/(?:^|\s)(?:[-/]restore(?::(?:true|false))?|[-/]r:(?:true|false))(?=\s|$)/gi) || [];
+                return /:false$/i.test(switches[switches.length - 1] || '');
+              };
+              const skipsImplicit = l => /(?:^|\s)--no-restore(?:\s|$)/.test(l) ||
+                (/^dotnet (test|publish|pack|run)\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l));
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
               const restoreIndex = steps.findIndex(l => /^dotnet restore\b/.test(l) && solution(l));
               const buildIndex = steps.findIndex(l => /^dotnet (msbuild|build)\b/.test(l) && solution(l));
@@ -69,14 +79,21 @@ stimuli:
                 throw new Error('the solution build and test must keep the Release configuration');
               }
               if (!/--no-build/.test(steps[testIndex])) throw new Error('the solution test must keep --no-build');
-              if (!/--no-restore|[-/]restore:false/i.test(steps[testIndex])) {
-                throw new Error('the solution test still inherits the rsp restore despite --no-build');
+              if (!restoreOff(steps[testIndex])) {
+                throw new Error('the solution test needs -restore:false to override rsp restore on older SDKs');
               }
-              const off = /[-/]restore:false/i.test(build) || (/^dotnet build\b/.test(build) && /--no-restore/.test(build));
+              const off = restoreOff(build) && (/^dotnet msbuild\b/.test(build) || skipsImplicit(build));
               if (!off) throw new Error('the build step still restores: ' + build);
               if (steps.some(l => /^dotnet msbuild\b/.test(l) && /--no-restore/.test(l))) {
                 throw new Error('--no-restore is not a dotnet msbuild switch');
               }
+              const restoring = steps.filter(l => {
+                if (/^dotnet restore\b/.test(l) || /(?:^|\s)[-/](?:t|target):(?:[^\s]*[;,])?Restore(?:[;,]|\s|$)/i.test(l)) return true;
+                if (!/^dotnet (msbuild|build|test|publish|pack|run)\b/.test(l)) return false;
+                if (/^dotnet run\b/.test(l)) return !/(?:^|\s)--no-build(?:\s|$)/.test(l);
+                return !restoreOff(l) || (!/^dotnet msbuild\b/.test(l) && !skipsImplicit(l));
+              });
+              if (restoring.length !== 1) throw new Error('exactly one restore-capable invocation must remain, found ' + restoring.length);
           expected_exit_code: 0
       - type: run-command
         config:
@@ -117,15 +134,6 @@ stimuli:
               "tests/Contoso.Tests/Contoso.Tests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
               "tests/Contoso.Tests/SmokeTests.cs":"363c4d10f175b6bbd06aacc4f68cb64a52d726c883614890839bc276c42dc419"}
           expected_exit_code: 0
-      - type: output-matches
-        config: &restore_report
-          pattern: '(?im)^[ \t]*\|[^\r\n]*\bStep\b[^\r\n]*\|[^\r\n]*\bRestores today\b[^\r\n]*\|[^\r\n]*Covered by an earlier restore\?[^\r\n]*\|[^\r\n]*\bChange\b[^\r\n]*\|[^\r\n]*\bEvidence\b[^\r\n]*\|[ \t]*\r?\n[ \t]*\|(?:[ \t]*:?-+:?[ \t]*\|){5}[ \t]*\r?\n(?:[ \t]*\|(?:[^|\r\n]+\|){5}[ \t]*\r?\n)+[\s\S]*?^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*(?:removed \d+ of \d+ restores, first restore kept|no redundant restores)\.?[ \t]*$'
-      - type: output-not-matches
-        config: &multiple_verdicts
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:[^\r\n]*[\s\S]*?^[ \t]*(?:\*\*)?Verdict:'
-      - type: output-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 2 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that the Build step restores again because Directory.Build.rsp contains -restore and applies to every
@@ -136,6 +144,7 @@ stimuli:
       - Kept the same build and test coverage
       - Changed only ci.yml, preserving the solution, response file, project files, and source files
       - Also stopped the test step inheriting the rsp restore rather than relying on --no-build alone
+      - Left exactly one restore-capable invocation, with explicit response-file overrides compatible with .NET 8
 
   - name: Keep restore on a project outside the restored solution
     prompt: |
@@ -183,6 +192,9 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('uncovered-project/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
+                throw new Error('dotnet build does not support --no-build');
+              }
               if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
               const packager = l => /(?:^|\s)(?:\.\/)?tools\/Packager\/Packager\.csproj(?:\s|$)/.test(l);
@@ -230,13 +242,6 @@ stimuli:
       - type: output-matches
         config:
           pattern: Packager
-      - type: output-matches
-        config: *restore_report
-      - type: output-not-matches
-        config: *multiple_verdicts
-      - type: output-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Added --no-restore to the solution build, which the explicit restore covers
@@ -270,13 +275,13 @@ stimuli:
           - step_id: 1
             source: agent
             message: |-
-              The publish restores again because the first restore ran without a runtime identifier and publish asks for linux-x64 and self-contained. Simply adding --no-restore to publish would fail with NETSDK1047, since the assets file has no net10.0/linux-x64 target. The fix is to give the single restore the inputs publish uses: restore with -r linux-x64 and -p:SelfContained=true, then build and publish with --no-restore. A restore with a runtime identifier still produces the plain framework target, so the build step keeps working. Not validated on a clean machine: please run build.sh from a clean checkout.
+              The publish restores again because the first restore ran without a runtime identifier and publish asks for linux-x64. Simply adding --no-restore to publish would fail with NETSDK1047, since the assets file has no net10.0/linux-x64 target. Restore once with -r linux-x64, then build and publish with --no-restore, keeping the self-contained publish output. This fixture has no package conditions requiring SelfContained on restore. A RID-only restore produces both the plain framework target and net10.0/linux-x64, so the build and self-contained publish remain covered. Not validated on a clean machine: please run build.sh from a clean checkout.
 
               | Step | Restores today (explicit/implicit/rsp) | Covered by an earlier restore? | Change | Evidence |
               |---|---|---|---|---|
-              | Restore Gateway | Explicit | No | Add -r linux-x64 and -p:SelfContained=true | Matches publish's restore inputs |
+              | Restore Gateway | Explicit | No | Add -r linux-x64 | Produces both framework and RID targets without requiring SelfContained on restore |
               | Build Gateway | No | Yes | Keep --no-restore | Restore also produces the framework target |
-              | Publish Gateway | Implicit | Not with the original inputs | Add --no-restore; keep RID and self-contained output | Updated restore covers net10.0/linux-x64 and SelfContained=true |
+              | Publish Gateway | Implicit | Not with the original inputs | Add --no-restore; keep RID and self-contained output | RID-only restore covers net10.0/linux-x64 |
 
               Verdict: removed 1 of 2 restores, first restore kept
     graders:
@@ -289,6 +294,9 @@ stimuli:
               const fs = require('fs');
               const cmds = fs.readFileSync('rid-mismatch/build.sh', 'utf8').split(/\r?\n/)
                 .map(l => l.trim()).filter(l => /^dotnet\s/.test(l));
+              if (cmds.some(c => /^dotnet build\b/.test(c) && /(?:^|\s)--no-build(?:\s|$)/.test(c))) {
+                throw new Error('dotnet build does not support --no-build');
+              }
               const gateway = c => /(?:^|\s)(?:\.\/)?src\/Gateway\/Gateway\.csproj(?:\s|$)/.test(c);
               const rid = c => /(?:^|\s)(-r|--runtime)[ =]+linux-x64(?:\s|$)/.test(c);
               const selfContained = c => /(?:^|\s)(?:--self-contained(?:[ =]+true)?|(?:[-/]p:|--property[:=])SelfContained=true)(?=\s|$)(?![ =]+false\b)/i.test(c);
@@ -314,30 +322,23 @@ stimuli:
                 const skips = /--no-restore|--no-build/.test(c);
                 if (/^dotnet restore\b/.test(c) || !skips) {
                   count++;
-                  restored = { gateway: gateway(c), rid: rid(c), selfContained: selfContained(c) };
+                  restored = { gateway: gateway(c), rid: rid(c) };
                 } else if (!restored) {
                   throw new Error('a command skips restore before anything restored: ' + c);
-                } else if (/^dotnet publish\b/.test(c) && (!restored.gateway || !restored.rid || !restored.selfContained)) {
-                  throw new Error('publish skips restore without a Gateway restore carrying linux-x64 and SelfContained=true: ' + c);
+                } else if (/^dotnet publish\b/.test(c) && (!restored.gateway || !restored.rid)) {
+                  throw new Error('publish skips restore without a Gateway restore carrying linux-x64: ' + c);
                 }
               }
               if (count !== 1) throw new Error('restore runs ' + count + ' times instead of once');
           expected_exit_code: 0
-      - type: output-matches
-        config: *restore_report
-      - type: output-not-matches
-        config: *multiple_verdicts
-      - type: output-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 2 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Explained that the later restore happens because the earlier restore did not include the runtime identifier that
         publish uses, so the assets file lacks that target
       - Ended with the restore running once, with -r linux-x64, and did not simply add --no-restore to publish after a
         restore that lacked the runtime identifier
-      - Considered other inputs that publish uses, such as the self-contained setting, when deciding publish could
-        skip restore
+      - Kept self-contained publish output; the restore only needs the RID unless repository package conditions require more
+        inputs
       - Kept the build and publish commands, and either stated what remains unvalidated or said how to validate on a clean
         checkout
       - If publish skips building, first built Gateway with the same Release, linux-x64, and self-contained inputs
@@ -389,6 +390,9 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('generated-reference/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
+                throw new Error('dotnet build does not support --no-build');
+              }
               const gen = steps.findIndex(l => /^dotnet run\s+--project\s+(?:\.\/)?tools\/AddAnalyzer(?:\/AddAnalyzer\.csproj)?\s+--\s+(?:\.\/)?src\/Contoso\.Core\/Contoso\.Core\.csproj\s*$/.test(l));
               if (gen < 0) throw new Error('the analyzer tool must still run against src/Contoso.Core/Contoso.Core.csproj');
               const build = steps.findIndex(l => /^dotnet build\b/.test(l) && /Contoso\.slnx\b/.test(l));
@@ -431,13 +435,6 @@ stimuli:
               "tools/AddAnalyzer/Program.cs":"eacd116061991ef0bdef4d5a65189880c68b5a0bccdafa53e8eb26c4ccfb2039",
               "tools/AddAnalyzer/README.txt":"71bd0831214aa914468587a67e9a5827491e1487cd32eae38d09cf99b4131580"}
           expected_exit_code: 0
-      - type: output-matches
-        config: *restore_report
-      - type: output-not-matches
-        config: *multiple_verdicts
-      - type: output-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 1 of 3 restores, first restore kept\.?[ \t]*$'
       - type: prompt
     rubric:
       - Identified that the tool edits package references after the first restore, so that restore is stale for the build
@@ -453,7 +450,8 @@ stimuli:
       themselves run for only about 20 s of that. Each of the three test steps
       spends roughly 25 s before its first test starts. Reduce that overhead in
       ci.yml. Keep the three test steps separate so results are reported
-      separately, and keep the Release configuration.
+      separately, and keep the Release configuration. Only edit ci.yml; leave
+      the solution, project files, and source files unchanged.
     tags:
       capability: test-step-overhead
       risk: medium
@@ -494,6 +492,9 @@ stimuli:
               const fs = require('fs');
               const steps = fs.readFileSync('test-steps/ci.yml', 'utf8').split(/\r?\n/)
                 .filter(l => /script:/.test(l)).map(l => l.replace(/^\s*-?\s*script:\s*/, ''));
+              if (steps.some(l => /^dotnet build\b/.test(l) && /(?:^|\s)--no-build(?:\s|$)/.test(l))) {
+                throw new Error('dotnet build does not support --no-build');
+              }
               const tests = steps.filter(l => /^dotnet test\b/.test(l));
               if (tests.length !== 3) throw new Error('expected three separate test steps, found ' + tests.length);
               for (const project of ['UnitTests', 'IntegrationTests', 'ContractTests']) {
@@ -519,13 +520,24 @@ stimuli:
                 (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
               if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
           expected_exit_code: 0
-      - type: output-matches
-        config: *restore_report
-      - type: output-not-matches
-        config: *multiple_verdicts
-      - type: output-matches
+      - type: run-command
         config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*removed 3 of 4 restores, first restore kept\.?[ \t]*$'
+          command: node
+          args:
+            - -e
+            - *immutable_fixture
+            - test-steps
+            - >-
+              {"Contoso.slnx":"b100e4a0d6e76f1915416036cc6666ab9ceec225d3f3cfaa3cea68871cd097d6",
+              "src/Contoso.Core/BuildMarker.cs":"4983ca8e13a9428e32bbe314a13de57f5e7145b39f5143b9842e5d36c40b7c98",
+              "src/Contoso.Core/Contoso.Core.csproj":"e2c08643e21eba9123e4b319840fec508efc44b473a7cab491d6188e5f6905ca",
+              "tests/Contoso.ContractTests/Contoso.ContractTests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.ContractTests/SmokeTests.cs":"1d469b09fda31a62352910396d4409f2cc41e5b6d657acc546c7282ec353feeb",
+              "tests/Contoso.IntegrationTests/Contoso.IntegrationTests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.IntegrationTests/SmokeTests.cs":"4f4b9fe2b7593a42e77d21fa29cac98fffef9918f74e995c85a9abaa5a08ff53",
+              "tests/Contoso.UnitTests/Contoso.UnitTests.csproj":"0b523d82a19231031bae17755104a62fd21b18db894dd23d24234fb7e2dbdf0e",
+              "tests/Contoso.UnitTests/SmokeTests.cs":"8669a02c2b3b7ae756211e8b58d31a99414441fb362f64e745869249d664a0c3"}
+          expected_exit_code: 0
       - type: prompt
     rubric:
       - Identified that each dotnet test step repeats restore and build work that an earlier step already did
@@ -533,6 +545,7 @@ stimuli:
         test steps skip building
       - Kept the three test steps separate and kept the explicit restore as the only restore
       - Did not rely on --no-restore alone for the test steps, which would still rebuild three times
+      - Changed only ci.yml, preserving all three test projects and their test coverage
 
   - name: Confirm a pipeline with a single restore needs no change
     prompt: |
@@ -580,13 +593,6 @@ stimuli:
       - type: output-matches
         config:
           pattern: (?i)(nothing is redundant|no redundant|no repeated|not redundant|nothing to (change|remove|eliminate)|already (avoid|skip|minimal|optimal)|only one restore|single restore|restores once)
-      - type: output-matches
-        config: *restore_report
-      - type: output-not-matches
-        config: *multiple_verdicts
-      - type: output-matches
-        config:
-          pattern: '(?im)^[ \t]*(?:\*\*)?Verdict:(?:\*\*)?[ \t]*no redundant restores\.?[ \t]*$'
       - type: prompt
     rubric:
       - Concluded that no step repeats restore work, because the single explicit restore is followed by --no-restore or
