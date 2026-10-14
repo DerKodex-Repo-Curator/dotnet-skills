@@ -5,7 +5,9 @@ import http.server
 import json
 import os
 from pathlib import Path
+import shlex
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
@@ -18,11 +20,11 @@ REPO = Path(__file__).resolve().parents[2]
 PLUGIN = REPO / "plugins" / "dotnet-msbuild"
 DOTNET = shutil.which("dotnet")
 POWERSHELL = shutil.which("powershell") if os.name == "nt" else None
-SH = shutil.which("sh")
+BASH = shutil.which("bash")
 if os.name == "nt":
-    git_sh = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "sh.exe"
-    if git_sh.exists():
-        SH = str(git_sh)
+    git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+    if git_bash.exists():
+        BASH = str(git_bash)
 
 
 class BinlogPreflightTests(unittest.TestCase):
@@ -54,16 +56,16 @@ class BinlogPreflightTests(unittest.TestCase):
             self.assertIsNotNone(POWERSHELL, "Windows PowerShell is required.")
             yield "copilot", [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
                               "-File", str(self.plugin / "hooks" / "session-start.ps1")]
-        self.assertIsNotNone(SH, "The supported Claude Bash shell must provide sh.")
+        self.assertIsNotNone(BASH, "The supported hook shell must provide Bash.")
         for host in ("copilot", "claude"):
-            yield host, [SH, str(self.plugin / "hooks" / "session-start.sh"), host]
+            yield host, [BASH, str(self.plugin / "hooks" / "session-start.sh"), host]
 
     def run_hook(self, command, env=None, cwd=None):
         started = time.monotonic()
         result = subprocess.run(
             command, cwd=cwd or self.workspace, env=env or self.env,
-            input=json.dumps({"cwd": str(self.workspace), "source": "startup"}),
-            text=True, capture_output=True, timeout=12)
+            input=json.dumps({"cwd": str(self.workspace), "source": "startup"}, ensure_ascii=False),
+            text=True, encoding="utf-8", capture_output=True, timeout=12)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertLess(time.monotonic() - started, 10, result.stdout + result.stderr)
         self.assertEqual(result.stderr, "", result.stderr)
@@ -112,6 +114,14 @@ class BinlogPreflightTests(unittest.TestCase):
         for host, command in self.launchers():
             with self.subTest(host=host, command=command[0]):
                 self.assertEqual(self.run_hook(command), "")
+
+    def test_utf8_workspace_request(self):
+        self.workspace = self.root / "workspace with spaces \u00e9"
+        self.workspace.mkdir()
+        for host, command in self.launchers():
+            with self.subTest(host=host, command=command[0]):
+                message = self.context(host, self.run_hook(command))
+                self.assertIn("configured feeds did not provide Microsoft.AITools.BinlogMcp", message)
 
     def test_feed_errors_are_not_absence(self):
         class MissingServiceIndex(http.server.BaseHTTPRequestHandler):
@@ -201,11 +211,88 @@ function taskkill.exe {
     Write-Error 'ERROR: The process was not found.'
     $global:LASTEXITCODE = 1
 }
-""" + f"& '{launcher}'"
-        command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
-        message = self.context("copilot", self.run_hook(command))
-        self.assertIn("8-second diagnostic launcher budget expired", message)
-        self.assertNotIn("configured feeds did not provide", message)
+"""
+        for host in ("copilot", "claude"):
+            with self.subTest(host=host):
+                command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass",
+                           "-Command", script + f"& '{launcher}' -HostName {host}"]
+                message = self.context(host, self.run_hook(command))
+                self.assertIn("8-second diagnostic launcher budget expired", message)
+                self.assertNotIn("configured feeds did not provide", message)
+
+    @unittest.skipUnless(os.name == "nt", "Windows PowerShell stdin encoding")
+    def test_windows_utf8_bom_input_uses_workspace(self):
+        launcher = str(self.plugin / "hooks" / "session-start.ps1").replace("'", "''")
+        for host in ("copilot", "claude"):
+            with self.subTest(host=host):
+                command = [POWERSHELL, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                           "[Console]::InputEncoding = [Text.UTF8Encoding]::new($true); "
+                           f"& '{launcher}' -HostName {host}"]
+                message = self.context(host, self.run_hook(command))
+                self.assertIn("configured feeds did not provide Microsoft.AITools.BinlogMcp", message)
+
+    def assert_unix_tree_cleanup(self, exit_early):
+        fake_bin = self.root / "fake sdk"
+        fake_bin.mkdir()
+        leader_pid = self.root / "leader.pid"
+        package_pid = self.root / "package.pid"
+        credential_pid = self.root / "credential.pid"
+        group_file = self.root / "group.pid"
+        package = fake_bin / "package-search"
+        package.write_text(
+            "#!/bin/bash\ntrap '' TERM\nsleep 30 &\n"
+            f"printf '%s\\n' \"$$\" > {shlex.quote(str(package_pid))}\n"
+            f"printf '%s\\n' \"$!\" > {shlex.quote(str(credential_pid))}\nwait\n",
+            encoding="utf-8")
+        dotnet = fake_bin / "dotnet"
+        dotnet.write_text(
+            "#!/bin/bash\ntrap '' TERM\n"
+            f"bash {shlex.quote(str(package))} &\n"
+            f"printf '%s\\n' \"$$\" > {shlex.quote(str(leader_pid))}\n"
+            f"ps -o pgid= -p \"$$\" > {shlex.quote(str(group_file))}\n"
+            f"while [ ! -s {shlex.quote(str(credential_pid))} ]; do sleep 0.05; done\n"
+            + ("exit 1\n" if exit_early else "wait\n"), encoding="utf-8")
+        dotnet.chmod(0o700)
+        env = dict(self.env, PATH=str(fake_bin) + os.pathsep + self.env["PATH"])
+
+        def running(pid):
+            status = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(pid)], text=True, capture_output=True, check=False)
+            return bool(status.stdout.strip()) and not status.stdout.strip().startswith("Z")
+
+        for host, command in self.launchers():
+            with self.subTest(host=host, exit_early=exit_early):
+                sentinel = subprocess.Popen(["sleep", "30"])
+                try:
+                    message = self.context(host, self.run_hook(command, env=env))
+                    self.assertIn("selected SDK" if exit_early else "budget expired", message)
+                    self.assertNotIn("configured feeds did not provide", message)
+                    pids = [int(path.read_text()) for path in (leader_pid, package_pid, credential_pid)]
+                    self.assertEqual(int(group_file.read_text()), pids[0], "Helper must own its group.")
+                    deadline = time.monotonic() + 2
+                    while any(running(pid) for pid in pids) and time.monotonic() < deadline:
+                        time.sleep(0.05)
+                    self.assertFalse(any(running(pid) for pid in pids), "Helper descendants survived.")
+                    self.assertIsNone(sentinel.poll(), "Cleanup must not kill unrelated processes.")
+                finally:
+                    sentinel.terminate()
+                    sentinel.wait(timeout=5)
+                    for path in (credential_pid, package_pid, leader_pid):
+                        if path.exists():
+                            pid = int(path.read_text())
+                            if running(pid):
+                                os.kill(pid, signal.SIGKILL)
+                            path.unlink()
+                    if group_file.exists():
+                        group_file.unlink()
+
+    @unittest.skipIf(os.name == "nt", "Native Unix process groups")
+    def test_unix_timeout_stops_descendants(self):
+        self.assert_unix_tree_cleanup(exit_early=False)
+
+    @unittest.skipIf(os.name == "nt", "Native Unix process groups")
+    def test_unix_early_exit_stops_descendants(self):
+        self.assert_unix_tree_cleanup(exit_early=True)
 
     def test_hook_declarations_and_unchanged_mcp_launch(self):
         copilot = json.loads((PLUGIN / "hooks" / "copilot.json").read_text())
@@ -214,11 +301,13 @@ function taskkill.exe {
         self.assertEqual(hook["timeoutSec"], 10)
         self.assertIn("${PLUGIN_ROOT}", hook["powershell"])
         self.assertIn("${PLUGIN_ROOT}", hook["bash"])
+        self.assertTrue(hook["bash"].startswith("bash "))
         claude = json.loads((PLUGIN / "hooks" / "claude.json").read_text())
         hook = claude["hooks"]["SessionStart"][0]["hooks"][0]
         self.assertEqual(hook["timeout"], 10)
         self.assertEqual(hook["shell"], "bash")
         self.assertIn("${CLAUDE_PLUGIN_ROOT}", hook["command"])
+        self.assertTrue(hook["command"].startswith("bash "))
         for relative, expected in (("plugin.json", "./hooks/copilot.json"),
                                    (".claude-plugin/plugin.json", "./hooks/claude.json"),
                                    (".codex-plugin/plugin.json", None)):

@@ -1,12 +1,23 @@
-param()
+param(
+    [ValidateSet('copilot', 'claude')]
+    [string] $HostName = 'copilot'
+)
 
 $ErrorActionPreference = 'Stop'
+
+function Write-Context([string] $Message) {
+    if ($HostName -eq 'claude') {
+        @{ hookSpecificOutput = @{ hookEventName = 'SessionStart'; additionalContext = $Message } } | ConvertTo-Json -Compress
+    } else {
+        @{ additionalContext = $Message } | ConvertTo-Json -Compress
+    }
+}
 
 function Write-Diagnostic([string] $Reason) {
     $message = "dotnet-msbuild binlog MCP preflight: $Reason Package availability could not be verified. Tell the user. " +
         'Recovery options: make Microsoft.AITools.BinlogMcp available through an approved feed/mirror; add nuget.org only if organizational policy permits; ' +
         'or install the tool from an approved feed and register its binlog-mcp executable as an MCP server. Do not change NuGet configuration or bypass feed policy automatically.'
-    @{ additionalContext = $message } | ConvertTo-Json -Compress
+    Write-Context $message
 }
 
 $dotnet = Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue
@@ -17,17 +28,23 @@ if (-not $dotnet) {
 
 $child = $null
 $outputPath = $null
+$inputPath = $null
+$inputReader = $null
 try {
-    $inputJson = [Console]::In.ReadToEnd()
+    $inputReader = [IO.StreamReader]::new([Console]::OpenStandardInput(), [Text.Encoding]::UTF8)
+    $inputJson = $inputReader.ReadToEnd()
     $workspace = ($inputJson | ConvertFrom-Json).cwd
     if (-not $workspace -or -not [IO.Directory]::Exists($workspace)) {
         Write-Diagnostic "The hook could not use the session's workspace directory."
         exit 0
     }
     $outputPath = Join-Path ([IO.Path]::GetTempPath()) ("binlog-preflight-" + [guid]::NewGuid().ToString('N') + '.json')
+    $inputPath = $outputPath + '.input'
+    # Windows PowerShell and a console-less SDK process can select different stdin encodings.
+    [IO.File]::WriteAllText($inputPath, $inputJson, [Text.UTF8Encoding]::new($false))
     $info = New-Object Diagnostics.ProcessStartInfo
     $info.FileName = $dotnet.Source
-    $info.Arguments = 'fsi --exec "' + (Join-Path $PSScriptRoot 'binlog-preflight.fsx') + '" copilot "' + $outputPath + '"'
+    $info.Arguments = 'fsi --exec "' + (Join-Path $PSScriptRoot 'binlog-preflight.fsx') + '" ' + $HostName + ' "' + $outputPath + '" "' + $inputPath + '"'
     $info.WorkingDirectory = $workspace
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
@@ -39,7 +56,6 @@ try {
     [void]$child.Start()
     $stdout = $child.StandardOutput.ReadToEndAsync()
     $stderr = $child.StandardError.ReadToEndAsync()
-    $child.StandardInput.Write($inputJson)
     $child.StandardInput.Close()
     if (-not $child.WaitForExit(8000)) {
         # Kill only this launcher's process tree, including SDK and credential-provider children.
@@ -62,10 +78,18 @@ try {
         if ($output) {
             # Re-serialize only the documented output, never SDK banners or subprocess stderr.
             $payload = $output | ConvertFrom-Json
-            if ($payload.additionalContext -isnot [string]) {
+            if ($HostName -eq 'claude') {
+                if ($payload.hookSpecificOutput.hookEventName -ne 'SessionStart') {
+                    throw [FormatException]::new('Invalid hook event.')
+                }
+                $message = $payload.hookSpecificOutput.additionalContext
+            } else {
+                $message = $payload.additionalContext
+            }
+            if ($message -isnot [string]) {
                 throw [FormatException]::new('Invalid hook output.')
             }
-            @{ additionalContext = $payload.additionalContext } | ConvertTo-Json -Compress
+            Write-Context $message
         }
     }
 } catch [System.ComponentModel.Win32Exception] {
@@ -78,6 +102,8 @@ try {
     Write-Diagnostic 'The selected SDK did not return a valid diagnostic payload. Check dotnet --info and workspace global.json.'
 } finally {
     if ($child) { $child.Dispose() }
+    if ($inputReader) { $inputReader.Dispose() }
+    if ($inputPath -and [IO.File]::Exists($inputPath)) { Remove-Item -LiteralPath $inputPath -Force }
     if ($outputPath -and [IO.File]::Exists($outputPath)) { Remove-Item -LiteralPath $outputPath -Force }
 }
 exit 0

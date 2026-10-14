@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 host=$1
 diagnostic() {
@@ -16,25 +16,49 @@ if ! command -v dotnet >/dev/null 2>&1; then
     exit 0
 fi
 
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+case "$OSTYPE" in
+    msys*|cygwin*)
+        # MSYS process groups do not reliably include native Windows SDK descendants.
+        exec powershell.exe -NoProfile -ExecutionPolicy Bypass \
+            -File "$(cygpath -w "$script_dir/session-start.ps1")" -HostName "$host"
+        ;;
+esac
+
 scratch=$(mktemp -d 2>/dev/null) || {
     diagnostic 'The diagnostic launcher could not create its temporary directory.'
     exit 0
 }
-trap 'rm -f "$scratch/input" "$scratch/output"; rmdir "$scratch"' EXIT
+child=
+stop_helper() {
+    if [ -n "$child" ]; then
+        kill -TERM -- "-$child" 2>/dev/null
+        kill -KILL -- "-$child" 2>/dev/null
+        wait "$child" 2>/dev/null
+        child=
+    fi
+}
+cleanup() {
+    stop_helper
+    rm -f "$scratch/input" "$scratch/output"
+    rmdir "$scratch"
+}
+trap cleanup EXIT
+trap 'diagnostic "The diagnostic launcher was interrupted; this does not establish that MCP startup failed."; exit 0' HUP INT TERM
 cat >"$scratch/input"
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 # Only the script's serialized payload reaches the host, never SDK first-run banners.
-dotnet fsi --exec "$script_dir/binlog-preflight.fsx" "$host" "$scratch/output" <"$scratch/input" >/dev/null 2>&1 &
+# Bash job control gives this asynchronous command its own process group on macOS and Linux.
+set -m
+dotnet fsi --exec "$script_dir/binlog-preflight.fsx" "$host" "$scratch/output" "$scratch/input" </dev/null >/dev/null 2>&1 &
 child=$!
+set +m
 elapsed=0
 while kill -0 "$child" 2>/dev/null && [ "$elapsed" -lt 8 ]; do
     sleep 1
     elapsed=$((elapsed + 1))
 done
 if kill -0 "$child" 2>/dev/null; then
-    kill "$child" 2>/dev/null
-    kill -KILL "$child" 2>/dev/null
-    wait "$child" 2>/dev/null
+    stop_helper
     diagnostic 'The 8-second diagnostic launcher budget expired; this does not establish that MCP startup failed.'
 elif wait "$child" && [ -f "$scratch/output" ]; then
     cat "$scratch/output"

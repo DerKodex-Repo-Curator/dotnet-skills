@@ -73,4 +73,13 @@ for host in [ "copilot"; "claude" ] do
 let unavailable = ProcessStartInfo("dotnet-msbuild-test-no-such-executable")
 check (runProbe unavailable = CouldNotStart) "Process start failure must not throw."
 check (searchArguments = [ "package"; "search"; "Microsoft.AITools.BinlogMcp"; "--exact-match"; "--prerelease"; "--format"; "json" ]) "No config/source override or localized table parser."
+let input = JsonSerializer.Serialize {| cwd = Environment.CurrentDirectory |}
+let inputPath = IO.Path.GetTempFileName()
+try
+    IO.File.WriteAllText(inputPath, input, Text.UTF8Encoding(false))
+    check (workspace inputPath = Environment.CurrentDirectory) "Use the UTF-8 session workspace."
+    IO.File.WriteAllText(inputPath, input, Text.UTF8Encoding(true))
+    check (workspace inputPath = Environment.CurrentDirectory) "Accept a UTF-8 input BOM."
+finally
+    IO.File.Delete(inputPath)
 printfn "Passed %d preflight assertions." assertions

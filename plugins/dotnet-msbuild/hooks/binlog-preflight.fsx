@@ -115,16 +115,16 @@ let serialize host message =
     else
         JsonSerializer.Serialize {| additionalContext = message |}
 
-let workspace (input: string) =
-    use document = JsonDocument.Parse(input)
+let workspace inputPath =
+    use document = JsonDocument.Parse(File.ReadAllText(inputPath))
     match property "cwd" document.RootElement with
     | Some cwd when cwd.ValueKind = JsonValueKind.String && Directory.Exists(cwd.GetString()) -> cwd.GetString()
     | _ -> raise (JsonException("Expected a workspace directory."))
 
-let main host outputPath =
+let main host outputPath inputPath =
     let message =
         try
-            let cwd = workspace (Console.In.ReadToEnd())
+            let cwd = workspace inputPath
             Directory.SetCurrentDirectory(cwd)
             if Environment.Version.Major < 10 then Some(context unknown)
             else
@@ -139,4 +139,4 @@ let main host outputPath =
     File.WriteAllText(outputPath, output)
 
 if Path.GetFullPath(fsi.CommandLineArgs[0]) = Path.Combine(__SOURCE_DIRECTORY__, __SOURCE_FILE__) then
-    main fsi.CommandLineArgs[1] fsi.CommandLineArgs[2]
+    main fsi.CommandLineArgs[1] fsi.CommandLineArgs[2] fsi.CommandLineArgs[3]
