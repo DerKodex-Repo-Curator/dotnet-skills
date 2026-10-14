@@ -388,14 +388,51 @@ stimuli:
               assert hashlib.sha256((base / 'tools/make-buildinfo.sh').read_bytes()).hexdigest() == '8dac8ea8ec16e52259c72d0b91a36c4ea91212d92ed6067e1743c15616c927e1', 'preserve the submitted generator before instrumenting it'
               bash = shutil.which('bash')
               assert bash, 'Bash is required to exercise build.sh'
+              real_dotnet = shutil.which('dotnet')
+              assert real_dotnet, 'the .NET SDK is required to exercise per-project generation hooks'
               with tempfile.TemporaryDirectory() as tmp:
                   work = pathlib.Path(tmp) / 'work'
                   shutil.copytree(base, work)
                   bin_dir = pathlib.Path(tmp) / 'bin'
                   bin_dir.mkdir()
+                  projects = []
+                  phases = ['BeforeBuild', 'PrepareForBuild', 'BeforeCompile', 'CoreCompile', 'AfterBuild']
+                  submitted_targets = {target.get('Name') for target in root.findall('Target')}
+                  observations = []
+                  for name in ['Api', 'Worker']:
+                      project_dir = work / 'probes' / name
+                      project_dir.mkdir(parents=True)
+                      probe = ET.Element('Project')
+                      properties = ET.SubElement(probe, 'PropertyGroup')
+                      for property_name, value in [('Configuration', 'Release'), ('TargetFramework', 'net10.0'),
+                                                   ('IsCrossTargetingBuild', 'false'),
+                                                   ('BuildDependsOn', ';'.join(phases))]:
+                          ET.SubElement(properties, property_name).text = value
+                      ET.SubElement(probe, 'Import', Project=str((work / 'Directory.Build.targets').resolve()))
+                      for phase in phases:
+                          if phase not in submitted_targets:
+                              ET.SubElement(probe, 'Target', Name=phase)
+                      if 'Build' not in submitted_targets:
+                          ET.SubElement(probe, 'Target', Name='Build', DependsOnTargets='$(BuildDependsOn)')
+                      observation = bin_dir / (name + '.built')
+                      observations.append((name, observation))
+                      observer = ET.SubElement(probe, 'Target', Name='ObserveProbeBuild_' + uuid.uuid4().hex,
+                                               AfterTargets='Build')
+                      ET.SubElement(observer, 'WriteLinesToFile', File=str(observation.resolve()),
+                                    Lines='$(MSBuildProjectName)', Overwrite='true')
+                      project_path = project_dir / (name + '.proj')
+                      ET.ElementTree(probe).write(project_path, encoding='utf-8')
+                      projects.append(str(project_path.resolve()))
+                  graph = ET.Element('Project', DefaultTargets='Build')
+                  ET.SubElement(graph, 'Target', Name='Restore')
+                  build = ET.SubElement(graph, 'Target', Name='Build')
+                  ET.SubElement(build, 'MSBuild', Projects=';'.join(projects), Targets='Build', BuildInParallel='true')
+                  graph_path = work / 'probe-build.proj'
+                  ET.ElementTree(graph).write(graph_path, encoding='utf-8')
                   generator = work / 'tools/make-buildinfo.sh'
                   generator.write_text(
                       '#!/usr/bin/env sh\nset -eu\n'
+                      'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"\n'
                       'printf "generator-start\\n" >> "$MOCK_BIN/events"\n'
                       '[ "$#" -eq 1 ]\n'
                       'sleep 1\nmkdir -p "$(dirname "$1")"\nprintf "%s\\n" "$EXPECTED_CONTENT" > "$1"\n'
@@ -409,17 +446,24 @@ stimuli:
                       '[ "$1" = build ] || [ "$1" = msbuild ]\n'
                       '[ "$2" = Contoso.slnx ]\n'
                       '[ "$(cat obj/buildinfo.g.cs)" = "$EXPECTED_CONTENT" ]\n'
-                      'stat -c %Y obj/buildinfo.g.cs >> "$MOCK_BIN/mtimes"\n',
+                      'stat -c %Y obj/buildinfo.g.cs >> "$MOCK_BIN/mtimes"\n'
+                      'mode="$1"\nshift 2\n'
+                      '"$REAL_DOTNET" "$mode" probe-build.proj "$@" -nologo -verbosity:quiet\n',
                       encoding='utf-8', newline='\n',
                   )
                   dotnet.chmod(0o755)
-                  env = dict(os.environ, MOCK_BIN=str(bin_dir), EXPECTED_CONTENT=uuid.uuid4().hex)
+                  env = dict(os.environ, MOCK_BIN=str(bin_dir), EXPECTED_CONTENT=uuid.uuid4().hex,
+                             REAL_DOTNET=pathlib.Path(real_dotnet).as_posix())
                   generated = work / 'obj/buildinfo.g.cs'
                   def run_build():
+                      for _, path in observations:
+                          path.unlink(missing_ok=True)
                       subprocess.run(
                           [bash, '-c', 'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"; export PATH="$MOCK_BIN:$PATH"; bash build.sh'],
                           cwd=work, env=env, check=True, timeout=20,
                       )
+                      assert all(path.is_file() and path.read_text(encoding='utf-8-sig').strip() == name
+                                 for name, path in observations), 'exercise both project Build paths and their submitted target hooks'
                       assert (bin_dir / 'events').read_text().splitlines() == ['generator-start', 'generator-done', 'build'], 'generate exactly once and await its required output before building'
                       (bin_dir / 'events').unlink()
                       return generated.stat().st_mtime_ns
