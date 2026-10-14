@@ -30,6 +30,8 @@ For applications targeting .NET 11 or later:
 
 ## Target Framework
 
+Inspect the project's actual `TargetFramework` or `TargetFrameworks` before introducing these APIs; they require .NET 11 or later. Do not upgrade the target framework implicitly. For multi-targeted projects that include older frameworks, preserve those targets and their existing behavior; use conditional compilation or framework-specific implementations to keep .NET 11 APIs out of older-target builds.
+
 ```xml
 <TargetFramework>net11.0</TargetFramework>
 ```
@@ -94,7 +96,7 @@ process.WaitForExit();
 
 Here the parent reads stdout until EOF before it starts draining stderr. If the child fills stderr while stdout remains open, the child blocks writing stderr and the parent blocks waiting for stdout to close. Replacing these reads with sequentially awaited `ReadToEndAsync` calls has the same problem.
 
-**Drain both redirected streams concurrently, before waiting for process exit.** The following .NET 11 APIs do this for you. They prevent this pipe-buffer deadlock, not every possible hang: a descendant that retains an inherited pipe writer can still delay EOF.
+**Start draining both redirected streams concurrently while the child runs; never wait for process exit without draining them.** The following .NET 11 APIs do this for you. They prevent this pipe-buffer deadlock, not every possible hang: a descendant that retains an inherited pipe writer can still delay EOF.
 
 ### Capture Text or Bytes From a Started Process
 
@@ -474,9 +476,9 @@ Use `InheritedHandles` to specify which additional handles a child may inherit, 
 public IList<SafeHandle>? InheritedHandles { get; set; }
 ```
 
-**Enable restricted inheritance by default on every platform**: use `InheritedHandles = []` when no additional handles are needed, or an explicit list when they are.
+**When configuring `ProcessStartInfo`, enable restricted inheritance on every platform**: use `InheritedHandles = []` when no additional handles are needed, or an explicit list when they are.
 
-For combined helpers such as `Run[Async]` and `RunAndCaptureText[Async]`, use the `ProcessStartInfo` overloads to configure this restriction; the filename overloads do not expose it.
+The filename overloads of `Run[Async]`, `RunAndCaptureText[Async]`, and `StartAndForget` are convenient, but retain the default inheritance policy. Use their `ProcessStartInfo` overloads when restricted inheritance is required. The short filename-overload examples in this skill demonstrate each operation, not a restricted-inheritance configuration.
 
 | Value | Child inherits |
 |-------|----------------|
@@ -581,6 +583,8 @@ On Linux and Android, process starts with `KillOnParentExit` enabled are seriali
 ## Detaching a Process From the Parent's Terminal
 
 `ProcessStartInfo.StartDetached` starts the process without attachment to the parent's console on Windows, or in a new session without a controlling terminal on Unix.
+
+Terminal detachment does not guarantee that the child survives the parent: `StartDetached` does not override `KillOnParentExit` or escape a Windows job's lifetime restrictions.
 
 When `StartDetached` is `true`, standard handles without explicit redirection are redirected to the null device to avoid keeping the parent's standard handles open unnecessarily.
 
