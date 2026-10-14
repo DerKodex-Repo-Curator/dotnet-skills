@@ -106,7 +106,7 @@ stimuli:
             - &execution_modes |
               const fs = require('fs');
               const content = fs.readFileSync(process.argv[1], 'utf8');
-              if (/^\s*(?:VSTestTestCaseFilter\s*:|-\s*name\s*:\s*VSTestTestCaseFilter\b)/im.test(content)) {
+              if (/(?:^\s*(?:-\s*)?|[{,]\s*)(?:["']?VSTestTestCaseFilter["']?\s*:|["']?name["']?\s*:\s*["']?VSTestTestCaseFilter(?:["']|(?=\s|[,}]|$)))/im.test(content)) {
                 throw new Error('do not add environment or pipeline variables that filter fixture tests');
               }
               const commands = content.split(/\r?\n/)
