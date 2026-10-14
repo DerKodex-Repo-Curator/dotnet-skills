@@ -78,6 +78,15 @@ Here the parent reads stdout until EOF before it starts draining stderr. If the 
 
 Use `Process.ReadAllText` or `Process.ReadAllTextAsync` to capture both streams as text. They drain stdout and stderr concurrently and return a tuple containing both strings. Text is decoded using `ProcessStartInfo.StandardOutputEncoding` and `StandardErrorEncoding`, or the defaults when unspecified.
 
+Both text and byte readers require `RedirectStandardOutput = true` and `RedirectStandardError = true` before starting the process:
+
+```csharp
+public (string StandardOutput, string StandardError) ReadAllText(TimeSpan? timeout = null)
+public Task<(string StandardOutput, string StandardError)> ReadAllTextAsync(CancellationToken cancellationToken = default)
+public (byte[] StandardOutput, byte[] StandardError) ReadAllBytes(TimeSpan? timeout = null)
+public Task<(byte[] StandardOutput, byte[] StandardError)> ReadAllBytesAsync(CancellationToken cancellationToken = default)
+```
+
 **Use full-output capture only when the output size is trusted and bounded.** `ReadAllText[Async]` and `ReadAllBytes[Async]` read until EOF and buffer all captured output in the parent process's memory, without an output-size limit. An untrusted child can produce unlimited output and exhaust the parent's memory, causing an out-of-memory failure. A timeout or cancellation token is not a memory limit. For untrusted output, use a bounded capture strategy that drains both streams concurrently, enforces an explicit byte limit, and terminates the child when that limit is exceeded.
 
 ```csharp
@@ -119,7 +128,12 @@ These instance methods read to EOF; they do not replace waiting for process exit
 
 ### Process Output Line by Line With ReadAllLines[Async]
 
-Use `Process.ReadAllLines` or `Process.ReadAllLinesAsync` to read stdout and stderr as one sequence of `ProcessOutputLine` values, interleaved as lines become available. `Content` contains the line's text, and `StandardError` identifies its source. Enable both output and error redirection before starting the process. Consume the sequence with `foreach` or `await foreach` while the process runs; merely obtaining the enumerable does not drain output.
+Use `Process.ReadAllLines` or `Process.ReadAllLinesAsync` to read stdout and stderr as one sequence of `ProcessOutputLine` values, interleaved as lines become available. `ProcessOutputLine` is a readonly struct with read-only properties `string Content` for the line's text and `bool StandardError` identifying its source. Enable both output and error redirection before starting the process. Consume the sequence with `foreach` or `await foreach` while the process runs; merely obtaining the enumerable does not drain output.
+
+```csharp
+public IEnumerable<ProcessOutputLine> ReadAllLines(TimeSpan? timeout = null)
+public IAsyncEnumerable<ProcessOutputLine> ReadAllLinesAsync(CancellationToken cancellationToken = default)
+```
 
 Prefer these methods when the interleaving of output and error matters. Capturing stdout and stderr separately and then concatenating the strings loses that interleaving. For example, a child might print:
 
@@ -171,13 +185,31 @@ Use `Process.RunAndCaptureTextAsync` when asynchronous execution is needed:
 ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--help"]);
 ```
 
-Both methods combine starting the process, draining both streams, and waiting for exit. Read `result.StandardOutput`, `result.StandardError`, and `result.ExitStatus`; no separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself.
+Both methods combine starting the process, draining both streams, and waiting for exit. They return the framework's sealed `ProcessTextOutput` class, with read-only properties `ProcessExitStatus ExitStatus`, `string StandardOutput`, `string StandardError`, and `int ProcessId`. No separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, require `UseShellExecute = false` (the default in modern .NET) and enable both `RedirectStandardOutput` and `RedirectStandardError` yourself; the methods do not modify the supplied configuration.
+
+The synchronous overloads accept a timeout; the asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
+
+```csharp
+public static ProcessTextOutput RunAndCaptureText(string fileName, IEnumerable<string>? arguments = null, TimeSpan? timeout = null)
+public static Task<ProcessTextOutput> RunAndCaptureTextAsync(string fileName, IEnumerable<string>? arguments = null, CancellationToken cancellationToken = default)
+public static ProcessTextOutput RunAndCaptureText(ProcessStartInfo startInfo, TimeSpan? timeout = null)
+public static Task<ProcessTextOutput> RunAndCaptureTextAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken = default)
+```
 
 `RunAndCaptureText[Async]` also buffers all captured output in memory without an output-size limit. The same trusted, bounded-output requirement applies; do not use it to capture potentially unlimited output from an untrusted process.
 
 ### Run and Wait Without Capturing Output
 
 Use `Process.Run` or `Process.RunAsync` when you need to start a process and wait for its exit status without capturing its output. By default, the child inherits the parent's standard handles, so output remains visible. Pass `silent: true` to redirect all three standard handles (stdin, stdout, and stderr) to the null device (`NUL` on Windows, `/dev/null` on Unix). Writes are discarded and reads receive EOF, without creating pipes that the parent must drain.
+
+The `ProcessStartInfo` overloads require `UseShellExecute = false`, the default in modern .NET. Synchronous overloads accept a timeout; asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
+
+```csharp
+public static ProcessExitStatus Run(string fileName, IEnumerable<string>? arguments = null, bool silent = false, TimeSpan? timeout = null)
+public static Task<ProcessExitStatus> RunAsync(string fileName, IEnumerable<string>? arguments = null, bool silent = false, CancellationToken cancellationToken = default)
+public static ProcessExitStatus Run(ProcessStartInfo startInfo, TimeSpan? timeout = null)
+public static Task<ProcessExitStatus> RunAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken = default)
+```
 
 ```csharp
 ProcessExitStatus status = Process.Run("dotnet", ["build"], silent: true);
@@ -257,7 +289,7 @@ ProcessExitStatus status = await process.WaitForExitStatusAsync();
 int exitCode = status.ExitCode;
 ```
 
-`status.ExitCode` is an already-obtained value, unlike the process-state checks performed by `process.ExitCode`. `ProcessExitStatus` also exposes `Canceled` and the terminating `Signal` on Unix. Interpret exit codes using the external command's contract.
+`status.ExitCode` is an already-obtained value, unlike the process-state checks performed by `process.ExitCode`. Use the framework's sealed `ProcessExitStatus` class directly; its read-only properties are `int ExitCode`, `bool Canceled`, and `PosixSignal? Signal` for the terminating signal on Unix. Interpret exit codes using the external command's contract; there is no universal `Success` property.
 
 ### Choose Whether Cancellation or Timeout Kills the Process
 
@@ -414,6 +446,10 @@ This coordination prevents races with cooperating .NET starts; it is not an auto
 
 Use `InheritedHandles` to specify which additional handles a child may inherit, instead of exposing all inheritable handles in the parent:
 
+```csharp
+public IList<SafeHandle>? InheritedHandles { get; set; }
+```
+
 **Enable restricted inheritance by default on every platform**: use `InheritedHandles = []` when no additional handles are needed, or an explicit list when they are.
 
 | Value | Child inherits |
@@ -527,83 +563,6 @@ public bool StartDetached { get; set; }
 ```
 
 Requires `UseShellExecute = false`.
-
-## New APIs
-
-### Types
-
-Before using the new convenience methods, note the following types. Use the framework types directly:
-
-| Type | Kind | Read-only properties |
-|------|------|----------------------|
-| `ProcessExitStatus` | Sealed class | `int ExitCode`, `bool Canceled`, `PosixSignal? Signal` |
-| `ProcessTextOutput` | Sealed class | `ProcessExitStatus ExitStatus`, `string StandardOutput`, `string StandardError`, `int ProcessId` |
-| `ProcessOutputLine` | Readonly struct | `string Content`, `bool StandardError` |
-
-`ProcessExitStatus` describes the outcome of a completed process. Interpret `ExitCode` using the external command's contract; there is no universal `Success` property. `ProcessTextOutput` contains the exit status, captured output and error text, and process ID. `ProcessOutputLine` identifies one output line and whether it came from standard error.
-
-### High-Level Convenience APIs
-
-#### Static Methods
-
-The `ProcessStartInfo` overloads below require `UseShellExecute = false`, which is the default for .NET.
-
-##### `Process.Run` / `Process.RunAsync`
-Starts a process and waits for it to exit, returning the exit status. Does not capture standard output or error. Passing `silent: true` redirects standard input, output, and error to the null device, providing EOF on input and discarding output and error without creating pipes to drain. On timeout or cancellation, the process is killed.
-```csharp
-public static ProcessExitStatus Run(string fileName, IEnumerable<string>? arguments = null, bool silent = false, TimeSpan? timeout = null)
-public static Task<ProcessExitStatus> RunAsync(string fileName, IEnumerable<string>? arguments = null, bool silent = false, CancellationToken cancellationToken = default)
-public static ProcessExitStatus Run(ProcessStartInfo startInfo, TimeSpan? timeout = null)
-public static Task<ProcessExitStatus> RunAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken = default)
-```
-
-##### `Process.RunAndCaptureText` / `Process.RunAndCaptureTextAsync`
-Use when starting a process, capturing both streams as text, and waiting for its exit status is the complete operation. The method drains both streams concurrently before completing, avoiding the pipe-buffer deadlocks described above. On timeout or cancellation, the process is killed.
-
-When using the `ProcessStartInfo` overloads, the caller is responsible for setting `RedirectStandardOutput = true` and `RedirectStandardError = true` on `ProcessStartInfo` (because BCL APIs cannot modify the input arguments they were given).
-```csharp
-public static ProcessTextOutput RunAndCaptureText(string fileName, IEnumerable<string>? arguments = null, TimeSpan? timeout = null)
-public static Task<ProcessTextOutput> RunAndCaptureTextAsync(string fileName, IEnumerable<string>? arguments = null, CancellationToken cancellationToken = default)
-public static ProcessTextOutput RunAndCaptureText(ProcessStartInfo startInfo, TimeSpan? timeout = null)
-public static Task<ProcessTextOutput> RunAndCaptureTextAsync(ProcessStartInfo startInfo, CancellationToken cancellationToken = default)
-```
-
-#### Instance Methods
-These methods drain stdout and stderr concurrently on an already-started `Process`, avoiding pipe-buffer deadlocks. Choose `ReadAllText[Async]` for decoded text, `ReadAllBytes[Async]` for raw bytes, or `ReadAllLines[Async]` for incremental line processing. Use `WaitForExitStatus` or await `WaitForExitStatusAsync` afterward to wait for termination and obtain the exit status; see [Waiting for Process Exit](#waiting-for-process-exit).
-
-*Note: Calling these methods requires `RedirectStandardOutput = true` and `RedirectStandardError = true` on the `ProcessStartInfo` passed to `Process.Start`.*
-
-```csharp
-public (string StandardOutput, string StandardError) ReadAllText(TimeSpan? timeout = null)
-public Task<(string StandardOutput, string StandardError)> ReadAllTextAsync(CancellationToken cancellationToken = default)
-public (byte[] StandardOutput, byte[] StandardError) ReadAllBytes(TimeSpan? timeout = null)
-public Task<(byte[] StandardOutput, byte[] StandardError)> ReadAllBytesAsync(CancellationToken cancellationToken = default)
-public IEnumerable<ProcessOutputLine> ReadAllLines(TimeSpan? timeout = null)
-public IAsyncEnumerable<ProcessOutputLine> ReadAllLinesAsync(CancellationToken cancellationToken = default)
-```
-
-Example of deconstructing the tuple return:
-```csharp
-(string stdout, string stderr) = await process.ReadAllTextAsync();
-```
-
-### ProcessStartInfo Properties
-
-#### `InheritedHandles`
-Provides precise control over which handles (file descriptors) are inherited by the child process, preventing accidental resource leaks.
-- Standard handles (`stdin`, `stdout`, `stderr`) are always included (no need to add them to the list).
-- Setting the list to an empty list means only standard handles get inherited.
-- Only `SafeFileHandle` and `SafePipeHandle` instances are allowed as of today.
-- On Windows, explicit lists use a shared reader lock, allowing concurrent starts instead of serializing them under an exclusive writer lock.
-- Concurrent process starts must not pass the same handle in `InheritedHandles`: the runtime temporarily changes its inheritance flags. Serialize starts that share a handle, or use separate handles for each concurrent start.
-- Do not enable inheritance on the handles before passing them; other process-start APIs could then inherit them unintentionally.
-- Officially supported Unix environments support restricted inheritance; very old unsupported Linux environments may throw `PlatformNotSupportedException` for a non-null list. See [Unix Support and Older Linux Compatibility](#unix-support-and-older-linux-compatibility) before adding a compatibility fallback.
-- A non-null list requires `UseShellExecute = false` and cannot be combined with a non-empty `UserName`.
-```csharp
-public IList<SafeHandle>? InheritedHandles { get; set; }
-```
-
-See [Controlling Handle Inheritance](#controlling-handle-inheritance) for sibling-inheritance races, the difference between `null` and an empty list, and why restricting inheritance does not prevent grandchild-held standard handles from delaying EOF.
 
 ---
 
