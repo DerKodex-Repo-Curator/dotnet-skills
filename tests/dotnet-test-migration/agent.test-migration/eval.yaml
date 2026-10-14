@@ -4,6 +4,60 @@ type: capability
 defaults:
   timeout: 5m
 stimuli:
+  - name: Leave an already aligned MSTest v4 native MTP project unchanged
+    tags: {capability: already-aligned-migration-noop, risk: unnecessary-upgrade, journey: assess-current-project}
+    prompt: |
+      Bring this repository's tests to MSTest v4 and the native .NET 10 test
+      runner only if a migration is actually needed. Inspect the project,
+      global.json and tests first. If they are already aligned, leave every
+      file unchanged and explain the detected setup. Do not restore, build,
+      or execute tests for this inspection.
+    constraints:
+      reject_tools: [bash, powershell, execute, run_shell_command, task, edit, create, apply_patch]
+    environment:
+      files:
+        - src: ../fixtures/current-native
+          dest: .
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+      skills:
+        - ../../plugins/dotnet-test/skills/platform-detection
+        - ../../plugins/dotnet-test-migration/skills/migrate-mstest-v3-to-v4
+        - ../../plugins/dotnet-test-migration/skills/migrate-vstest-to-mtp
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: agent-current-native-noop
+        agent: {name: reference, version: "1.0", model_name: curated}
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              CurrentTests.csproj already uses MSTest v4 (4.4.1), and global.json
+              selects native Microsoft.Testing.Platform on .NET 10. No migration
+              is needed. I inspected the files, changed nothing and ran no commands.
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root . --workspace
+            --file 862e32d03af85bcbe5e5ef4501063db618c1e2c0f2bebdfd9c9e6fa1f75db39e:CurrentTests.csproj
+            --file ebc2d4f2471e3df021d5ca812092c9a79c6a8dbef69b4037a35f2009f43b99e4:CurrentTests.cs
+            --file bb8bde5a1a7b9f418d206c2c9614697507eb02d640f83414d6ba435ad549d91c:global.json
+            --file a900b417f9cc64204d58a8c2f798febf446509e3ab583211d2e96112bc11dadb:notes.txt
+            --file 5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a:.eval/migration_evidence.py
+          expected_exit_code: 0
+          timeout: 1m
+      - type: output-matches
+        config: {pattern: '(?i)MSTest.*(?:v4|4\.4\.1)|(?:v4|4\.4\.1).*MSTest'}
+      - type: output-matches
+        config: {pattern: '(?i)native|Microsoft\.Testing\.Platform|MTP'}
+      - type: prompt
+    rubric:
+      - Detects that both the framework and native runner are already aligned and avoids unnecessary migration steps.
+      - Preserves every supplied file, the staged verifier and the workspace file set rather than rewriting equivalent configuration.
+      - Reports inspection-only evidence without claiming restore, build or test execution.
+
   - name: Detect MSTest v2 on VSTest and recommend migration path
     tags: {capability: mstest-detection, risk: wrong-upgrade-path, journey: assess-migrations}
     prompt: |
@@ -186,7 +240,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root OrderTests
             --file 5dedff259cd3951d7944eb07f4a70ea0152d7e051e8d2a4def183426adc4059d:OrderTests.csproj
             --file f2660905616f9ef20ae1f6f56b334c01d17cc1d4bc1d23cd33ff5d958670f43e:OrderServiceTests.cs
           expected_exit_code: 0
@@ -230,7 +284,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" stages --project OrderTests/OrderTests.csproj
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" stages --project OrderTests/OrderTests.csproj
             --runner native --mstest-major 4 --expect CreateOrder_ValidInput_ReturnsOrder=Passed
             --expect invalid-zero=Passed --expect invalid-negative=Passed
             --source-contract staged-orders:ce046d85855206011a53400f227b69d7922b06ddcf69e4e0d0863d39a4b5b2eb:OrderTests/OrderServiceTests.cs

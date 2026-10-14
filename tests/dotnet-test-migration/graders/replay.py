@@ -13,7 +13,9 @@ import yaml
 
 
 def materialize(spec, stimulus, workspace):
-    for item in stimulus.get("environment", {}).get("files", []):
+    document = yaml.safe_load(spec.read_text(encoding="utf-8"))
+    files = document.get("environment", {}).get("files", []) + stimulus.get("environment", {}).get("files", [])
+    for item in files:
         source = (spec.parent / item["src"]).resolve()
         target = workspace / item["dest"]
         if source.is_dir():

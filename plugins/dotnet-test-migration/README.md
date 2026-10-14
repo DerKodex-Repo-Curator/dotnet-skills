@@ -93,6 +93,11 @@ Both test projects must reference the supplied production library in the
 project graph and compiler metadata. The evaluator rejects additional local
 projects and checks that the copied runtime dependency matches that library's
 verified output.
+The delivered project, props/targets, SDK/runner selection, package/settings
+configuration and supporting inputs are snapshotted before restore/build/test
+and checked afterward, excluding build outputs and evaluator result artifacts.
+Verified package-asset files are retained as explicit exceptions to the build-output
+exclusion. Green TRX results cannot hide a rewritten final configuration or package resolution.
 
 File hashes alone do not establish compiler participation. Executable migration
 cases bind each project's target-time compile items and actual C# compiler
@@ -113,6 +118,12 @@ rejects adding unrelated tests. It is not a generic multi-collection lifetime
 mapping, and no cleanup may depend on every class being selected.
 A deferred-member scheduling fallback must defer both members; a mixed policy
 cannot support a group-wide claim about unrelated-class overlap.
+
+Already-current native MTP fixtures cover both orchestrator no-op behavior and
+the platform skill's dormancy boundary. Their guards preserve all user files and
+staged verifier bytes and reject root additions, excluding only host state and generated
+Python bytecode. Fixture-health execution is separate evidence, not a claim that
+the inspected agent ran commands.
 
 From the repository root:
 

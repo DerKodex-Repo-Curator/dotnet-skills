@@ -68,7 +68,7 @@ stimuli:
             - >-
               import hashlib,pathlib;
               p=pathlib.Path('.eval/collection_report.py');data=p.read_bytes();
-              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='cc05666d0b0647d25a1139afad1249629647d3e5ea52de29daff80545df2bb12','Report verifier changed';
+              assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='fb94c18b186ff7ed068b276941912e1b1aad1306a13228b84517b437c15b4dcc','Report verifier changed';
               exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})
           timeout: 4m
       - type: output-matches

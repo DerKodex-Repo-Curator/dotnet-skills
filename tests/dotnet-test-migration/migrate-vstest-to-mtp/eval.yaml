@@ -4,6 +4,59 @@ type: capability
 defaults:
   timeout: 8m
 stimuli:
+  - name: Leave a healthy already-native MTP project dormant and unchanged
+    expect_activation: false
+    tags: {capability: already-native-boundary, risk: unnecessary-runner-rewrite, journey: inspect-healthy-runner}
+    prompt: |
+      Our .NET 10 tests already run successfully on Microsoft.Testing.Platform.
+      Check the supplied configuration and tell me whether runner changes are
+      needed. There is no failing behavior to fix. Leave everything unchanged
+      if the setup is already correct, and only inspect files: do not execute
+      shell commands, restore packages, build or run tests.
+    constraints:
+      reject_tools: [bash, powershell, execute, run_shell_command, task, edit, create, apply_patch]
+    environment:
+      files:
+        - src: ../fixtures/current-native
+          dest: .
+        - src: ../graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: native-mtp-dormancy
+        agent: {name: reference, version: "1.0", model_name: curated}
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              The project already enables MSTest's MTP runner, and global.json
+              selects native Microsoft.Testing.Platform. No runner change is
+              needed. I left all files unchanged and did not execute commands.
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root . --workspace
+            --file 862e32d03af85bcbe5e5ef4501063db618c1e2c0f2bebdfd9c9e6fa1f75db39e:CurrentTests.csproj
+            --file ebc2d4f2471e3df021d5ca812092c9a79c6a8dbef69b4037a35f2009f43b99e4:CurrentTests.cs
+            --file bb8bde5a1a7b9f418d206c2c9614697507eb02d640f83414d6ba435ad549d91c:global.json
+            --file a900b417f9cc64204d58a8c2f798febf446509e3ab583211d2e96112bc11dadb:notes.txt
+            --file 5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a:.eval/migration_evidence.py
+          expected_exit_code: 0
+          timeout: 1m
+      - type: output-matches
+        config: {pattern: '(?i)already|unchanged|no (?:runner )?(?:change|migration).*(?:needed|required)'}
+      - type: tool-calls
+        config:
+          disallowed:
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|task)$'
+      - type: prompt
+    rubric:
+      - Recognizes the healthy native configuration as outside a VSTest-to-MTP migration and does not activate migration work.
+      - Preserves the complete workspace file set and bytes, including unrelated files and the staged verifier.
+      - Does not claim execution or propose an unnecessary compatibility bridge, package change or runner rewrite.
+
   - name: Migrate MSTest project from VSTest to Microsoft.Testing.Platform
     tags: {capability: mstest-runner, risk: partial-enablement, journey: plan-platform-migration}
     prompt: |
@@ -350,7 +403,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner native --mstest-major 4 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 4.4.1 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj
@@ -397,7 +450,7 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='bb166bf60c078abb395b490c89ce1a559d0bff939fc4e1832f2b8bf9e76910fe','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" run --project Alpha.Tests/Alpha.Tests.csproj --solution Suite.slnx
             --runner bridge --mstest-major 3 --report-count 2 --expect alpha-positive=Passed
             --mstest-version 3.8.0 --production-project Library/Library.csproj
             --package-project Beta.Tests/Beta.Tests.csproj

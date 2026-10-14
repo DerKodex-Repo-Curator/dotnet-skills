@@ -16,6 +16,61 @@ SPEC.loader.exec_module(evidence)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_configuration_snapshot_rejects_rewrites_additions_and_removals(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            filenames = ("Tests.csproj", "Directory.Build.props", "Directory.Build.targets",
+                         "Directory.Packages.props", "global.json", "NuGet.Config", "test.runsettings",
+                         "Directory.Build.rsp", ".editorconfig", "custom.settings.json", "tests.cs")
+            for name in filenames:
+                (root / name).write_bytes(b"verified configuration\n")
+            expected = evidence.configuration_snapshot(root)
+            self.assertEqual(set(filenames), set(expected))
+            (root / "obj").mkdir()
+            (root / "obj" / "Tests.csproj.nuget.g.props").write_text("restore output")
+            evidence.verify_configuration(root, expected)
+            assets_path = root / "obj" / "project.assets.json"
+            assets_path.write_bytes(b"verified packages")
+            assets = {"obj/project.assets.json": evidence.sha256(assets_path)}
+            evidence.verify_configuration(root, expected, assets)
+            assets_path.write_bytes(b"changed packages")
+            with self.assertRaisesRegex(AssertionError, "Migration configuration changed"):
+                evidence.verify_configuration(root, expected, assets)
+            for name in filenames:
+                with self.subTest(file=name):
+                    path = root / name
+                    path.write_bytes(b"changed configuration\n")
+                    with self.assertRaisesRegex(AssertionError, "Migration configuration changed"):
+                        evidence.verify_configuration(root, expected)
+                    path.unlink()
+                    with self.assertRaisesRegex(AssertionError, "Migration configuration changed"):
+                        evidence.verify_configuration(root, expected)
+                    path.write_bytes(b"verified configuration\n")
+            (root / "new.targets").write_text("new import")
+            with self.assertRaisesRegex(AssertionError, "Migration configuration changed"):
+                evidence.verify_configuration(root, expected)
+
+    def test_workspace_preservation_includes_helpers_and_root_additions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / ".eval").mkdir()
+            for name in ("test.py", ".eval/guard.py"):
+                (root / name).write_bytes(b"unchanged\n")
+            expected = {name: evidence.sha256(root / name) for name in ("test.py", ".eval/guard.py")}
+            (root / ".git").mkdir()
+            (root / ".git" / "index").write_text("host state")
+            (root / "__pycache__").mkdir()
+            (root / "__pycache__" / "test.cpython-314.pyc").write_bytes(b"bytecode")
+            evidence.preserve(root, expected, workspace=True)
+            for name in ("unrequested.txt", "__pycache__/hidden.py"):
+                (root / name).write_text("new file")
+                with self.assertRaises(AssertionError):
+                    evidence.preserve(root, expected, workspace=True)
+                (root / name).unlink()
+            (root / ".eval" / "guard.py").write_text("modified helper")
+            with self.assertRaises(AssertionError):
+                evidence.preserve(root, expected, workspace=True)
+
     def test_project_graph_binds_global_references_and_runtime_copies(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

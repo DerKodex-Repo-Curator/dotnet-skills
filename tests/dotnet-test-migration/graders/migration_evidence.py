@@ -17,16 +17,23 @@ def sha256(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def preserve(root, expected):
+HOST_STATE = {".git", ".agents", ".copilot", ".claude"}
+
+
+def preserve(root, expected, workspace=False):
     root = Path(root)
     assert not is_linked_path(root), f"Symlink or junction in preserved scope: {root}"
-    paths = list(root.rglob("*"))
+    paths = [
+        path for path in root.rglob("*")
+        if not workspace or path.relative_to(root).parts[0] not in HOST_STATE
+    ]
     assert not any(is_linked_path(path) for path in paths), (
         f"Symlink or junction in preserved scope: {root}"
     )
     actual = {
         path.relative_to(root).as_posix(): sha256(path)
         for path in paths if path.is_file()
+        and not (workspace and path.suffix == ".pyc" and "__pycache__" in path.relative_to(root).parts)
     }
     assert actual == expected, {"expected": expected, "actual": actual}
 
@@ -142,6 +149,36 @@ def verify_unchanged_files(root, contracts):
 
 def is_linked_path(path):
     return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+
+def configuration_snapshot(root):
+    snapshot = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if (relative.parts[0] in HOST_STATE or {"bin", "obj"}.intersection(relative.parts)
+                or relative.parts[:2] == (".eval", "results")):
+            continue
+        if path.is_file():
+            compiler_path(root, str(path), root)
+            snapshot[relative.as_posix()] = sha256(path)
+    return snapshot
+
+
+def verify_configuration(root, expected, package_assets=None):
+    actual = configuration_snapshot(root)
+    if package_assets:
+        expected = {**expected, **package_assets}
+        for name in package_assets:
+            path = compiler_path(root, name, root)
+            if path.is_file():
+                actual[name] = sha256(path)
+    assert actual == expected, (
+        "Migration configuration changed",
+        {"added": sorted(actual.keys() - expected.keys()),
+         "removed": sorted(expected.keys() - actual.keys()),
+         "changed": sorted(name for name in actual.keys() & expected.keys()
+                           if actual[name] != expected[name])},
+    )
 
 
 def validate_checkpoint(root):
@@ -407,6 +444,7 @@ def verify_project_graph(root, builds, production_projects):
 
 def run(args, root=None):
     root = Path.cwd() if root is None else root
+    configuration = configuration_snapshot(root)
     source_invariants = verify_sources(root, args.source_contract)
     preserved = verify_unchanged_files(root, args.unchanged_file)
     artifacts = root / ".eval" / "results"
@@ -416,6 +454,7 @@ def run(args, root=None):
     assert (root / project).is_file(), project
     assert args.expect or args.allow_empty, "An empty run needs explicit authorization"
     execute(["dotnet", "restore", str(project)], root, evidence, "restore")
+    verify_configuration(root, configuration)
     properties = (
         "TargetFramework,OutputType,EnableMSTestRunner,"
         "UseMicrosoftTestingPlatformRunner,TestingPlatformDotnetTestSupport,"
@@ -445,27 +484,34 @@ def run(args, root=None):
         production[filename] = values
 
     package_projects = {}
+    package_assets = {}
     test_project_properties = {str(project): effective}
     for index, filename in enumerate(dict.fromkeys([str(project), *args.package_project])):
         if index:
             execute(["dotnet", "restore", filename], root, evidence, f"restore-package-{index}")
+            verify_configuration(root, configuration, package_assets)
             values = json.loads(execute(
                 ["dotnet", "msbuild", filename, "-getProperty:" + properties],
                 root, evidence, f"test-properties-{index}",
             ).stdout)["Properties"]
             verify_runner(values, native, args.runner)
             test_project_properties[filename] = values
-        assets = json.loads(
-            (root / Path(filename).parent / "obj" / "project.assets.json").read_text(encoding="utf-8")
-        )["libraries"]
+        assets_path = root / Path(filename).parent / "obj" / "project.assets.json"
+        assets = json.loads(assets_path.read_text(encoding="utf-8"))["libraries"]
         if args.mstest_major or args.mstest_version:
             verify_mstest_packages(assets, filename, args.mstest_major, args.mstest_version)
         package_projects[filename] = sorted(assets)
+        package_assets[assets_path.relative_to(root).as_posix()] = sha256(assets_path)
     contracts = compile_contracts(
         root, args.compile_source, [*package_projects, *args.production_project]
     )
     if contracts and args.production_project:
         verify_project_inventory(root, contracts)
+    for project_path in contracts:
+        assets_path = project_path.parent / "obj" / "project.assets.json"
+        package_assets.setdefault(
+            assets_path.relative_to(root.resolve()).as_posix(), sha256(assets_path)
+        )
     compiler_inputs = {}
     builds = {}
     for index, (filename, expected_sources) in enumerate(contracts.items()):
@@ -477,6 +523,7 @@ def run(args, root=None):
         ).stdout)
         verify_unchanged_files(root, args.unchanged_file)
         verify_sources(root, args.source_contract)
+        verify_configuration(root, configuration, package_assets)
         compiler_inputs[filename.relative_to(root.resolve()).as_posix()] = verify_compile_inputs(
             root, filename, expected_sources, build
         )
@@ -504,6 +551,7 @@ def run(args, root=None):
     result = execute(
         command, root, evidence, "test", environment, args.exit_code,
     )
+    verify_configuration(root, configuration, package_assets)
     reports = list(evidence.rglob("*.trx"))
     assert len(reports) == args.report_count, (
         f"Expected {args.report_count} fresh reports, found {reports}"
@@ -555,6 +603,8 @@ def run(args, root=None):
         "source_invariants": source_invariants,
         "compiler_inputs": compiler_inputs,
         "project_reference_graph": project_graph,
+        "verified_input_files": configuration,
+        "verified_package_assets": package_assets,
         "reports": {str(report): sha256(report) for report in reports},
     }
     (evidence / "evidence.json").write_text(
@@ -613,6 +663,7 @@ def main():
     check = commands.add_parser("preserve")
     check.add_argument("--root", required=True)
     check.add_argument("--file", action="append", default=[], required=True)
+    check.add_argument("--workspace", action="store_true")
     test = commands.add_parser("run", aliases=["stages"])
     test.add_argument("--project", required=True)
     test.add_argument("--solution")
@@ -637,7 +688,7 @@ def main():
             path: digest for digest, path in (
                 value.split(":", 1) for value in args.file
             )
-        })
+        }, workspace=args.workspace)
         print("PRESERVED: complete file set and bytes")
     elif args.operation == "stages":
         run_checkpoints(args)

@@ -25,6 +25,60 @@ environment:
     - src: ../graders/authenticated_artifacts.py
       dest: .eval/authenticated_artifacts.py
 stimuli:
+  - name: Leave already-correct tests unchanged during a repair request
+    tags: {capability: repair-already-correct-tests, risk: unnecessary-test-rewrite, journey: investigate-reported-test-failure}
+    prompt: |
+      I suspect NoopRepair/test_amounts.py still needs repair after the module
+      was renamed. Inspect the files and fix anything that is actually broken.
+      Keep the existing test intent, production behavior and unrelated files
+      intact; do not modernize the suite. Do not execute tests or shell commands
+      for this review; report what the file inspection establishes.
+    constraints:
+      reject_tools: [bash, powershell, execute, run_shell_command, task]
+    environment:
+      files:
+        - src: fixtures/repair-noop
+          dest: NoopRepair
+        - src: fixtures/operation-repair/unrelated.txt
+          dest: unrelated.txt
+        - src: ../../dotnet-test-migration/graders/migration_evidence.py
+          dest: .eval/migration_evidence.py
+    golden_trajectory:
+      inline:
+        schema_version: ATIF-v1.6
+        session_id: code-testing-repair-noop
+        agent: {name: reference, version: "1.0.0", model_name: curated}
+        steps:
+          - step_id: 1
+            source: agent
+            message: |
+              No repair was needed: test_amounts.py already imports amounts.
+              I left the source and unrelated files unchanged after inspecting
+              the import and assertions. I did not execute tests or shell commands.
+    graders:
+      - type: run-command
+        config:
+          command: >-
+            python -c "import hashlib,pathlib,subprocess,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];code=compile(data,str(p),'exec');exec(code,{'__name__':'__main__','__file__':str(p)});subprocess.run([sys.executable,'-B','-m','unittest','-v'],cwd='NoopRepair',check=True);exec(code,{'__name__':'__main__','__file__':str(p)})" preserve --root . --workspace
+            --file 3251dbf18617cd67c47707cb9bd1611dbac212ff0ee9814a75b8ce1f34b85aad:NoopRepair/amounts.py
+            --file 2f9d898323917f0f5014dc669e4fbe874e9c54f57c0bf53333a06b310489d8bc:NoopRepair/test_amounts.py
+            --file 66c24b2a4601b9533524546566bcbab0f7b51afdf1a56f9742e82e409f54dcae:unrelated.txt
+            --file e1f80ddf5efca29aa82174dafd3130df9ec19572f34b6aeff7a9ed184faad8b7:.eval/authenticated_artifacts.py
+            --file 5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a:.eval/migration_evidence.py
+          expected_exit_code: 0
+          timeout: 1m
+      - type: output-matches
+        config: {pattern: '(?i)no (?:repair|changes?|fix)(?: (?:was|were|is|are))? (?:needed|required)|already (?:correct|imports|uses)|unchanged'}
+      - type: tool-calls
+        config:
+          disallowed:
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|run_shell_command|task)$'
+      - type: prompt
+    rubric:
+      - Recognizes that the existing import and tests are already correct instead of forcing a repair.
+      - Preserves all source files, unrelated files, staged evaluator resources and the complete workspace file set.
+      - Reports inspection-only findings without claiming tests were executed or passed.
+
   - name: Repair an existing test import without widening the edit scope
     tags: {capability: existing-test-repair, risk: append-only-or-production-edit, journey: repair-focused-tests}
     prompt: |

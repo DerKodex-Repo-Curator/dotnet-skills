@@ -17,6 +17,76 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReplayTests(unittest.TestCase):
+    def test_noop_state_graders_preserve_every_user_file_and_verifier(self):
+        for spec, name in (
+            (ROOT / "agent.test-migration" / "eval.yaml",
+             "Leave an already aligned MSTest v4 native MTP project unchanged"),
+            (ROOT / "migrate-vstest-to-mtp" / "eval.yaml",
+             "Leave a healthy already-native MTP project dormant and unchanged"),
+            (ROOT.parent / "dotnet-test" / "code-testing" / "eval.yaml",
+             "Leave already-correct tests unchanged during a repair request"),
+        ):
+            case = next(case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+                        if case["name"] == name)
+            # Trace constraints are calibrated separately through production Vally.
+            case["graders"] = [grader for grader in case["graders"] if grader["type"] != "tool-calls"]
+            with self.subTest(case=name), tempfile.TemporaryDirectory(prefix="noop-preservation-") as temporary:
+                workspace = Path(temporary)
+                materialize(spec, case, workspace)
+                run_graders(case, workspace)
+                original_files = {path: path.read_bytes() for path in workspace.rglob("*") if path.is_file()}
+                for path, data in original_files.items():
+                    for mutation in ("change", "delete"):
+                        with self.subTest(file=path.relative_to(workspace), mutation=mutation):
+                            if mutation == "change":
+                                path.write_bytes(data + b"\nchanged\n")
+                            else:
+                                path.unlink()
+                            with self.assertRaises(AssertionError):
+                                run_graders(case, workspace)
+                            path.write_bytes(data)
+                for name in ("unrequested.txt", "__pycache__/hidden.py", ".eval/added.py"):
+                    added = workspace / name
+                    added.parent.mkdir(parents=True, exist_ok=True)
+                    added.write_bytes(b"unrequested")
+                    with self.subTest(added=name), self.assertRaises(AssertionError):
+                        run_graders(case, workspace)
+                    added.unlink()
+
+    def test_post_test_rewrites_cannot_change_verified_configuration(self):
+        spec = ROOT / "migrate-mstest-v3-to-v4" / "eval.yaml"
+        stimulus = next(case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+                        if case["name"].startswith("Verified MSTest"))
+        for filename, payload in (
+            ("TestProject.csproj", "&lt;Project /&gt;"),
+            ("Directory.Build.props", "&lt;Project&gt;&lt;PropertyGroup&gt;"
+             "&lt;Nullable&gt;disable&lt;/Nullable&gt;&lt;/PropertyGroup&gt;&lt;/Project&gt;"),
+            ("global.json", "{&quot;test&quot;:{&quot;runner&quot;:&quot;Microsoft.Testing.Platform&quot;}}"),
+            ("obj/project.assets.json", "{}"),
+        ):
+            with self.subTest(file=filename), tempfile.TemporaryDirectory(
+                prefix="post-test-config-"
+            ) as temporary:
+                workspace = Path(temporary)
+                materialize(spec, stimulus, workspace)
+                project = workspace / "TestProject.csproj"
+                project.write_text(project.read_text(encoding="utf-8").replace(
+                    "</Project>",
+                    '<Target Name="RewriteVerifiedConfiguration" AfterTargets="VSTest">'
+                    f'<WriteLinesToFile File="$(MSBuildProjectDirectory)/{filename}" '
+                    f'Lines="{payload}" Overwrite="true" /></Target></Project>',
+                ), encoding="utf-8")
+                target = workspace / filename
+                before = target.read_bytes() if target.exists() else None
+                failure = None
+                try:
+                    run_graders(stimulus, workspace)
+                except AssertionError as error:
+                    failure = error
+                self.assertNotEqual(before, target.read_bytes(), "Post-test rewrite was not exercised")
+                self.assertIsNotNone(failure, "Changed configuration was accepted after green tests")
+                self.assertIn("Migration configuration changed", str(failure))
+
     def test_native_and_bridge_bind_the_original_production_reference(self):
         spec = ROOT / "migrate-vstest-to-mtp" / "eval.yaml"
         cases = yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
