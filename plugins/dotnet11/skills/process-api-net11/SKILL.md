@@ -4,7 +4,8 @@ description: >
   Choose System.Diagnostics.Process APIs for .NET 11 or later, including improving existing Process.Start code.
   USE FOR: launching executables; preventing redirected stdout/stderr pipe deadlocks; capturing text, bytes, or interleaved lines;
   waiting for exit status; cancellation and timeouts; redirecting standard handles to files, pipes, or the null device;
-  restricting handle inheritance; custom native process creation; fire-and-forget starts; parent-exit termination; terminal detachment.
+  restricting handle inheritance; custom native process creation; fire-and-forget starts; parent-exit termination; terminal detachment;
+  SafeProcessHandle and trimmer-friendly process management for NativeAOT applications.
   DO NOT USE FOR: projects that must remain on .NET 10 or earlier, or opening URLs and documents through the operating system's shell.
 license: MIT
 ---
@@ -595,6 +596,8 @@ public bool StartDetached { get; set; }
 ## Using SafeProcessHandle for a Smaller, Trimmer-Friendly API Surface
 
 Prefer `Microsoft.Win32.SafeHandles.SafeProcessHandle` when you need a process handle for starting, waiting, terminating, or signaling, but do not need `Process` stream readers, output events, or its broader component-based API. Its focused surface avoids the higher-level `Process` wrapper and offers better trimmability, making it useful for size-sensitive NativeAOT applications. The resulting binary-size savings depend on the application and platform; they are not a fixed percentage.
+
+For a combined start-and-wait operation without output capture, keep preferring `Process.Run[Async]`: it is simpler and uses `SafeProcessHandle` internally.
 
 ```csharp
 using System.Diagnostics;
