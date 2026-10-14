@@ -121,10 +121,12 @@ stimuli:
                 let sectionIndent = null, entryIndent = null, fields = [];
                 const checkStep = () => {
                   if (entryIndent === null) return;
-                  const execution = fields.filter(l => /^["']?(?:script|bash|pwsh|powershell|task|run|uses|template)["']?\s*:/.test(l));
+                  const execution = fields.filter(l => /^['"]?(?:script|bash|pwsh|powershell|task|run|uses|template)['"]?\s*:/.test(l));
+                  const unsupported = fields.filter(l => !/^['"]?(?:script|displayName)['"]?\s*:/.test(l));
                   if (execution.length !== 1 || !/^script:\s*dotnet\b/.test(execution[0])) {
                     throw new Error('each fixture step must contain one direct script: dotnet invocation, not a shell or CI-task wrapper');
                   }
+                  if (unsupported.length) throw new Error('fixture steps may only contain script and displayName fields');
                   fields = [];
                 };
                 for (const line of lines) {
