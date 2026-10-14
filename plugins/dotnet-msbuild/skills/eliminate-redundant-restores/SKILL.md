@@ -57,12 +57,13 @@ Starting with .NET SDK 9.0.1xx, `--no-restore` forwards `-restore:false` to over
 
 ### Step 3: Decide per invocation
 
-Keep the first restore. Skip a later one only when all three checks pass:
+Keep the first restore. Skip a later one only when all four checks pass:
 
 | Check | If it fails |
 |---|---|
 | **Same project set.** A restore covers its entry project or solution and that project's ProjectReference closure. It does not cover a project in another solution or `.slnf`, a tool built from another path, or a project an orchestrating `.proj` builds through the `MSBuild` task (`-restore` on the orchestrator leaves those unrestored and they fail with NETSDK1004) | Keep restore on that step, or add the project to the explicit restore step |
 | **Same restore inputs.** `-r`/`--runtime`, `TargetFramework(s)`, `RuntimeIdentifier(s)`, `PublishAot`, package sources (`--source`, `--configfile`, `RestoreSources`), `RestorePackagesPath`, and any `-p:` value a PackageReference condition reads. Missing RID targets fail with NETSDK1047 (`Assets file ... doesn't have a target for 'net10.0/linux-x64'`) | Give the explicit restore the required inputs (for example `dotnet restore -r linux-x64`) or keep restore on the later step. Do not require `SelfContained=true` on restore solely because publish is self-contained: RID-only restore covers ordinary SDK projects. Match `Configuration` or `SelfContained` only if repository conditions change package inputs |
+| **Same available restore state.** Earlier `project.assets.json` files must exist where the later invocation looks for them. Match `--artifacts-path`, `UseArtifactsOutput`/`ArtifactsPath`, and `MSBuildProjectExtensionsPath`/`BaseIntermediateOutputPath`; another job or workspace does not automatically share these files | Align the explicit restore's output layout with build/test, or retain restore in the later workspace. For `build --artifacts-path artifacts --no-restore`, use `restore --artifacts-path artifacts` first; ordinary `obj/` assets do not cover that layout |
 | **Nothing changes packages in between.** A step that generates or edits a project, runs `dotnet add package`, rewrites `Directory.Packages.props` or `NuGet.config` invalidates the earlier restore | Move the explicit restore after that step |
 
 ### Step 4: Apply the smallest change
@@ -87,7 +88,7 @@ dotnet msbuild Packaging.proj -t:Pack -restore:false
 
 ### Step 5: Validate and report truthfully
 
-1. Run the changed pipeline or script end to end from a clean state (no `obj/`, no `project.assets.json`). A project that was never restored only fails there. If you cannot run it, say "not validated" and list the steps and projects to confirm.
+1. Run the changed pipeline or script end to end in a clean temporary copy (no `obj/`, no `project.assets.json`). A project that was never restored only fails there. YAML syntax or flag-presence checks do not validate restore coverage or test execution. If you cannot run it, say "not validated" and list the steps and projects to confirm.
 2. Success evidence: every later step passed; `Restore` calls (binlog) or `Determining projects to restore` lines fell from N to the expected count; for a time claim, before/after medians of at least three runs.
 3. Report a restore failure (NETSDK1004, NETSDK1047) separately from a build failure, and never claim success after either.
 
