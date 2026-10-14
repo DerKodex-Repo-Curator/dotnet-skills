@@ -422,7 +422,9 @@ stimuli:
                   assert run_build() == unchanged_mtime, 'an identical second build must preserve the generated-source timestamp'
                   assert int((bin_dir / 'mtimes').read_text().splitlines()[-1]) == unchanged_mtime // 1_000_000_000, 'preserve the unchanged timestamp before the build consumes the source'
                   env['EXPECTED_CONTENT'] = uuid.uuid4().hex
-                  assert run_build() != unchanged_mtime, 'changed generated content must advance the source timestamp'
+                  assert run_build() > previous.st_mtime_ns, 'changed generated content must advance the source timestamp'
+                  mtimes = [int(value) for value in (bin_dir / 'mtimes').read_text().splitlines()]
+                  assert mtimes[-1] > mtimes[0], 'publish the changed timestamp before the build consumes the source'
           expected_exit_code: 0
       - type: output-matches
         config:
