@@ -51,7 +51,7 @@ SHELL_TOOLS = {
     "run_in_terminal", "run_command", "terminal",
 }
 EXECUTION_TOOLS = SHELL_TOOLS | {
-    "task", "create_agent", "create_session", "write_agent", "send_session_message",
+    "task", "agent", "create_agent", "create_session", "write_agent", "send_session_message",
     "author_factory", "run_factory", "apply_patch", "edit", "create",
 }
 

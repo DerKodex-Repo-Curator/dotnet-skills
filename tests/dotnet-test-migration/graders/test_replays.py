@@ -20,6 +20,10 @@ class ReplayTests(unittest.TestCase):
     def test_noop_state_graders_preserve_every_user_file_and_verifier(self):
         for spec, name in (
             (ROOT / "agent.test-migration" / "eval.yaml",
+             "Plan a staged MSTest v2 to v4 and MTP migration"),
+            (ROOT / "migrate-mstest-v3-to-v4" / "eval.yaml",
+             "Leave an already current MSTest project unchanged"),
+            (ROOT / "agent.test-migration" / "eval.yaml",
              "Leave an already aligned MSTest v4 native MTP project unchanged"),
             (ROOT / "migrate-vstest-to-mtp" / "eval.yaml",
              "Leave a healthy already-native MTP project dormant and unchanged"),
@@ -45,10 +49,13 @@ class ReplayTests(unittest.TestCase):
                             with self.assertRaises(AssertionError):
                                 run_graders(case, workspace)
                             path.write_bytes(data)
-                for name in ("unrequested.txt", "__pycache__/hidden.py", ".eval/added.py"):
+                for name in ("Directory.Build.props", "unrequested.txt", "__pycache__/hidden.py", ".eval/added.py"):
                     added = workspace / name
                     added.parent.mkdir(parents=True, exist_ok=True)
-                    added.write_bytes(b"unrequested")
+                    added.write_bytes(
+                        b"<Project><PropertyGroup><TargetFramework>net10.0</TargetFramework>"
+                        b"</PropertyGroup></Project>" if name == "Directory.Build.props" else b"unrequested"
+                    )
                     with self.subTest(added=name), self.assertRaises(AssertionError):
                         run_graders(case, workspace)
                     added.unlink()

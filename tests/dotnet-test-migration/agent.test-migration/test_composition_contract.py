@@ -22,6 +22,16 @@ def complete(text):
 
 
 class PermissionContractTests(unittest.TestCase):
+    def test_agent_alias_cannot_retry_after_shell_denial(self):
+        for alias in ("agent", "functions.agent", "MCP:AGENT"):
+            with self.subTest(tool=alias):
+                result = composition.policy_evidence([
+                    start("powershell", "denied"), complete("Permission was denied"),
+                    start(alias, "retry"),
+                ])
+                self.assertEqual([{"tool": "agent", "tool_call_id": "retry"}],
+                                 result["execution_after_denial"])
+
     def test_native_alias_denials_and_retries_are_always_detected(self):
         for alias in ("execute", "run_shell_command", "local_shell"):
             for name in (alias, "functions." + alias, "MCP:" + alias.upper()):
@@ -60,7 +70,7 @@ class PermissionContractTests(unittest.TestCase):
         path = composition.ROOT / "tests" / "dotnet-test-migration" / "migrate-mstest-v3-to-v4" / "eval.yaml"
         case = next(case for case in composition.yaml.safe_load(path.read_text(encoding="utf-8"))["stimuli"]
                     if case["name"] == "Leave an already current MSTest project unchanged")
-        aliases = composition.SHELL_TOOLS | {"task"}
+        aliases = composition.SHELL_TOOLS | {"task", "agent"}
         self.assertLessEqual(aliases, set(case["constraints"]["reject_tools"]))
         patterns = [entry["name"] for grader in case["graders"] if grader["type"] == "tool-calls"
                     for entry in grader["config"]["disallowed"]]

@@ -10,10 +10,59 @@ from unittest.mock import patch
 
 import yaml
 
-from operation_contract import check_files, check_mutation, digest, main, rust_runtime_bytes
+from operation_contract import check_files, check_mutation, digest, has_go_cleanup, main, rust_runtime_bytes
 
 
 class ScopeTests(unittest.TestCase):
+    def test_go_cleanup_check_ignores_unregistered_calls_and_documentation(self):
+        for source in (
+            "server.Close()",
+            "// t.Cleanup(func() { server.Close() })",
+            "/* defer func() { server.Close() }() */",
+            '"t.Cleanup(func() { server.Close() })"',
+            '`defer func() { server.Close() }()`',
+            "t.Cleanup(func() {})\nserver.Close()",
+            "defer func() { if ok { server.Close() }",
+        ):
+            with self.subTest(source=source):
+                self.assertFalse(has_go_cleanup(source))
+        for source in (
+            "t.Cleanup(server.Close)",
+            "defer server.Close()",
+            't.Cleanup(func() { note := "}"; _ = note; /* } */ if ok { server.Close() } })',
+        ):
+            with self.subTest(source=source):
+                self.assertTrue(has_go_cleanup(source))
+
+    def test_go_cleanup_callbacks_pass_native_golden(self):
+        suite = Path(__file__).resolve().parents[1]
+        replay_spec = importlib.util.spec_from_file_location(
+            "operation_replay", suite.parent.parent / "dotnet-test-migration" / "graders" / "replay.py"
+        )
+        replay = importlib.util.module_from_spec(replay_spec)
+        replay_spec.loader.exec_module(replay)
+        spec = suite / "eval.yaml"
+        case = next(case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+                    if case["name"].startswith("Test Go HTTP"))
+        for callback in (
+            "t.Cleanup(func() { server.Close() })",
+            "defer func() { server.Close() }()",
+            "t.Cleanup(func() { if server != nil { server.Close() } })",
+        ):
+            with self.subTest(callback=callback), tempfile.TemporaryDirectory(
+                prefix="go-cleanup-callback-"
+            ) as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                tests = root / "work" / "client_test.go"
+                source = tests.read_text(encoding="utf-8")
+                self.assertEqual(2, source.count("t.Cleanup(server.Close)") +
+                                 source.count("defer server.Close()"))
+                tests.write_text(source.replace(
+                    "t.Cleanup(server.Close)", callback
+                ).replace("defer server.Close()", callback), encoding="utf-8")
+                replay.run_graders(case, root)
+
     def test_mutation_copy_preserves_other_languages_target_directories(self):
         for case in ("go", "new-regression"):
             with self.subTest(case=case), tempfile.TemporaryDirectory() as temporary:

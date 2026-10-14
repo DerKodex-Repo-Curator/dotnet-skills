@@ -145,6 +145,24 @@ def check_mutation(root, filename, old, new, argv, exit_code, outcome_pattern, e
         assert re.search(outcome_pattern, output), "Counterfactual must reach the expected test outcome"
 
 
+def has_go_cleanup(source):
+    source = re.sub(
+        r'//[^\r\n]*|/\*.*?\*/|`[^`]*`|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+        lambda match: " " * len(match[0]), source, flags=re.S,
+    )
+    if re.search(r"\b(?:Cleanup\s*\(\s*\w+\.Close\s*\)|defer\s+\w+\.Close\s*\(\s*\))", source):
+        return True
+    for match in re.finditer(r"\b(?:Cleanup\s*\(\s*|defer\s+)func\s*\([^)]*\)\s*\{", source):
+        depth = 1
+        end = match.end()
+        while end < len(source) and depth:
+            depth += (source[end] == "{") - (source[end] == "}")
+            end += 1
+        if depth == 0 and re.search(r"\b\w+\.Close\s*\(\s*\)", source[match.end():end - 1]):
+            return True
+    return False
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("case", choices=["repair", "regression", "new-regression", "rust", "go"])
@@ -205,7 +223,7 @@ def main():
         source = "\n".join(path.read_text(encoding="utf-8") for path in test_sources)
         assert "httptest.NewServer" in source, "Exercise an owned ephemeral HTTP server"
         assert re.search(r"(?:TempDir|MkdirTemp)\s*\(", source), "Use an owned temporary directory"
-        assert re.search(r"\b(?:Cleanup\s*\([^)]*\.Close|defer\s+\w+\.Close\s*\()", source), (
+        assert has_go_cleanup(source), (
             "The fixture's HTTP server needs registered cleanup"
         )
         environment = dict(os.environ, GOPROXY="off", GOSUMDB="off")

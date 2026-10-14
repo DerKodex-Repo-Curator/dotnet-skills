@@ -14,7 +14,7 @@ stimuli:
       if the setup is already correct, and only inspect files: do not execute
       shell commands, restore packages, build or run tests.
     constraints:
-      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, edit, create, apply_patch]
+      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, agent, edit, create, apply_patch]
     environment:
       files:
         - src: ../fixtures/current-native
@@ -50,7 +50,7 @@ stimuli:
       - type: tool-calls
         config:
           disallowed:
-            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|shell|run_shell_command|local_shell|run_in_terminal|run_command|terminal|task)$'
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|shell|run_shell_command|local_shell|run_in_terminal|run_command|terminal|task|agent)$'
       - type: prompt
     rubric:
       - Recognizes the healthy native configuration as outside a VSTest-to-MTP migration and does not activate migration work.

@@ -7,7 +7,7 @@ stimuli:
   - name: Leave an already current MSTest project unchanged
     tags: {capability: already-current-noop, risk: unnecessary-migration, journey: assess-current-project}
     constraints:
-      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, edit, create, apply_patch]
+      reject_tools: [bash, powershell, execute, shell, run_shell_command, local_shell, run_in_terminal, run_command, terminal, task, agent, edit, create, apply_patch]
     prompt: |
       Check whether work still needs an MSTest v3-to-v4 upgrade.
       Only inspect the files: do not edit, restore packages, build, or run tests.
@@ -30,15 +30,16 @@ stimuli:
       - type: run-command
         config:
           command: >-
-            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root work
-            --file cbf50da5ba591ca235846a791d8218a617f1f7c6bfcaad835b78be17c0d02891:TestProject.csproj
-            --file c58be5fc9fb5fc2f65701bc29e70b74cd96dcc5a5fd4a080d49e3c6eed682429:ExistingTests.cs
+            python -c "import hashlib,pathlib,sys;p=pathlib.Path('.eval/migration_evidence.py');data=p.read_bytes();assert hashlib.sha256(data.replace(b'\r\n',b'\n')).hexdigest()=='5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a','Evaluator code changed';sys.argv=[str(p),*sys.argv[1:]];exec(compile(data,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})" preserve --root . --workspace
+            --file cbf50da5ba591ca235846a791d8218a617f1f7c6bfcaad835b78be17c0d02891:work/TestProject.csproj
+            --file c58be5fc9fb5fc2f65701bc29e70b74cd96dcc5a5fd4a080d49e3c6eed682429:work/ExistingTests.cs
+            --file 5d406aa064f92dfb0f2c861f178f42e91b067ecfe7c3f30cf5ea335e578d026a:.eval/migration_evidence.py
           expected_exit_code: 0
           timeout: 1m
       - type: tool-calls
         config:
           disallowed:
-            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|shell|run_shell_command|local_shell|run_in_terminal|run_command|terminal|task)$'
+            - name: '(?i)(?:^|[.:])(?:bash|powershell|execute|shell|run_shell_command|local_shell|run_in_terminal|run_command|terminal|task|agent)$'
       - type: prompt
     rubric:
       - Recognizes the already-v4 project and leaves the complete file set unchanged without executing the test toolchain.
