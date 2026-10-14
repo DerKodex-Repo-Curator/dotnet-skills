@@ -89,31 +89,31 @@ using Process process = new() { StartInfo = startInfo };
 process.Start();
 
 (string output, string error) = process.ReadAllText();
-process.WaitForExit();
+ProcessExitStatus status = process.WaitForExitStatus();
 ```
 
 For asynchronous reading, replace the last two lines with:
 
 ```csharp
 (string output, string error) = await process.ReadAllTextAsync();
-await process.WaitForExitAsync();
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
 ```
 
-Use `Process.ReadAllBytes` or `Process.ReadAllBytesAsync` instead when the output is binary or you need the original bytes without text decoding. With the same redirection setup, replace the text read with:
+Use `Process.ReadAllBytes` or `Process.ReadAllBytesAsync` instead when the output is binary or you need the original bytes without text decoding. With the same redirection setup, replace the last two lines of the synchronous example with:
 
 ```csharp
 (byte[] output, byte[] error) = process.ReadAllBytes();
-process.WaitForExit();
+ProcessExitStatus status = process.WaitForExitStatus();
 ```
 
 The asynchronous equivalent is:
 
 ```csharp
 (byte[] output, byte[] error) = await process.ReadAllBytesAsync();
-await process.WaitForExitAsync();
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
 ```
 
-These instance methods read to EOF; they do not replace waiting for process exit. A child can close its standard streams and keep running. Wait separately when completion or `process.ExitCode` is needed.
+These instance methods read to EOF; they do not replace waiting for process exit. A child can close its standard streams and keep running. After reading, use `WaitForExitStatus` or await `WaitForExitStatusAsync` to wait for termination and obtain the exit status. See [Waiting for Process Exit](#waiting-for-process-exit) for cancellation and timeout policies.
 
 ### Start, Capture Text, and Wait for Exit in One Call
 
@@ -130,6 +130,70 @@ ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--he
 ```
 
 Both methods combine starting the process, draining both streams, and waiting for exit. Read `result.StandardOutput`, `result.StandardError`, and `result.ExitStatus`; no separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself.
+
+## Waiting for Process Exit
+
+### Wait for Termination, Not Output EOF
+
+Prefer the .NET 11 status-wait methods when waiting for a process to terminate. They return its exit status without waiting for stdout or stderr to reach EOF.
+
+The existing parameterless `Process.WaitForExit()` and `Process.WaitForExitAsync()` also wait for EOF from redirected streams being read through `BeginOutputReadLine` or `BeginErrorReadLine`. A grandchild can inherit a pipe's write handle and keep it open after the child exits, leaving these waits stuck even though the child has terminated. See [dotnet/runtime#51277](https://github.com/dotnet/runtime/issues/51277). Finite-timeout `WaitForExit` overloads do not wait for those readers to finish; do not assume all overloads have the same output-completion behavior.
+
+The new status waits do not read or drain output. For redirected streams, use `ReadAllText[Async]`, `ReadAllBytes[Async]`, or `ReadAllLines[Async]` to drain stdout and stderr concurrently while the process runs.
+
+```csharp
+// Process instance methods
+public ProcessExitStatus WaitForExitStatus()
+public bool TryWaitForExitStatus(TimeSpan timeout, out ProcessExitStatus? exitStatus)
+public Task<ProcessExitStatus> WaitForExitStatusAsync(CancellationToken cancellationToken = default)
+```
+
+Use `WaitForExitStatus` for synchronous waiting and `WaitForExitStatusAsync` in asynchronous code. `TryWaitForExitStatus` returns `false` if the timeout expires without terminating the process; only use its `exitStatus` output when it returns `true`.
+
+### Do Not Use Process.ExitCode as a Wait
+
+`Process.ExitCode` is a synchronous property, not an asynchronous completion operation. It checks process state and throws `InvalidOperationException` if the process is still running. Reading all output does not prove that it has exited. Do not poll this property or use it instead of waiting for termination.
+
+**Never use `.Wait()`, `.Result`, or `.GetAwaiter().GetResult()` to synchronously block on an asynchronous process wait: sync-over-async can deadlock and blocks the calling thread.** Do not call synchronous process-wait methods from asynchronous code either.
+
+In asynchronous code, await `WaitForExitStatusAsync` directly and read the returned object's properties:
+
+```csharp
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
+int exitCode = status.ExitCode;
+```
+
+`status.ExitCode` is an already-obtained value, unlike the process-state checks performed by `process.ExitCode`. `ProcessExitStatus` also exposes `Canceled` and the terminating `Signal` on Unix. Interpret exit codes using the external command's contract.
+
+### Choose Whether Cancellation or Timeout Kills the Process
+
+Canceling `Process.WaitForExitStatusAsync(cancellationToken)` stops the wait with `OperationCanceledException`; it does not kill the process. Use that policy only when the child is intentionally allowed to continue and its lifetime is managed elsewhere.
+
+When managing the child's lifetime with a cancellation token, prefer `SafeProcessHandle.WaitForExitOrKillOnCancellationAsync`, available through `process.SafeHandle`. It kills the process when cancellation is requested and then waits for termination, rather than abandoning a running child. For a synchronous timeout with the same cleanup policy, use `WaitForExitOrKillOnTimeout`.
+
+```csharp
+// SafeProcessHandle instance methods
+public Task<ProcessExitStatus> WaitForExitOrKillOnCancellationAsync(CancellationToken cancellationToken)
+public ProcessExitStatus WaitForExitOrKillOnTimeout(TimeSpan timeout)
+```
+
+For a started process and a caller-provided cancellation token:
+
+```csharp
+ProcessExitStatus status =
+    await process.SafeHandle.WaitForExitOrKillOnCancellationAsync(cancellationToken);
+```
+
+For a synchronous timeout:
+
+```csharp
+ProcessExitStatus status =
+    process.SafeHandle.WaitForExitOrKillOnTimeout(TimeSpan.FromSeconds(30));
+```
+
+Both return the exit status after termination, with `Canceled` set when the process was killed due to cancellation or timeout. They do not merely throw a cancellation or timeout exception, and the timeout is the time before killing, not a bound on the subsequent termination wait. These methods terminate the associated process, not an entire descendant tree.
+
+If also capturing redirected output, start the kill-on-cancellation wait before awaiting output capture so cancellation can kill a child even while a read is pending. Manage output-read cancellation separately: process termination still does not guarantee EOF if another process retains a pipe writer.
 
 ## New APIs
 
@@ -183,7 +247,7 @@ public static int StartAndForget(ProcessStartInfo startInfo)
 ```
 
 #### Instance Methods
-These methods drain stdout and stderr concurrently on an already-started `Process`, avoiding pipe-buffer deadlocks. Choose `ReadAllText[Async]` for decoded text, `ReadAllBytes[Async]` for raw bytes, or `ReadAllLines[Async]` for incremental line processing. Wait separately if process completion or its exit code is required.
+These methods drain stdout and stderr concurrently on an already-started `Process`, avoiding pipe-buffer deadlocks. Choose `ReadAllText[Async]` for decoded text, `ReadAllBytes[Async]` for raw bytes, or `ReadAllLines[Async]` for incremental line processing. Use `WaitForExitStatus` or await `WaitForExitStatusAsync` afterward to wait for termination and obtain the exit status; see [Waiting for Process Exit](#waiting-for-process-exit).
 
 *Note: Calling these methods requires `RedirectStandardOutput = true` and `RedirectStandardError = true` on the `ProcessStartInfo` passed to `Process.Start`.*
 
@@ -305,6 +369,7 @@ await foreach (ProcessOutputLine line in process.ReadAllLinesAsync())
     string prefix = line.StandardError ? "[Err]" : "[Out]";
     Console.WriteLine($"{prefix} > {line.Content}");
 }
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
 ```
 
 ### 4. Read Entire Output Deadlock-Free (Tuple Return)
@@ -324,7 +389,7 @@ ProcessStartInfo startInfo = new("git", ["diff"])
 
 using Process process = Process.Start(startInfo)!;
 (string stdout, string stderr) = await process.ReadAllTextAsync();
-await process.WaitForExitAsync();
+ProcessExitStatus status = await process.WaitForExitStatusAsync();
 
 Console.WriteLine($"Diff output: {stdout}");
 Console.Error.WriteLine(stderr);
