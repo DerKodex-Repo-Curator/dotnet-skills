@@ -124,6 +124,23 @@ class ReplayTests(unittest.TestCase):
                         "<Nullable>enable</Nullable>", replacement, "Nullable",
                     )
 
+    def test_execution_cannot_rewrite_preserved_production_or_test_sources(self):
+        for name in (
+            "Deliver native MTP migration with fresh reports from both projects",
+            "Keep the explicit SDK 10 compatibility bridge while enabling MTP",
+        ):
+            for filename in ("../Library/Arithmetic.cs", "AdditionTests.cs"):
+                with self.subTest(case=name, file=filename):
+                    self.broken_golden(
+                        "migrate-vstest-to-mtp", name, "Alpha.Tests/Alpha.Tests.csproj",
+                        "</Project>",
+                        '<Target Name="RewritePreservedSource" AfterTargets="CoreCompile">'
+                        f'<WriteLinesToFile File="$(MSBuildProjectDirectory)/{filename}" '
+                        'Lines="// overwritten after compilation" Overwrite="true" />'
+                        '</Target></Project>',
+                        "Preserved fixture changed",
+                    )
+
     def test_staged_delivery_cannot_drop_a_parameterized_case(self):
         self.broken_golden(
             "agent.test-migration",

@@ -86,8 +86,9 @@ rebuilds and runs each checkpoint with its own runner and package requirements;
 a final-only edit cannot satisfy the stage contract. This proves the delivered
 checkpoints are valid, not an inferred chronology from the final response.
 Platform-only solution migrations also verify both test projects' resolved
-package versions, preserve every supplied test source byte, and require the
-production library to retain its target framework and enabled nullable analysis.
+package versions, authenticate unchanged production/test files before and after
+execution, and require the production library to retain its target framework
+and enabled nullable analysis.
 
 Checkpoint replays copy each checkpoint alone outside the delivered workspace,
 reject symlinks, Windows junctions and external compile/project/import references, and authenticate

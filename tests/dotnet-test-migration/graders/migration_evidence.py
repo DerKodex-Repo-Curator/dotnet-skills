@@ -128,6 +128,18 @@ def verify_sources(root, contracts):
     return verified
 
 
+def verify_unchanged_files(root, contracts):
+    verified = {}
+    for item in contracts:
+        expected, filename = item.split(":", 1)
+        path = root / filename
+        assert not path.is_symlink() and path.is_file(), filename
+        actual = hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        assert actual == expected, f"Preserved fixture changed: {filename}"
+        verified[filename] = actual
+    return verified
+
+
 def is_linked_path(path):
     return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
 
@@ -203,14 +215,7 @@ def verify_runner(effective, native, runner):
 def run(args, root=None):
     root = Path.cwd() if root is None else root
     source_invariants = verify_sources(root, args.source_contract)
-    preserved = {}
-    for item in args.unchanged_file:
-        expected, filename = item.split(":", 1)
-        path = root / filename
-        assert not path.is_symlink() and path.is_file(), filename
-        actual = hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
-        assert actual == expected, f"Preserved fixture changed: {filename}"
-        preserved[filename] = actual
+    preserved = verify_unchanged_files(root, args.unchanged_file)
     artifacts = root / ".eval" / "results"
     artifacts.mkdir(parents=True, exist_ok=True)
     evidence = Path(tempfile.mkdtemp(prefix="migration-", dir=artifacts))
@@ -294,6 +299,7 @@ def run(args, root=None):
     expected = dict(value.rsplit("=", 1) for value in args.expect)
     reasons = dict(value.split("=", 1) for value in args.skip_reason)
     verify_cases(cases, expected, reasons)
+    verify_unchanged_files(root, args.unchanged_file)
     verify_sources(root, args.source_contract)
     if args.lifecycle:
         events = [

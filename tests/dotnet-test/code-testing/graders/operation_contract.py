@@ -70,17 +70,25 @@ def rust_runtime_bytes(source):
     raise AssertionError("Unclosed inline test module")
 
 
+def is_linked_path(path):
+    return path.is_symlink() or getattr(path, "is_junction", lambda: False)()
+
+
 def check_files(root, expected, mutable, python_tests=False, repair=False):
+    assert not is_linked_path(root), f"Symlink or junction in fixture scope: {root}"
+    paths = list(root.rglob("*"))
+    assert not any(is_linked_path(path) for path in paths), (
+        f"Symlink or junction in fixture scope: {root}"
+    )
     ignored = {"target", ".git"}
     pytest_outputs = {
         ".pytest_cache/.gitignore", ".pytest_cache/CACHEDIR.TAG",
         ".pytest_cache/README.md", ".pytest_cache/v/cache/nodeids",
         ".pytest_cache/v/cache/lastfailed", ".pytest_cache/v/cache/stepwise",
     }
-    assert not any(path.is_symlink() for path in root.rglob("*")), "Symlink in fixture scope"
     actual = {
         path.relative_to(root).as_posix(): path
-        for path in root.rglob("*")
+        for path in paths
         if path.is_file() and not ignored.intersection(path.relative_to(root).parts)
         and not (path.suffix == ".pyc" and "__pycache__" in path.relative_to(root).parts)
         and path.name != "Cargo.lock"

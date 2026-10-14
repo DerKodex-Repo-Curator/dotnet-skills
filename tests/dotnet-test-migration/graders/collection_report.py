@@ -106,7 +106,7 @@ def main():
     )
     verified_bytes(
         workspace / ".eval" / "migration_evidence.py",
-        "b17ffc7e4a3946adfa6d1c1d805cf1424aede2c74afca09267b8fef18905021d",
+        "e03299ec2ea3ba3b4780dfd5a2bce0ee0c0c97a33c055a7bb2a8a31639c67e1e",
     )
     (workspace / "CollectionSchedulingContract.cs").write_bytes(guard)
     runs = []

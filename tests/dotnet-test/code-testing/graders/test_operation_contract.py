@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -10,6 +11,47 @@ from operation_contract import check_files, digest, main, rust_runtime_bytes
 
 
 class ScopeTests(unittest.TestCase):
+    def test_scope_rejects_linked_roots_and_descendants(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            external = parent / "external"
+            external.mkdir()
+            source = external / "limit.py"
+            source.write_bytes(b"unchanged")
+            expected = {"limit.py": digest(source.read_bytes())}
+            check_files(external, expected, set())
+            workspace = parent / "work"
+            workspace.mkdir()
+            link = workspace / "src"
+            for kind in ("symlink", "junction") if os.name == "nt" else ("symlink",):
+                if kind == "junction":
+                    subprocess.run(
+                        ["pwsh", "-NoProfile", "-NonInteractive", "-Command",
+                         "New-Item -ItemType Junction -Path $env:OPERATION_LINK "
+                         "-Target $env:OPERATION_TARGET | Out-Null"],
+                        env=dict(os.environ, OPERATION_LINK=str(link), OPERATION_TARGET=str(external)),
+                        check=True, capture_output=True, text=True, timeout=30,
+                    )
+                    self.assertFalse(link.is_symlink())
+                    self.assertTrue(link.is_junction())
+                else:
+                    link.symlink_to(external, target_is_directory=True)
+                try:
+                    for root, files in (
+                        (link, expected),
+                        (workspace, {"src/limit.py": expected["limit.py"]}),
+                    ):
+                        with self.subTest(kind=kind, root=root), self.assertRaisesRegex(
+                            AssertionError, "Symlink.*fixture scope"
+                        ):
+                            check_files(root, files, set())
+                finally:
+                    if kind == "junction":
+                        link.rmdir()
+                    else:
+                        link.unlink()
+                self.assertEqual(b"unchanged", source.read_bytes())
+
     def repair_fixture(self, root):
         fixture = Path(__file__).resolve().parents[1] / "fixtures" / "operation-repair"
         shutil.copytree(fixture, root)
