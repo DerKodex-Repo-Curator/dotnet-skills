@@ -91,8 +91,11 @@ stimuli:
                           encoding='utf-8', newline='\r\n',
                       )
                   probe = ET.Element('Project')
+                  defaults = ET.SubElement(probe, 'PropertyGroup')
+                  ET.SubElement(defaults, 'Configuration', Condition="'$(Configuration)' == ''").text = 'Debug'
                   for name in ['Directory.Build.props', 'Directory.Build.targets']:
                       ET.SubElement(probe, 'Import', Project=str(pathlib.Path('git-stamp', name).resolve()))
+                  ET.SubElement(probe, 'Target', Name='Restore')
                   consumer = ET.SubElement(probe, 'Target', Name='GetAssemblyAttributes')
                   ET.SubElement(ET.SubElement(consumer, 'PropertyGroup'), 'ObservedInformationalVersion').text = '$(InformationalVersion)'
                   probe_path = bin_dir / 'stamp.proj'
@@ -125,6 +128,18 @@ stimuli:
                       assert commits and commits[-1] == commit, 'pass the actual git result, not an empty, fixed or undefined value'
                       assert all(p.partition('=')[2] == '3.2.0' for p in assignments if p.partition('=')[0].lower() == 'version'), 'the build must not override the base version'
                       assert all(p.partition('=')[2] == '3.2.0+' + commit for p in assignments if p.partition('=')[0].lower() == 'informationalversion'), 'the build must not override the stamped version'
+                      parallel = [match[1] for arg in args
+                                  if (match := re.fullmatch(r'(?:--?|/)(?:m|maxcpucount)(?::(\d+))?', arg, re.I))]
+                      assert parallel and (parallel[-1] is None or int(parallel[-1]) > 1), 'preserve parallel execution, not a missing switch or single worker'
+                      build_in_parallel = [p.partition('=')[2] for p in assignments if p.partition('=')[0].lower() == 'buildinparallel']
+                      assert not build_in_parallel or build_in_parallel[-1].strip().lower() not in ['false', 'off', 'no', '0'], 'do not disable parallel execution through global properties'
+                      configuration = subprocess.run(
+                          [dotnet, args[0], str(probe_path), *args[2:], '-nologo', '-verbosity:quiet',
+                           '-getProperty:Configuration'],
+                          cwd=bin_dir, env=env, capture_output=True, text=True, timeout=30,
+                      )
+                      assert configuration.returncode == 0, configuration.stdout + configuration.stderr
+                      assert configuration.stdout.strip() == 'Release', 'preserve the effective Release configuration'
                       for supplied in [False, True]:
                           (bin_dir / 'git-calls').unlink(missing_ok=True)
                           command = [dotnet, 'msbuild', str(probe_path), '-nologo', '-verbosity:quiet',
@@ -378,14 +393,13 @@ stimuli:
           args:
             - -c
             - |
-              import hashlib, os, pathlib, shutil, subprocess, tempfile, uuid
+              import datetime, os, pathlib, shutil, subprocess, tempfile, uuid
               import xml.etree.ElementTree as ET
               base = pathlib.Path('exists-sentinel-race')
               root = ET.parse(base / 'Directory.Build.targets').getroot()
               assert any(c.get('Include') == '$(MSBuildThisFileDirectory)obj/buildinfo.g.cs' and not c.get('Condition')
                          for group in root.findall('ItemGroup') if not group.get('Condition')
                          for c in group.findall('Compile')), 'every project must still compile buildinfo.g.cs'
-              assert hashlib.sha256((base / 'tools/make-buildinfo.sh').read_bytes()).hexdigest() == '8dac8ea8ec16e52259c72d0b91a36c4ea91212d92ed6067e1743c15616c927e1', 'preserve the submitted generator before instrumenting it'
               bash = shutil.which('bash')
               assert bash, 'Bash is required to exercise build.sh'
               real_dotnet = shutil.which('dotnet')
@@ -430,30 +444,50 @@ stimuli:
                   graph_path = work / 'probe-build.proj'
                   ET.ElementTree(graph).write(graph_path, encoding='utf-8')
                   generator = work / 'tools/make-buildinfo.sh'
+                  generator.rename(generator.with_name('make-buildinfo.submitted.sh'))
                   generator.write_text(
                       '#!/usr/bin/env sh\nset -eu\n'
                       'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"\n'
                       'printf "generator-start\\n" >> "$MOCK_BIN/events"\n'
-                      '[ "$#" -eq 1 ]\n'
-                      'sleep 1\nmkdir -p "$(dirname "$1")"\nprintf "%s\\n" "$EXPECTED_CONTENT" > "$1"\n'
+                      'sleep 1\n'
+                      'sh "$(dirname "$0")/make-buildinfo.submitted.sh" "$@"\n'
                       'printf "generator-done\\n" >> "$MOCK_BIN/events"\n',
                       encoding='utf-8', newline='\n',
                   )
+                  real_date = subprocess.run([bash, '-c', 'command -v date'], check=True,
+                                             capture_output=True, text=True).stdout.strip()
+                  assert real_date, 'GNU date is required to vary the submitted generator input'
+                  date = bin_dir / 'date'
+                  date.write_text(
+                      '#!/usr/bin/env sh\nset -eu\n'
+                      '"$REAL_DATE" --date="$EXPECTED_DATE" "$@"\n',
+                      encoding='utf-8', newline='\n',
+                  )
+                  date.chmod(0o755)
                   dotnet = bin_dir / 'dotnet'
                   dotnet.write_text(
                       '#!/usr/bin/env sh\nset -eu\n'
                       'printf "build\\n" >> "$MOCK_BIN/events"\n'
                       '[ "$1" = build ] || [ "$1" = msbuild ]\n'
                       '[ "$2" = Contoso.slnx ]\n'
-                      '[ "$(cat obj/buildinfo.g.cs)" = "$EXPECTED_CONTENT" ]\n'
+                      'cmp obj/buildinfo.g.cs "$MOCK_BIN/expected-buildinfo"\n'
                       'stat -c %Y obj/buildinfo.g.cs >> "$MOCK_BIN/mtimes"\n'
                       'mode="$1"\nshift 2\n'
                       '"$REAL_DOTNET" "$mode" probe-build.proj "$@" -nologo -verbosity:quiet\n',
                       encoding='utf-8', newline='\n',
                   )
                   dotnet.chmod(0o755)
-                  env = dict(os.environ, MOCK_BIN=str(bin_dir), EXPECTED_CONTENT=uuid.uuid4().hex,
+                  env = dict(os.environ, MOCK_BIN=str(bin_dir), REAL_DATE=real_date,
                              REAL_DOTNET=pathlib.Path(real_dotnet).as_posix())
+                  expected = bin_dir / 'expected-buildinfo'
+                  stamp = datetime.date(2040, 1, 1) + datetime.timedelta(days=uuid.uuid4().int % 20000)
+                  def set_stamp(value):
+                      env['EXPECTED_DATE'] = value.isoformat() + ' 00:00:00 UTC'
+                      expected.write_bytes(
+                          ('internal static class BuildInfo { public const string Stamp = "' +
+                           value.strftime('%Y%m%d') + '"; }\n').encode('utf-8')
+                      )
+                  set_stamp(stamp)
                   generated = work / 'obj/buildinfo.g.cs'
                   def run_build():
                       for _, path in observations:
@@ -465,6 +499,7 @@ stimuli:
                       assert all(path.is_file() and path.read_text(encoding='utf-8-sig').strip() == name
                                  for name, path in observations), 'exercise both project Build paths and their submitted target hooks'
                       assert (bin_dir / 'events').read_text().splitlines() == ['generator-start', 'generator-done', 'build'], 'generate exactly once and await its required output before building'
+                      assert generated.read_bytes() == expected.read_bytes(), 'preserve the original daily build-info output bytes'
                       (bin_dir / 'events').unlink()
                       return generated.stat().st_mtime_ns
                   run_build()
@@ -473,7 +508,7 @@ stimuli:
                   unchanged_mtime = generated.stat().st_mtime_ns
                   assert run_build() == unchanged_mtime, 'an identical second build must preserve the generated-source timestamp'
                   assert int((bin_dir / 'mtimes').read_text().splitlines()[-1]) == unchanged_mtime // 1_000_000_000, 'preserve the unchanged timestamp before the build consumes the source'
-                  env['EXPECTED_CONTENT'] = uuid.uuid4().hex
+                  set_stamp(stamp + datetime.timedelta(days=1))
                   assert run_build() > previous.st_mtime_ns, 'changed generated content must advance the source timestamp'
                   mtimes = [int(value) for value in (bin_dir / 'mtimes').read_text().splitlines()]
                   assert mtimes[-1] > mtimes[0], 'publish the changed timestamp before the build consumes the source'
