@@ -87,8 +87,11 @@ stimuli:
               if (steps.some(l => /^dotnet msbuild\b/.test(l) && /--no-restore/.test(l))) {
                 throw new Error('--no-restore is not a dotnet msbuild switch');
               }
-              const restoring = steps.filter(l => {
-                if (/^dotnet restore\b/.test(l) || /(?:^|\s)[-/](?:t|target):(?:[^\s]*[;,])?Restore(?:[;,]|\s|$)/i.test(l)) return true;
+              const restoring = steps.filter(command => {
+                const l = command.replace(/["']/g, '');
+                const targets = [...l.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
+                if (/^dotnet restore\b/.test(l) || targets.includes('restore')) return true;
                 if (!/^dotnet (msbuild|build|test|publish|pack|run)\b/.test(l)) return false;
                 if (/^dotnet run\b/.test(l)) return !/(?:^|\s)--no-build(?:\s|$)/.test(l);
                 return !restoreOff(l) || (!/^dotnet msbuild\b/.test(l) && !skipsImplicit(l));
@@ -321,10 +324,13 @@ stimuli:
               if (steps.some(l => /\bdisplayName:/.test(l))) throw new Error('displayName was folded into a shell command');
               const solution = l => /(?:^|\s)(?:\.\/)?Contoso\.slnx(?:\s|$)/.test(l);
               const packager = l => /(?:^|\s)(?:\.\/)?tools\/Packager\/Packager\.csproj(?:\s|$)/.test(l);
-              const restores = l => {
-                if (/^dotnet restore\b/.test(l)) return true;
+              const restores = command => {
+                const l = command.replace(/["']/g, '');
+                const targets = [...l.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
+                if (/^dotnet restore\b/.test(l) || targets.includes('restore')) return true;
                 if (!/^dotnet (build|test|publish|pack)\b/.test(l)) return false;
-                const switches = l.replace(/["']/g, '').match(/(?:^|\s)(?:--?|\/)(?:restore(?::(?:true|false))?|r:(?:true|false))(?=\s|$)/gi) || [];
+                const switches = l.match(/(?:^|\s)(?:--?|\/)(?:restore(?::(?:true|false))?|r:(?:true|false))(?=\s|$)/gi) || [];
                 if (switches.length) return !/:false$/i.test(switches[switches.length - 1]);
                 return !/(?:^|\s)--no-(?:restore|build)(?:\s|$)/.test(l);
               };
@@ -474,7 +480,9 @@ stimuli:
               let count = 0;
               for (const c of cmds) {
                 const skips = /--no-restore|--no-build/.test(c);
-                if (/^dotnet restore\b/.test(c) || !skips) {
+                const targets = [...c.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
+                if (/^dotnet restore\b/.test(c) || targets.includes('restore') || !skips) {
                   count++;
                   restored = { gateway: gateway(c), rid: rid(c) };
                 } else if (!restored) {
@@ -568,7 +576,10 @@ stimuli:
               }
               const restoring = [];
               steps.forEach((l, i) => {
+                const targets = [...l.replace(/["']/g, '').matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
                 if (/Contoso\.slnx/.test(l) && (/^dotnet restore\b/.test(l) ||
+                    targets.includes('restore') ||
                     (/^dotnet (build|test|publish|pack)\b/.test(l) && !/--no-restore|--no-build/.test(l)))) restoring.push(i);
               });
               if (restoring.length !== 1) throw new Error('the solution is restored ' + restoring.length + ' times');
@@ -682,8 +693,12 @@ stimuli:
               }
               const restore = steps.findIndex(l => /^dotnet restore\b/.test(l) && /Contoso\.slnx\b/.test(l));
               if (restore < 0 || restore > build) throw new Error('the explicit solution restore must precede the build');
-              const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
-                (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
+              const restoring = steps.filter(l => {
+                const targets = [...l.replace(/["']/g, '').matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
+                return /^dotnet restore\b/.test(l) || targets.includes('restore') ||
+                  (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l));
+              });
               if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
           expected_exit_code: 0
       - type: run-command
