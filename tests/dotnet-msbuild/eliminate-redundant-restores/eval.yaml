@@ -103,6 +103,43 @@ stimuli:
           command: node
           args:
             - -e
+            - &execution_modes |
+              const fs = require('fs');
+              const commands = fs.readFileSync(process.argv[1], 'utf8').split(/\r?\n/)
+                .map(l => l.replace(/^\s*-?\s*script:\s*/, '').trim().replace(/["']/g, ''))
+                .filter(l => /^dotnet (msbuild|build|test|publish)\b/.test(l));
+              for (const command of commands) {
+                const targets = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:t|target|targets):([^\s]+)/gi)]
+                  .flatMap(m => m[1].split(/[;,]/).map(t => t.toLowerCase()));
+                if (/^dotnet test\b/.test(command)) {
+                  const properties = [...command.matchAll(/(?:^|\s)(?:--?|\/)(?:p|property|properties):([^\s]+)/gi)]
+                    .flatMap(m => m[1].split(/[;,]/));
+                  const listTests = properties.reduce((value, property) => {
+                    const match = /^VSTestListTests=(.*)$/i.exec(property);
+                    return match ? match[1].toLowerCase() : value;
+                  }, 'false');
+                  if (/(?:^|\s)(?:--list-tests|-t)(?:[:=\s]|$)/.test(command) || listTests === 'true') {
+                    throw new Error('tests must execute, not only be listed: ' + command);
+                  }
+                  if (targets.length && !targets.includes('vstest')) {
+                    throw new Error('the test command overrides test execution: ' + command);
+                  }
+                } else if (targets.length) {
+                  const expected = /^dotnet publish\b/.test(command) ? ['publish'] : ['build', 'rebuild'];
+                  const execution = targets.reduce((last, t, i) => expected.includes(t) ? i : last, -1);
+                  const clean = targets.reduce((last, t, i) => t.endsWith('clean') ? i : last, -1);
+                  if (execution < 0 || clean > execution) {
+                    throw new Error('the command must produce its build or publish output: ' + command);
+                  }
+                }
+              }
+            - rsp-inherited/ci.yml
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
             - &immutable_fixture |
               const fs = require('fs');
               const path = require('path');
@@ -233,6 +270,14 @@ stimuli:
           command: node
           args:
             - -e
+            - *execution_modes
+            - uncovered-project/ci.yml
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
             - *immutable_fixture
             - uncovered-project
             - >-
@@ -340,6 +385,14 @@ stimuli:
               }
               if (count !== 1) throw new Error('restore runs ' + count + ' times instead of once');
           expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *execution_modes
+            - rid-mismatch/build.sh
+          expected_exit_code: 0
       - type: prompt
     rubric:
       - Explained that the later restore happens because the earlier restore did not include the runtime identifier that
@@ -429,6 +482,14 @@ stimuli:
                   throw new Error('a step skips restore before the restore ran: ' + l);
                 }
               });
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *execution_modes
+            - generated-reference/ci.yml
           expected_exit_code: 0
       - type: run-command
         config:
@@ -534,6 +595,14 @@ stimuli:
               const restoring = steps.filter(l => /^dotnet restore\b/.test(l) ||
                 (/^dotnet (build|test)\b/.test(l) && !/--no-restore|--no-build/.test(l)));
               if (restoring.length !== 1) throw new Error('restore still runs ' + restoring.length + ' times');
+          expected_exit_code: 0
+      - type: run-command
+        config:
+          command: node
+          args:
+            - -e
+            - *execution_modes
+            - test-steps/ci.yml
           expected_exit_code: 0
       - type: run-command
         config:
