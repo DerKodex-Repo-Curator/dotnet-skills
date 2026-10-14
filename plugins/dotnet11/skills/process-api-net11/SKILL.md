@@ -78,6 +78,8 @@ Here the parent reads stdout until EOF before it starts draining stderr. If the 
 
 Use `Process.ReadAllText` or `Process.ReadAllTextAsync` to capture both streams as text. They drain stdout and stderr concurrently and return a tuple containing both strings. Text is decoded using `ProcessStartInfo.StandardOutputEncoding` and `StandardErrorEncoding`, or the defaults when unspecified.
 
+**Use full-output capture only when the output size is trusted and bounded.** `ReadAllText[Async]` and `ReadAllBytes[Async]` read until EOF and buffer all captured output in the parent process's memory, without an output-size limit. An untrusted child can produce unlimited output and exhaust the parent's memory, causing an out-of-memory failure. A timeout or cancellation token is not a memory limit. For untrusted output, use a bounded capture strategy that drains both streams concurrently, enforces an explicit byte limit, and terminates the child when that limit is exceeded.
+
 ```csharp
 ProcessStartInfo startInfo = new("dotnet", "--help")
 {
@@ -130,6 +132,8 @@ ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--he
 ```
 
 Both methods combine starting the process, draining both streams, and waiting for exit. Read `result.StandardOutput`, `result.StandardError`, and `result.ExitStatus`; no separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself.
+
+`RunAndCaptureText[Async]` also buffers all captured output in memory without an output-size limit. The same trusted, bounded-output requirement applies; do not use it to capture potentially unlimited output from an untrusted process.
 
 ## Waiting for Process Exit
 
