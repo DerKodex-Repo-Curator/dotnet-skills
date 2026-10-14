@@ -397,9 +397,6 @@ stimuli:
               import xml.etree.ElementTree as ET
               base = pathlib.Path('exists-sentinel-race')
               root = ET.parse(base / 'Directory.Build.targets').getroot()
-              assert any(c.get('Include') == '$(MSBuildThisFileDirectory)obj/buildinfo.g.cs' and not c.get('Condition')
-                         for group in root.findall('ItemGroup') if not group.get('Condition')
-                         for c in group.findall('Compile')), 'every project must still compile buildinfo.g.cs'
               bash = shutil.which('bash')
               assert bash, 'Bash is required to exercise build.sh'
               real_dotnet = shutil.which('dotnet')
@@ -413,6 +410,7 @@ stimuli:
                   phases = ['BeforeBuild', 'PrepareForBuild', 'BeforeCompile', 'CoreCompile', 'AfterBuild']
                   submitted_targets = {target.get('Name') for target in root.findall('Target')}
                   observations = []
+                  compile_observations = []
                   for name in ['Api', 'Worker']:
                       project_dir = work / 'probes' / name
                       project_dir.mkdir(parents=True)
@@ -434,6 +432,13 @@ stimuli:
                                                AfterTargets='Build')
                       ET.SubElement(observer, 'WriteLinesToFile', File=str(observation.resolve()),
                                     Lines='$(MSBuildProjectName)', Overwrite='true')
+                      compiler = ET.SubElement(probe, 'Target', Name='ObserveCompile_' + uuid.uuid4().hex,
+                                               BeforeTargets='CoreCompile')
+                      for phase, target in [('compile', compiler), ('built', observer)]:
+                          items = bin_dir / (name + '.' + phase + '.compile-items')
+                          compile_observations.append(items)
+                          ET.SubElement(target, 'WriteLinesToFile', File=str(items.resolve()),
+                                        Lines="@(Compile->'%(FullPath)')", Overwrite='true')
                       project_path = project_dir / (name + '.proj')
                       ET.ElementTree(probe).write(project_path, encoding='utf-8')
                       projects.append(str(project_path.resolve()))
@@ -490,7 +495,7 @@ stimuli:
                   set_stamp(stamp)
                   generated = work / 'obj/buildinfo.g.cs'
                   def run_build():
-                      for _, path in observations:
+                      for path in [path for _, path in observations] + compile_observations:
                           path.unlink(missing_ok=True)
                       subprocess.run(
                           [bash, '-c', 'export MOCK_BIN="$(cd "$MOCK_BIN" && pwd)"; export PATH="$MOCK_BIN:$PATH"; bash build.sh'],
@@ -498,6 +503,9 @@ stimuli:
                       )
                       assert all(path.is_file() and path.read_text(encoding='utf-8-sig').strip() == name
                                  for name, path in observations), 'exercise both project Build paths and their submitted target hooks'
+                      assert all(path.is_file() and generated.resolve() in [
+                          pathlib.Path(line).resolve() for line in path.read_text(encoding='utf-8-sig').splitlines()
+                      ] for path in compile_observations), 'each project must retain buildinfo.g.cs in effective Compile items at the compile and build boundaries'
                       assert (bin_dir / 'events').read_text().splitlines() == ['generator-start', 'generator-done', 'build'], 'generate exactly once and await its required output before building'
                       assert generated.read_bytes() == expected.read_bytes(), 'preserve the original daily build-info output bytes'
                       (bin_dir / 'events').unlink()

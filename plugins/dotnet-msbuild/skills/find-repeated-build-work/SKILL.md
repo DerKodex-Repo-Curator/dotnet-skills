@@ -29,9 +29,11 @@ MSBuild runs targets once per project instance. Work that does not depend on the
 
 ### Step 1: Count executions
 
-If no binlog is supplied, use the `binlog-generation` skill to capture one: add `/bl:{}` to the original MSBuild invocation, preserving its configuration, global properties, parallelism and restore behavior. In PowerShell, quote the complete switch as `'-bl:{}'`. If a script drives the build, instrument its underlying MSBuild invocation rather than replace it with a different build command. Confirm the binlog exists and record its path.
+Use a supplied performance summary with execution counts as valid input; a raw binlog is not required. If the user cannot run the build or forbids execution or new logs, work from the summary and repository files. Mark unavailable timing or overlap evidence `unknown` and proposed fixes `not validated`; do not execute a build or collect another log.
 
-For analysis, prefer the bundled **binlog MCP server** (`Microsoft.AITools.BinlogMcp`, exposed under the `binlog` MCP namespace). Discover its available tools and query project, target and task execution counts and timings from the captured binlog. Do not read the binary file as text.
+If neither usable execution counts nor a binlog is supplied, capture one only when build execution is available and permitted. Use the `binlog-generation` skill: add `/bl:{}` to the original MSBuild invocation, preserving its configuration, global properties, parallelism and restore behavior. In PowerShell, quote the complete switch as `'-bl:{}'`. If a script drives the build, instrument its underlying MSBuild invocation rather than replace it with a different build command. Confirm the binlog exists and record its path. If capture is not permitted, report the missing evidence instead of running the build.
+
+For an available binlog, prefer the bundled **binlog MCP server** (`Microsoft.AITools.BinlogMcp`, exposed under the `binlog` MCP namespace). Discover its available tools and query project, target and task execution counts and timings from that binlog. Do not read the binary file as text.
 
 If MCP is unavailable or its tools do not expose execution counts, replay the captured binlog to a text performance summary and read the `N calls` column of the Target and Task Performance Summaries and the Project Performance Summary:
 
@@ -81,7 +83,7 @@ If Source Link already supplies `SourceRevisionId`, it can replace an `Exec` onl
 
 ### Step 5: Validate and report truthfully
 
-1. Capture a new binlog of the same invocation. Calls must have dropped to the expected count.
+1. When execution is available and permitted, capture a new binlog of the same invocation. Calls must have dropped to the expected count. Otherwise, do not run the build or collect another log; report the fix as proposed and not validated.
 2. Confirm outputs are unchanged (the stamped value, generated file contents). For generated sources, also check that an unchanged second build stays incremental.
 3. Report timing as the median of at least three runs; if you could not run the build, say "not validated".
 
