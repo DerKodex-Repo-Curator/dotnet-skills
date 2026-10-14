@@ -32,6 +32,10 @@ New APIs added to `System.Diagnostics.Process` in .NET 11 simplify process manag
 <TargetFramework>net11.0</TargetFramework>
 ```
 
+When starting a process with the APIs or `ProcessStartInfo` features described in this skill, keep `UseShellExecute` at its default value of `false`. Leave the property unset rather than explicitly assigning `false`: when the application never sets it, the AOT compiler can eliminate the unused shell-execution code.
+
+Although `Process.Start` returns `Process?`, it can return `null` only when `UseShellExecute` is `true`. With shell execution disabled, it returns a `Process` on success or throws on failure. Do not add redundant null checks or `?? throw` after `Process.Start` in this case; use `Process.Start(startInfo)!` to express the guarantee.
+
 ## Capturing Output Without Pipe Buffer Deadlocks
 
 Redirecting standard output and standard error creates two separate pipes. Each pipe has a finite buffer. If the child fills a pipe, its next write blocks until the parent reads data from that pipe.
@@ -185,7 +189,7 @@ Use `Process.RunAndCaptureTextAsync` when asynchronous execution is needed:
 ProcessTextOutput result = await Process.RunAndCaptureTextAsync("dotnet", ["--help"]);
 ```
 
-Both methods combine starting the process, draining both streams, and waiting for exit. They return the framework's sealed `ProcessTextOutput` class, with read-only properties `ProcessExitStatus ExitStatus`, `string StandardOutput`, `string StandardError`, and `int ProcessId`. No separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, require `UseShellExecute = false` (the default in modern .NET) and enable both `RedirectStandardOutput` and `RedirectStandardError` yourself; the methods do not modify the supplied configuration.
+Both methods combine starting the process, draining both streams, and waiting for exit. They return the framework's sealed `ProcessTextOutput` class, with read-only properties `ProcessExitStatus ExitStatus`, `string StandardOutput`, `string StandardError`, and `int ProcessId`. No separate `Process` instance or wait is needed. They also accept `ProcessStartInfo` for custom configuration, so needing configuration alone is not a reason to use the instance readers. For those overloads, enable both `RedirectStandardOutput` and `RedirectStandardError` yourself; the methods do not modify the supplied configuration.
 
 The synchronous overloads accept a timeout; the asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
 
@@ -202,7 +206,7 @@ public static Task<ProcessTextOutput> RunAndCaptureTextAsync(ProcessStartInfo st
 
 Use `Process.Run` or `Process.RunAsync` when you need to start a process and wait for its exit status without capturing its output. By default, the child inherits the parent's standard handles, so output remains visible. Pass `silent: true` to redirect all three standard handles (stdin, stdout, and stderr) to the null device (`NUL` on Windows, `/dev/null` on Unix). Writes are discarded and reads receive EOF, without creating pipes that the parent must drain.
 
-The `ProcessStartInfo` overloads require `UseShellExecute = false`, the default in modern .NET. Synchronous overloads accept a timeout; asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
+Synchronous overloads accept a timeout; asynchronous overloads accept a cancellation token. On timeout or cancellation, the process is killed.
 
 ```csharp
 public static ProcessExitStatus Run(string fileName, IEnumerable<string>? arguments = null, bool silent = false, TimeSpan? timeout = null)
@@ -327,7 +331,7 @@ Use `ProcessStartInfo.StandardInputHandle`, `StandardOutputHandle`, and `Standar
 
 **When output only needs to go to a file or another process, redirect handles directly instead of capturing it in the parent and writing it out again.** Direct file-handle redirection or process-to-process piping is the most efficient approach for these uses: it avoids unnecessary parent-side buffering, copying, and text decoding/re-encoding. Only read output into the parent when it needs to inspect or transform the data.
 
-These properties require `UseShellExecute = false`, the default in modern .NET. Leave the corresponding `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag set to `false`; setting both a handle and its redirection flag throws.
+Leave the corresponding `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag set to `false`; setting both a handle and its redirection flag throws.
 
 | Destination or source | API |
 |-----------------------|-----|
@@ -470,7 +474,7 @@ using Process process = Process.Start(startInfo)!;
 ProcessExitStatus status = await process.WaitForExitStatusAsync();
 ```
 
-Apply the restriction to each relevant child start: restricting Child A does not prevent an unrestricted Child B from inheriting other handles. Standard handles are included automatically; do not add them to the list. Only `SafeFileHandle` and `SafePipeHandle` instances are supported, and a non-null list requires `UseShellExecute = false` and an empty `UserName`.
+Apply the restriction to each relevant child start: restricting Child A does not prevent an unrestricted Child B from inheriting other handles. Standard handles are included automatically; do not add them to the list. Only `SafeFileHandle` and `SafePipeHandle` instances are supported, and a non-null list requires an empty `UserName`.
 
 **Do not manually enable inheritance on handles passed in this list.** The runtime manages their inheritance flags during process creation. Do not pass the same handle in concurrent process starts; serialize starts sharing that handle or supply separate handles.
 
@@ -530,7 +534,7 @@ There is a common misconception that when a process is disposed, it's also being
 
 To make it easier to start a process without the need to worry about disposing it, `Process.StartAndForget` was introduced. The method starts an executable, returns its ID, and immediately releases all handle resources associated with it. Standard handles not supplied through `StandardInputHandle`, `StandardOutputHandle`, or `StandardErrorHandle` go to the null device by default.
 
-`StartAndForget` throws `InvalidOperationException` if `UseShellExecute` or any `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag is true. Use a capture or streaming API if output needs to be read.
+`StartAndForget` throws `InvalidOperationException` if any `RedirectStandardInput`, `RedirectStandardOutput`, or `RedirectStandardError` flag is true. Use a capture or streaming API if output needs to be read.
 
 ```csharp
 public static int StartAndForget(string fileName, IEnumerable<string>? arguments = null)
@@ -539,7 +543,7 @@ public static int StartAndForget(ProcessStartInfo startInfo)
 
 ## Terminating Child Processes When the Parent Exits
 
-`ProcessStartInfo.KillOnParentExit` ensures that the spawned child process is terminated when the current (parent) process exits (including fatal crash and being force killed). It's supported on Windows, Linux, and Android and requires `UseShellExecute = false`..
+`ProcessStartInfo.KillOnParentExit` ensures that the spawned child process is terminated when the current (parent) process exits (including fatal crash and being force killed). It's supported on Windows, Linux, and Android.
 
 ```csharp
 public class ProcessStartInfo
@@ -561,8 +565,6 @@ When `StartDetached` is `true`, standard handles without explicit redirection ar
 ```csharp
 public bool StartDetached { get; set; }
 ```
-
-Requires `UseShellExecute = false`.
 
 ---
 
