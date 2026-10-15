@@ -37,13 +37,14 @@ def run(argv, cwd, log):
     return result
 
 
-def check_spec():
-    spec = yaml.safe_load(text(EVAL))
-    require(len(spec["stimuli"]) == 40, "expected original 38 plus exactly two controls")
+def check_spec(spec=None):
+    if spec is None:
+        spec = yaml.safe_load(text(EVAL))
+    require(len(spec["stimuli"]) >= 40, "expected original 38 and the two outbound controls")
     require(spec["defaults"] == {"runs": 1, "timeout": "20m"} and
             spec["scoring"] == {"threshold": 1.0}, "existing evaluation budget changed")
-    require(len({s["name"] for s in spec["stimuli"]}) == 40, "duplicate identity")
-    require(spec["stimuli"][38:] == stimuli(), "declared staging/grading differs from controller bindings")
+    require(len({s["name"] for s in spec["stimuli"]}) == len(spec["stimuli"]), "duplicate identity")
+    require(spec["stimuli"][38:40] == stimuli(), "declared staging/grading differs from controller bindings")
     for f in FILES:
         a, b = text(HERE / CASES[0] / f), text(HERE / CASES[1] / f)
         if f == "EnvelopeCodec.cs":
@@ -58,7 +59,40 @@ def check_spec():
               "__pycache__" not in p.parts}
     require(actual == allowed, "unexpected repository fixture inventory")
     require(not any(p.is_symlink() for p in HERE.rglob("*")), "linked fixture")
-    return spec["stimuli"][38:]
+    return spec["stimuli"][38:40]
+
+
+def suite_extension_controls():
+    spec = yaml.safe_load(text(EVAL))
+    extended = copy.deepcopy(spec)
+    extended["stimuli"] = extended["stimuli"][:40]
+    extended["stimuli"].append({
+        "name": "Offline append-only suite control",
+        "prompt": "Explain what an integer is.",
+        "tags": {"capability": "integer-explanation", "risk": "incorrect-definition",
+                 "journey": "explain-a-concept"},
+        "graders": [{"type": "exit-success"}]})
+    require(check_spec(extended) == spec["stimuli"][38:40], "append changed the selected pair")
+    results = [{"control": "append-only-stimulus-41", "outcome": "pass"}]
+    for label, altered, reason in (
+        ("duplicate-appended-name", copy.deepcopy(extended), "duplicate identity"),
+        ("missing-outbound-control", copy.deepcopy(spec), "expected original 38"),
+        ("misbound-outbound-pair", copy.deepcopy(spec), "declared staging/grading"),
+    ):
+        if label == "duplicate-appended-name":
+            altered["stimuli"][-1]["name"] = spec["stimuli"][0]["name"]
+        elif label == "missing-outbound-control":
+            altered["stimuli"] = altered["stimuli"][:39]
+        else:
+            altered["stimuli"][38], altered["stimuli"][39] = altered["stimuli"][39], altered["stimuli"][38]
+        try:
+            check_spec(altered)
+        except ValueError as error:
+            require(reason in str(error), f"{label}: unexpected rejection: {error}")
+            results.append({"control": label, "outcome": "rejected", "evidence": str(error)})
+        else:
+            raise ValueError(f"{label}: invalid suite accepted")
+    return results
 
 
 def worksheet(index, broad=False, qualified=False):
@@ -121,6 +155,55 @@ def controls(selected, scratch):
         grade("correct", outcome="pass")
         grade("broad-grounded-ranges", worksheet(index, broad=True), "pass")
         grade("qualified-symbols", worksheet(index, qualified=True), "pass")
+        for path_index in range(2):
+            expanded = copy.deepcopy(correct)
+            record = expanded["paths"][path_index]
+            record["route"].insert(-1, record["serialization"]["method"])
+            grade(f"true-framework-step-{path_index}", expanded, "pass")
+            for namespace_index, prefix in enumerate(("", "System.Text.Json.", "global::System.Text.Json.")):
+                qualified = copy.deepcopy(expanded)
+                qualified["paths"][path_index]["route"][-2] = prefix + record["serialization"]["method"]
+                grade(f"valid-framework-namespace-{path_index}-{namespace_index}", qualified, "pass")
+            for namespace_index, prefix in enumerate((
+                "DockDispatch.", "global::DockDispatch.", "Unknown.", "global::Unknown.",
+                "DockDispatch.System.Text.Json.", "global::DockDispatch.System.Text.Json.",
+                "System.Text.Json.DockDispatch.", "global::System.Text.Json.DockDispatch.",
+                "System.Text.Json.System.Text.Json.", "global::System.Text.Json.System.Text.Json.",
+            )):
+                fabricated = copy.deepcopy(expanded)
+                fabricated["paths"][path_index]["route"][-2] = prefix + record["serialization"]["method"]
+                grade(f"invalid-framework-namespace-{path_index}-{namespace_index}", fabricated)
+        expanded = worksheet(index, qualified=True)
+        expanded["paths"][0]["route"].insert(-1, "global::System.Text.Json.JsonSerializer.SerializeToUtf8Bytes")
+        grade("qualified-framework-step", expanded, "pass")
+        alternative = copy.deepcopy(correct)
+        for record in alternative["paths"]:
+            for citation in record["citations"]:
+                if citation["path"] == "Outbox.cs" and "LastSent = payload" in citation["quote"]:
+                    sink = oracle(index)["paths"][0]["anchors"][-1]["alternatives"][0]
+                    citation.update({"start_line": sink["line"], "end_line": sink["line"], "quote": sink["text"]})
+        grade("sink-declaration-not-storage", alternative, "pass")
+        grade("send-capable-exclusion-with-grouped-helper", worksheet(index, broad=True), "pass")
+        for path_index, required in enumerate(oracle(index)["paths"]):
+            for step_index in range(len(required["route"])):
+                altered = copy.deepcopy(correct)
+                altered["paths"][path_index]["route"].pop(step_index)
+                grade(f"missing-route-step-{path_index}-{step_index}", altered)
+            for anchor_index, anchor in enumerate(required["anchors"]):
+                altered = copy.deepcopy(correct)
+                altered["paths"][path_index]["citations"] = [
+                    citation for citation in altered["paths"][path_index]["citations"]
+                    if not any(citation["path"] == choice["path"] and
+                               citation["start_line"] <= choice["line"] <= citation["end_line"]
+                               for choice in [anchor, *anchor.get("alternatives", [])])]
+                grade(f"missing-relationship-{path_index}-{anchor_index}", altered)
+        for anchor_index, anchor in enumerate(oracle(index)["excluded"][0]["anchors"]):
+            altered = copy.deepcopy(correct)
+            altered["excluded"][0]["citations"] = [
+                citation for citation in altered["excluded"][0]["citations"]
+                if citation["path"] != anchor["path"] or
+                not citation["start_line"] <= anchor["line"] <= citation["end_line"]]
+            grade(f"missing-excluded-relationship-{anchor_index}", altered)
         reordered = worksheet(index)
         reordered["paths"].reverse()
         grade("reordered-paths", reordered, "pass")
@@ -137,6 +220,19 @@ def controls(selected, scratch):
             ("wrong-value", lambda a: a["paths"][1].__setitem__("value", "snapshot.DockId")),
             ("fabricated-route", lambda a: a["paths"][1]["route"].__setitem__(1, "ExternalRouter.Route")),
             ("unreachable-as-reachable", lambda a: a["paths"][1]["route"].__setitem__(1, "CalibrationExport.Emit")),
+            ("invented-extra-step", lambda a: a["paths"][0]["route"].insert(-1, "ExternalRouter.Route")),
+            ("unreached-framework-step", lambda a: a["paths"][1]["route"].insert(
+                -1, "JsonSerializer.SerializeToUtf8Bytes")),
+            ("fixed-metadata-as-value-step", lambda a: a["paths"][1]["route"].insert(
+                -1, "Utf8JsonWriter.WriteStartObject")),
+            ("misplaced-serializer", lambda a: a["paths"][0]["route"].insert(
+                1, "JsonSerializer.SerializeToUtf8Bytes")),
+            ("duplicate-route-step", lambda a: a["paths"][0]["route"].insert(1, "SnapshotCodec.Encode")),
+            ("reversed-route", lambda a: a["paths"][1]["route"].reverse()),
+            ("converted-lexeme-as-value", lambda a: a["paths"][1].__setitem__(
+                "value", "ScalarLexeme.Quote(reservation.Code)")),
+            ("earlier-projection-input-as-value", lambda a: a["paths"][1].__setitem__(
+                "value", "ReservationCode")),
             ("wrong-sink", lambda a: a["paths"][1].__setitem__("sink", "Element.innerHTML")),
             ("wrong-writer", lambda a: a["paths"][1]["serialization"].__setitem__("method", "JsonSerializer.Serialize")),
             ("wrong-escaping", lambda a: a["paths"][1]["serialization"].__setitem__("escaping", "unresolved")),
@@ -144,7 +240,15 @@ def controls(selected, scratch):
             ("nonempty-nonsense-route", lambda a: a["paths"][1].__setitem__("route", ["the source looks fine"])),
             ("irrelevant-citations", lambda a: a["paths"][1].__setitem__("citations", a["paths"][0]["citations"])),
             ("fabricated-quote", lambda a: a["paths"][1]["citations"][0].__setitem__("quote", "typed and safe")),
+            ("partial-line-quote", lambda a: a["paths"][1]["citations"][-1].__setitem__(
+                "quote", a["paths"][1]["citations"][-1]["quote"].strip())),
+            ("noninteger-citation-line", lambda a: a["paths"][1]["citations"][0].__setitem__(
+                "start_line", True)),
+            ("out-of-source-citation", lambda a: a["paths"][1]["citations"][0].__setitem__(
+                "path", "../CalibrationExport.cs")),
             ("missing-exclusion", lambda a: a.__setitem__("excluded", [])),
+            ("scalar-only-exclusion", lambda a: a["excluded"].append({
+                **copy.deepcopy(a["excluded"][0]), "entry": "ScalarLexeme.Quote"})),
             ("hostile-identifier-claim", lambda a: a["limits"].__setitem__("application_ids_hostile", True)),
             ("invented-browser-run", lambda a: a["limits"].__setitem__("browser_executed", True)),
         ):
@@ -303,7 +407,12 @@ def program_interface(results, scratch):
     module = package / "dist" / "graders" / "static" / "program-grader.js"
     require(module.is_file(), "installed pinned Vally ProgramGrader is required; no inference is run")
     require(json.loads(text(package / "package.json"))["version"] == "0.14.0", "unexpected Vally version")
-    selected = [r for r in results if r["control"] in ("correct", "conclusion-not-tested", "mutated-criterion")]
+    selected = [r for r in results if r["control"] in (
+        "correct", "true-framework-step-0", "true-framework-step-1", "sink-declaration-not-storage",
+        "invented-extra-step", "missing-route-step-1-3", "conclusion-not-tested", "mutated-criterion",
+        "valid-framework-namespace-0-1", "valid-framework-namespace-1-2",
+        "invalid-framework-namespace-0-0", "invalid-framework-namespace-1-1",
+        "invalid-framework-namespace-0-5", "invalid-framework-namespace-1-7")]
     inputs = scratch / "interface-inputs.json"
     save(inputs, selected)
     code = """
@@ -329,6 +438,8 @@ console.log(JSON.stringify(results));
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scratch", required=True, type=Path)
+    parser.add_argument("--controls-only", action="store_true",
+                        help="Check staged Python graders and suite extension only; skip .NET and Vally checks")
     args = parser.parse_args()
     scratch = args.scratch.resolve()
     require(not scratch.is_relative_to(REPOSITORY), "scratch must be outside the repository")
@@ -341,9 +452,17 @@ def main():
         selected = check_spec()
         receipt["sources"] = {p.relative_to(HERE).as_posix(): digest(p) for p in HERE.rglob("*")
                               if p.is_file() and "__pycache__" not in p.parts}
-        receipt["builds"] = builds(scratch)
+        receipt["suite_extension"] = suite_extension_controls()
         result = controls(selected, scratch)
         receipt["controls"] = [{k: v for k, v in r.items() if k != "config"} for r in result]
+        if args.controls_only:
+            receipt["state"] = "passed-controls-only"
+            receipt["builds"] = {"state": "not-run", "reason": "--controls-only"}
+            receipt["program_interface"] = {"state": "not-run", "reason": "--controls-only"}
+            print(f"PASS {len(result)} staged grader controls and {len(receipt['suite_extension'])} "
+                  "suite-extension controls; .NET and Vally checks not run")
+            return
+        receipt["builds"] = builds(scratch)
         receipt["program_interface"] = program_interface(result, scratch)
         receipt["state"] = "passed"
         print(f"PASS {len(result)} adversarial controls, both synthetic builds/routing probes, "

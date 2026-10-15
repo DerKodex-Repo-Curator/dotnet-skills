@@ -79,7 +79,8 @@ try:
     assert load(criterion)["requirement_id"] == "BEQ-19"
     for record in expected["paths"] + expected["excluded"]:
         for anchor in record["anchors"]:
-            assert texts[anchor["path"]].splitlines()[anchor["line"] - 1] == anchor["text"], "anchor differs"
+            for choice in [anchor, *anchor.get("alternatives", [])]:
+                assert texts[choice["path"]].splitlines()[choice["line"] - 1] == choice["text"], "anchor differs"
 except (AssertionError, IndexError, KeyError, TypeError, ValueError, OSError, UnicodeError) as error:
     finish("error", str(error) or "invalid controller configuration")
 
@@ -107,7 +108,8 @@ def citations(records, anchors):
             reject("fabricated source quotation")
         ranges.append((path.as_posix(), start, end))
     for anchor in anchors:
-        if not any(p == anchor["path"] and first <= anchor["line"] <= last for p, first, last in ranges):
+        if not any(p == choice["path"] and first <= choice["line"] <= last
+                   for choice in [anchor, *anchor.get("alternatives", [])] for p, first, last in ranges):
             reject("citations do not ground a required relationship")
 
 try:
@@ -137,7 +139,13 @@ try:
         required = remaining.pop(record["condition"])
         assert record["value"] == required["value"], "wrong outbound value"
         assert isinstance(record["route"], list)
-        assert [symbol(v) for v in record["route"]] == required["route"], "fabricated or incomplete reached route"
+        route = [symbol(v) for v in record["route"]]
+        expanded = required["route"][:-1] + [required["serialization"]["method"], required["route"][-1]]
+        assert route in (required["route"], expanded), "fabricated or incomplete reached route"
+        if route == expanded:
+            method = required["serialization"]["method"]
+            assert record["route"][-2] in (method, "System.Text.Json." + method,
+                                          "global::System.Text.Json." + method), "wrong framework route namespace"
         assert symbol(record["sink"]) == required["sink"], "wrong outbound sink"
         serialization = record["serialization"]
         assert isinstance(serialization, dict) and set(serialization) == {"method", "kind", "escaping"}
@@ -180,6 +188,8 @@ def oracle(index):
         return anchor(case, path, needle)
     entry = [a("DockBoard.razor", "@inherits"), a("DockBoard.razor", "@onclick"),
              a("DispatchPanelBase.cs", "protected async Task PublishAsync")]
+    sink = a("Outbox.cs", "LastSent = payload")
+    sink["alternatives"] = [a("Outbox.cs", "SendAsync(ReadOnlyMemory<byte> payload)")]
     normal = {
         "condition": "always", "value": "snapshot",
         "route": ["DispatchPanelBase.PublishAsync", "SnapshotCodec.Encode", "DeliveryChannel.SendAsync"],
@@ -188,7 +198,7 @@ def oracle(index):
         "anchors": entry + [a("DispatchPanelBase.cs", "new DispatchSnapshot"),
                             a("DispatchPanelBase.cs", "channel.SendAsync"),
                             a("SnapshotCodec.cs", "SerializeToUtf8Bytes"),
-                            a("Outbox.cs", "LastSent = payload")]}
+                            sink]}
     queued = {
         "condition": "QueueEnabled", "value": "reservation.Code",
         "route": ["DispatchPanelBase.PublishAsync", "DispatchPlan.Capture", "Outbox.EnqueueAsync",
@@ -198,8 +208,7 @@ def oracle(index):
                           "kind": "raw-value" if index == 0 else "typed",
                           "escaping": "unescaped" if index == 0 else "default-json"},
         "sink": "DeliveryChannel.SendAsync",
-        "anchors": entry + [a("DispatchPanelBase.cs", "public bool QueueEnabled"),
-                            a("DispatchPanelBase.cs", "if (QueueEnabled)"),
+        "anchors": entry + [a("DispatchPanelBase.cs", "if (QueueEnabled)"),
                             a("DispatchPanelBase.cs", "DispatchPlan.Capture(ReservationCode)"),
                             a("DispatchPanelBase.cs", "await Outbox.EnqueueAsync"),
                             a("DispatchPanelBase.cs", "Capture(string code)"),
@@ -208,7 +217,7 @@ def oracle(index):
                             a("EnvelopeCodec.cs", "new Utf8JsonWriter"),
                             a("EnvelopeCodec.cs", 'WritePropertyName("reservation")'),
                             a("EnvelopeCodec.cs", "writer.WriteRawValue" if index == 0 else "writer.WriteStringValue"),
-                            a("Outbox.cs", "LastSent = payload")]}
+                            sink]}
     if index == 0:
         queued["anchors"] += [a("CalibrationExport.cs", "Quote(string value)"),
                                a("CalibrationExport.cs", "text.Append(value)")]
@@ -270,13 +279,13 @@ LiteralDumper.add_representer(str, literal)
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] not in (["--emit-stimuli"], ["--append-stimuli"]):
-        raise SystemExit("Usage: python controller.py --emit-stimuli|--append-stimuli (no inference)")
+    if sys.argv[1:] not in (["--emit-stimuli"], ["--append-stimuli"], ["--refresh-stimuli"]):
+        raise SystemExit("Usage: python controller.py --emit-stimuli|--append-stimuli|--refresh-stimuli (no inference)")
     generated = yaml.dump({"stimuli": stimuli()}, Dumper=LiteralDumper, sort_keys=False, width=120)
     addition = "\n" + "\n".join("  " + line if line else "" for line in generated.splitlines()[1:]) + "\n"
     if sys.argv[1] == "--emit-stimuli":
         print(addition, end="")
-    else:
+    elif sys.argv[1] == "--append-stimuli":
         original = EVAL.read_bytes()
         spec = yaml.safe_load(original)
         if len(spec["stimuli"]) != 38 or any(s["name"] in NAMES for s in spec["stimuli"]):
@@ -285,4 +294,25 @@ if __name__ == "__main__":
         check = yaml.safe_load(combined)
         if check["stimuli"][:38] != spec["stimuli"] or check["stimuli"][38:] != stimuli():
             raise SystemExit("Generated addition changed an existing stimulus")
+        EVAL.write_bytes(combined)
+    else:
+        original = EVAL.read_bytes()
+        spec = yaml.safe_load(original)
+        if len(spec["stimuli"]) < 40 or tuple(s["name"] for s in spec["stimuli"][38:40]) != NAMES:
+            raise SystemExit("Refusing to refresh: expected the outbound pair at positions 38 and 39")
+        marker = ("\n  - name: " + NAMES[0] + "\n").encode()
+        second = ("\n  - name: " + NAMES[1] + "\n").encode()
+        if original.count(marker) != 1 or original.count(second) != 1:
+            raise SystemExit("Refusing to refresh: ambiguous stimulus boundaries")
+        first_start = original.index(marker)
+        second_start = original.index(second, first_start)
+        suffix_start = original.find(b"\n  - name: ", second_start + len(second))
+        suffix = original[suffix_start:] if suffix_start >= 0 else b""
+        combined = original[:first_start] + addition.encode() + suffix
+        check = yaml.safe_load(combined)
+        if (check["stimuli"][:38] != spec["stimuli"][:38] or check["stimuli"][38:40] != stimuli() or
+                check["stimuli"][40:] != spec["stimuli"][40:] or
+                {k: v for k, v in check.items() if k != "stimuli"} !=
+                {k: v for k, v in spec.items() if k != "stimuli"}):
+            raise SystemExit("Generated refresh changed another stimulus or suite setting")
         EVAL.write_bytes(combined)
