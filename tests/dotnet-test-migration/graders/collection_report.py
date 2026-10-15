@@ -34,7 +34,7 @@ def validate_report(policy, response):
     negation = r"\b(?:cannot|can't|don't|doesn't|won't|isn't|aren't|not|never|no longer)\b"
     continuation = (
         r"(?:can|cannot|can't|may|must|do|does|don't|doesn't|will|won't|are|aren't|"
-        r"remain|continue|not|never|no longer)\b"
+        r"remain|continue|not|never|no longer|also)\b"
     )
     claims = set()
     previous_subject = None
@@ -42,6 +42,7 @@ def validate_report(policy, response):
     for sentence in re.split(r"[.!?;\n]+|\b(?:whereas|unlike)\b", normalized, flags=re.I):
         subject = None
         historical = False
+        previous_predicate = None
         # Keep coordinated overlap targets together, but separate their predicates.
         separator = (
             r",(?=\s*(?:MSTest|xUnit)\b)|\b(?:but|yet|however|while)\b|"
@@ -49,6 +50,13 @@ def validate_report(policy, response):
         )
         for clause in re.split(separator, sentence, flags=re.I):
             clause = re.sub(r"\s+", " ", clause).strip(" ,")
+            if previous_predicate and not re.search(
+                parallel + "|" + serial, re.sub(members, "", clause, flags=re.I), re.I
+            ):
+                clause = re.sub(
+                    rf"^((?:they\s+)?(?:{continuation})\s+)(?=(?:with\s+)?(?:{members}|{unrelated}|{peers}))",
+                    lambda match: match[0] + previous_predicate + " ", clause, flags=re.I,
+                )
             if re.match(r"^(?:in\s+)?xunit\b", clause, re.I):
                 historical = True
             elif re.match(r"^mstest\b", clause, re.I):
@@ -74,6 +82,7 @@ def validate_report(policy, response):
             predicate = re.search(parallel + "|" + serial, predicate_text, re.I)
             if not predicate:
                 continue
+            previous_predicate = predicate[0]
             negated = bool(re.search(negation, predicate_text[:predicate.start()], re.I))
             permitted = bool(re.fullmatch(parallel, predicate[0], re.I)) != negated
             targets = []

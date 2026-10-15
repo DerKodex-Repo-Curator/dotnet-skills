@@ -120,6 +120,21 @@ def check_files(root, expected, case):
     ), f"Unexpected files: {extra}"
 
 
+def check_workspace(workspace, root, supporting):
+    assert not is_linked_path(workspace), f"Linked workspace: {workspace}"
+    relative_root = root.resolve().relative_to(workspace.resolve())
+    assert relative_root.parts, "Operation root must be inside the supplied workspace"
+    actual = {}
+    for path in workspace.rglob("*"):
+        relative = path.relative_to(workspace)
+        if relative.parts[0] in {".git", ".agents", ".copilot", ".claude"}:
+            continue
+        assert not is_linked_path(path), f"Linked workspace input: {path}"
+        if path.is_file() and not relative.is_relative_to(relative_root):
+            actual[relative.as_posix()] = digest(path.read_bytes())
+    assert actual == supporting, f"Workspace supporting inputs changed: {actual.keys() ^ supporting.keys() or 'bytes'}"
+
+
 def command(argv, root, expected_exit=0, environment=None):
     result = subprocess.run(
         argv, cwd=root, env=environment, capture_output=True, text=True,
@@ -147,7 +162,7 @@ def check_mutation(root, filename, old, new, argv, exit_code, outcome_pattern, e
 
 def verify_go_lifetime(root, environment):
     helper = Path(__file__).with_name("go_server_lifetime.go")
-    assert digest(helper.read_bytes()) == "5d2cab5994e8a3108da037a5fb142a859fb62820a36514d1c84e7f197ad9c570", "Go lifetime verifier changed"
+    assert digest(helper.read_bytes()) == "397e8d6a59bb91ee7ade822a5bf1f57fb7a0c4ddedc4982f26962449f805ffbe", "Go lifetime verifier changed"
     with tempfile.TemporaryDirectory(prefix="go-lifetime-replay-") as temporary:
         replay = Path(temporary) / "work"
         shutil.copytree(root, replay)
@@ -156,6 +171,7 @@ def verify_go_lifetime(root, environment):
             ["go", "test", "-json", "-count=1", "./..."], replay, environment=environment,
         )
         assert "GO_SERVER_LIFETIME: verified " in output, "No owned server lifetime was exercised"
+        assert "GO_DIRECTORY_LIFETIME: verified destination" in output, "No owned destination was exercised"
 
 
 def main():
@@ -164,9 +180,14 @@ def main():
     parser.add_argument("--root", type=Path, default=Path("work"))
     parser.add_argument("--file", action="append", required=True)
     parser.add_argument("--runtime-sha256")
+    parser.add_argument("--workspace", type=Path)
+    parser.add_argument("--support-file", action="append", default=[])
     args = parser.parse_args()
     expected = dict(value.split("=", 1) for value in args.file)
+    supporting = dict(value.split("=", 1) for value in args.support_file)
     check_files(args.root, expected, args.case)
+    if args.workspace is not None:
+        check_workspace(args.workspace, args.root, supporting)
     if args.case in {"repair", "regression", "new-regression"}:
         program = (
             "import json,unittest,sys;"
@@ -215,8 +236,6 @@ def main():
     else:
         test_sources = list(args.root.glob("*_test.go"))
         assert test_sources, "No Go test file"
-        source = "\n".join(path.read_text(encoding="utf-8") for path in test_sources)
-        assert re.search(r"(?:TempDir|MkdirTemp)\s*\(", source), "Use an owned temporary directory"
         environment = dict(os.environ, GOPROXY="off", GOSUMDB="off")
         output = command(
             ["go", "test", "-json", "-count=1", "./..."], args.root,
@@ -225,7 +244,7 @@ def main():
         events = [json.loads(line) for line in output.splitlines() if line.startswith("{")]
         passed = {event["Test"] for event in events
                   if event.get("Action") == "pass" and "Test" in event}
-        assert len(passed) >= 2, "Both success and non-success HTTP behavior need tests"
+        assert passed, "No passing Go test was discovered"
         verify_go_lifetime(args.root, environment)
         for old, new in (
             ("destination, body, 0600", "destination, append(body, '!'), 0600"),
@@ -241,6 +260,8 @@ def main():
                 case=args.case,
             )
     check_files(args.root, expected, args.case)
+    if args.workspace is not None:
+        check_workspace(args.workspace, args.root, supporting)
     print(f"OPERATION_CONTRACT: {args.case} passed")
 
 

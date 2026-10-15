@@ -17,6 +17,165 @@ from operation_contract import check_files, check_mutation, digest, main, rust_r
 
 
 class ScopeTests(unittest.TestCase):
+    def test_go_cleanup_registered_before_server_creation(self):
+        replay, spec, case = self.go_case()
+        with tempfile.TemporaryDirectory(prefix="go-early-cleanup-") as temporary:
+            root = Path(temporary)
+            replay.materialize(spec, case, root)
+            path = root / "work" / "client_test.go"
+            text = path.read_text(encoding="utf-8")
+            text, count = re.subn(
+                r"(func Test\w+\(t \*testing.T\) \{)",
+                r"\1\n var servers []*httptest.Server\n t.Cleanup(func() { for _, s := range servers { s.Close() } })",
+                text,
+            )
+            self.assertEqual(2, count)
+            text = text.replace("t.Cleanup(server.Close)", "servers = append(servers, server)").replace(
+                "defer server.Close()", "servers = append(servers, server)"
+            )
+            path.write_text(text, encoding="utf-8")
+            replay.run_graders(case, root)
+
+    def test_go_single_table_driven_test_passes_all_mutations(self):
+        replay, spec, case = self.go_case()
+        with tempfile.TemporaryDirectory(prefix="go-table-test-") as temporary:
+            root = Path(temporary)
+            replay.materialize(spec, case, root)
+            path = root / "work" / "client_test.go"
+            path.write_text('''package transfer
+import ("context"; "net/http"; "net/http/httptest"; "os"; "path/filepath"; "testing")
+func TestDownload(t *testing.T) {
+    for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+        server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            w.WriteHeader(status); _, _ = w.Write([]byte("hello"))
+        }))
+        defer server.Close()
+        destination := filepath.Join(t.TempDir(), "response.txt")
+        err := Download(context.Background(), server.URL, destination)
+        if status == http.StatusOK {
+            body, readErr := os.ReadFile(destination)
+            if err != nil || readErr != nil || string(body) != "hello" { t.Fatal(err, readErr, string(body)) }
+        } else {
+            if err == nil { t.Fatal("expected failure") }
+            if _, err := os.Stat(destination); !os.IsNotExist(err) { t.Fatal("unexpected destination") }
+        }
+    }
+}
+''', encoding="utf-8")
+            replay.run_graders(case, root)
+
+    def test_go_destination_must_use_owned_cleaned_directory(self):
+        replay, spec, case = self.go_case()
+        with tempfile.TemporaryDirectory(prefix="go-directory-ownership-") as temporary:
+            root = Path(temporary)
+            replay.materialize(spec, case, root)
+            path = root / "work" / "client_test.go"
+            original = path.read_text(encoding="utf-8")
+            # A private test scratch path safely reproduces the shared fixed-path shape.
+            shared = root / "shared"
+            shared.mkdir()
+            for directory in ('os.Getenv("EVAL_SHARED_DIRECTORY") /* TempDir() */',
+                              'func() string { _ = t.TempDir(); return os.Getenv("EVAL_SHARED_DIRECTORY") }()'):
+                with self.subTest(directory=directory):
+                    source = original.replace("t.TempDir()", directory).replace(
+                        '"response.txt"', 't.Name()+".txt"'
+                    ).replace(
+                        "if err := Download(",
+                        "t.Cleanup(func() { _ = os.Remove(destination) })\n\tif err := Download(",
+                    )
+                    path.write_text(source, encoding="utf-8")
+                    environment = dict(os.environ, GOPROXY="off", GOSUMDB="off",
+                                       EVAL_SHARED_DIRECTORY=str(shared))
+                    native = subprocess.run(
+                        ["go", "test", "-json", "-count=1", "./..."], cwd=root / "work",
+                        env=environment, capture_output=True, text=True, timeout=120,
+                    )
+                    self.assertEqual(0, native.returncode, native.stdout + native.stderr)
+                    output = StringIO()
+                    with redirect_stdout(output), self.assertRaises(AssertionError):
+                        verify_go_lifetime(root / "work", environment)
+                    self.assertIn("GO_DIRECTORY_LIFETIME:", output.getvalue())
+
+    def test_operation_grader_preserves_workspace_root_and_support_files(self):
+        replay, spec, _ = self.go_case()
+        cases = [case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+                 if case["name"].startswith(("Repair an existing", "Retain a correct failing"))]
+        for case in cases:
+            with self.subTest(case=case["name"]), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                replay.run_graders(case, root)
+                for name in ("unrelated.txt", "target/extra.py", "__pycache__/hidden.py"):
+                    path = root / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("unauthorized")
+                    with self.subTest(path=name), self.assertRaises(AssertionError):
+                        replay.run_graders(case, root)
+                    path.unlink()
+                support = root / ".eval" / "authenticated_artifacts.py"
+                original = support.read_bytes()
+                for data in (original + b"\n# changed\n", None):
+                    if data is None:
+                        support.unlink()
+                    else:
+                        support.write_bytes(data)
+                    with self.subTest(support=data is None), self.assertRaises(AssertionError):
+                        replay.run_graders(case, root)
+                    support.write_bytes(original)
+
+    def test_operation_rechecks_workspace_after_test_execution(self):
+        replay, spec, _ = self.go_case()
+        cases = [case for case in yaml.safe_load(spec.read_text(encoding="utf-8"))["stimuli"]
+                 if case["name"].startswith(("Repair an existing", "Retain a correct failing"))]
+        for case in cases:
+            for name in ("unrelated.txt", ".eval/authenticated_artifacts.py"):
+                with self.subTest(case=case["name"], path=name), tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    replay.materialize(spec, case, root)
+                    # Load the real parsed CLI contract, but inject the execution-time mutation.
+                    command = next(g["config"]["command"] for g in case["graders"] if g["type"] == "run-command")
+                    options = command.split('})" ', 1)[1]
+                    import shlex
+                    def execute(*args, **kwargs):
+                        (root / name).write_text("changed by test execution")
+                        return ""
+                    previous = Path.cwd()
+                    try:
+                        os.chdir(root)
+                        with patch.object(sys, "argv", ["operation_contract.py", *shlex.split(options)]), patch(
+                            "operation_contract.command", side_effect=execute
+                        ), patch("operation_contract.check_mutation"):
+                            with self.assertRaisesRegex(AssertionError, "Workspace supporting inputs changed"):
+                                main()
+                    finally:
+                        os.chdir(previous)
+
+    def test_go_mkdirtemp_cleanup_is_required(self):
+        replay, spec, case = self.go_case()
+        for cleaned in (True, False):
+            with self.subTest(cleaned=cleaned), tempfile.TemporaryDirectory(prefix="go-mkdirtemp-") as temporary:
+                root = Path(temporary)
+                replay.materialize(spec, case, root)
+                path = root / "work" / "client_test.go"
+                source = path.read_text(encoding="utf-8")
+                source = source.replace(
+                    'destination := filepath.Join(t.TempDir(), "response.txt")',
+                    'directory, err := os.MkdirTemp(os.Getenv("EVAL_SHARED_DIRECTORY"), "owned-")\n'
+                    'if err != nil { t.Fatal(err) }\n'
+                    + ('defer os.RemoveAll(directory)\n' if cleaned else '')
+                    + 'destination := filepath.Join(directory, "response.txt")',
+                )
+                path.write_text(source, encoding="utf-8")
+                environment = dict(os.environ, GOPROXY="off", GOSUMDB="off",
+                                   EVAL_SHARED_DIRECTORY=str(root))
+                if cleaned:
+                    verify_go_lifetime(root / "work", environment)
+                else:
+                    output = StringIO()
+                    with redirect_stdout(output), self.assertRaises(AssertionError):
+                        verify_go_lifetime(root / "work", environment)
+                    self.assertIn("GO_DIRECTORY_LIFETIME: directory not cleaned", output.getvalue())
+
     @staticmethod
     def go_case():
         suite = Path(__file__).resolve().parents[1]
@@ -134,7 +293,7 @@ class ScopeTests(unittest.TestCase):
             replay.materialize(spec, case, root)
             helper = root / ".eval" / "go_server_lifetime.go"
             helper.write_bytes(helper.read_bytes() + b"\n// changed\n")
-            with self.assertRaisesRegex(AssertionError, "Go lifetime verifier changed"):
+            with self.assertRaisesRegex(AssertionError, "Workspace supporting inputs changed"):
                 replay.run_graders(case, root)
 
     def test_mutation_copy_preserves_other_languages_target_directories(self):

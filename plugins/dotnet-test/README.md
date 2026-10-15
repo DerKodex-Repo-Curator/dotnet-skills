@@ -48,11 +48,18 @@ or coverage limitation, never as zero tests or successful execution.
 
 The Go HTTP eval checks server lifetimes in a separate, instrumented replay copy,
 not by searching for one cleanup call. An authenticated standard-library Go AST
-probe tracks each server's listener until its owning test finishes. Direct closes,
-deferred callbacks, subtest owners and helpers accepting `testing.TB` are supported;
+probe registers verification at test/subtest entry, tracks every server listener,
+and checks that destinations use freshly created temporary directories removed by
+the end of user cleanup. This accepts cleanup registered before resource creation.
+Direct closes, deferred callbacks, subtest owners and helpers accepting `testing.TB` are supported;
 factory helpers without a standard testing-owner parameter are reported as
 unsupported by this fixture probe. This calibration does not modify delivered tests
 or expose a new public analysis tool.
+Single-function table-driven tests are accepted: coverage is established by the
+HTTP/body/destination mutations, not a minimum test-function count.
+Operation graders authenticate the full workspace and staged supporting inputs
+both before and after execution; permitted edits and generated outputs remain
+restricted to the operation's `work` directory.
 
 ### Test execution
 

@@ -146,6 +146,10 @@ task, not raw test counts or fewer tool calls.
 
 Offline replay honors each grader's declared timeout, using the production
 fallbacks of 60 seconds for program graders and 30 seconds for command graders.
+Grader subprocesses are isolated in a POSIX process group or a Windows job object.
+Timeouts and interruptions terminate descendants before replay returns; ordinary
+exit codes and failure output remain visible. The Windows bootstrap waits until
+job assignment succeeds before launching grader code.
 Invalid or expired budgets fail rather than silently extending a golden run.
 
 The composition command accepts `plan`, `missing-dependency`, `migration`,

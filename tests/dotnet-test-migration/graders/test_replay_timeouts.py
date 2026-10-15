@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -14,6 +15,70 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class ReplayTimeoutTests(unittest.TestCase):
+    def test_timeout_stops_descendants_before_late_workspace_writes(self):
+        with tempfile.TemporaryDirectory(prefix="timeout-tree-") as directory:
+            root = Path(directory)
+            (root / "grandchild.py").write_text(
+                "from pathlib import Path\nimport time\n"
+                "Path('started').write_text('ready')\ntime.sleep(2)\n"
+                "Path('late-write').write_text('escaped')\n", encoding="utf-8",
+            )
+            (root / "child.py").write_text(
+                "import subprocess, sys, time\n"
+                "subprocess.Popen([sys.executable, 'grandchild.py'], "
+                "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "time.sleep(10)\n", encoding="utf-8",
+            )
+            (root / "parent.py").write_text(
+                "import subprocess, sys, time\n"
+                "subprocess.Popen([sys.executable, 'child.py'], "
+                "stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "time.sleep(10)\n", encoding="utf-8",
+            )
+            for kind in ("program", "run-command"):
+                config = {"timeout": "1s"}
+                if kind == "program":
+                    config.update(program=sys.executable, args=["parent.py"])
+                else:
+                    config["command"] = f'"{sys.executable}" parent.py'
+                with self.subTest(kind=kind), self.assertRaises(subprocess.TimeoutExpired):
+                    replay.run_graders({"graders": [{"type": kind, "config": config}]}, root)
+                self.assertTrue((root / "started").exists(), "Child did not start: invalid timeout control")
+                time.sleep(2)
+                self.assertFalse((root / "late-write").exists(), "Timed-out descendant wrote afterward")
+                (root / "started").unlink()
+
+    def test_exit_codes_and_interrupt_cleanup_remain_observable(self):
+        with tempfile.TemporaryDirectory(prefix="replay-exit-") as directory:
+            root = Path(directory)
+            result = replay.run_command(
+                [sys.executable, "-c", "import sys;print('failure detail');sys.exit(7)"],
+                cwd=root, timeout=5, text=True, encoding="utf-8",
+            )
+            self.assertEqual(7, result.returncode)
+            self.assertIn("failure detail", result.stdout)
+            original = subprocess.Popen.communicate
+            interrupted = False
+            def interrupt(process, *args, **kwargs):
+                nonlocal interrupted
+                if not interrupted:
+                    interrupted = True
+                    try:
+                        return original(process, *args, **dict(kwargs, timeout=0.5))
+                    except subprocess.TimeoutExpired:
+                        raise KeyboardInterrupt
+                return original(process, *args, **kwargs)
+            with patch.object(subprocess.Popen, "communicate", interrupt), self.assertRaises(KeyboardInterrupt):
+                replay.run_command(
+                    [sys.executable, "-c",
+                     "from pathlib import Path;import time;"
+                     "Path('started').write_text('ready');time.sleep(2);Path('late').write_text('escaped')"],
+                    cwd=root, timeout=10, text=True, encoding="utf-8",
+                )
+            self.assertTrue((root / "started").exists())
+            time.sleep(2)
+            self.assertFalse((root / "late").exists())
+
     def configs(self):
         return (
             ("program", {"program": sys.executable,
@@ -54,14 +119,14 @@ console.log(JSON.stringify({
                 for value, seconds in ((None, default), ("1m", 60), ("3m", 180),
                                        ("4m", 240), ("250ms", 0.25)):
                     with self.subTest(kind=kind, value=value), patch.object(
-                        replay.subprocess, "run"
+                        replay, "run_command"
                     ) as run:
                         run.return_value = subprocess.CompletedProcess([], 0, '{"passed": true}', "")
                         replay.run_graders({"graders": [{
                             "type": kind, "config": dict(base, timeout=value),
                         }]}, Path(directory))
                         self.assertEqual(seconds, run.call_args.kwargs["timeout"])
-                with patch.object(replay.subprocess, "run") as run:
+                with patch.object(replay, "run_command") as run:
                     run.return_value = subprocess.CompletedProcess([], 0, '{"passed": true}', "")
                     replay.run_graders({"graders": [{"type": kind, "config": base}]}, Path(directory))
                     self.assertEqual(default, run.call_args.kwargs["timeout"])
@@ -71,7 +136,7 @@ console.log(JSON.stringify({
             for kind, base, _ in self.configs():
                 for value in ("0s", "20", -1, "9" * 400 + "d"):
                     with self.subTest(kind=kind, value=value), patch.object(
-                        replay.subprocess, "run"
+                        replay, "run_command"
                     ) as run:
                         with self.assertRaises(ValueError):
                             replay.run_graders({"graders": [{

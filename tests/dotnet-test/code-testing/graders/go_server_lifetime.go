@@ -7,6 +7,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
+	"go/scanner"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -54,12 +55,48 @@ func (v rewriter) Visit(node ast.Node) ast.Visitor {
 	switch node := node.(type) {
 	case *ast.FuncDecl:
 		v.owner = v.testParameter(node.Type.Params)
+		v.enter(node.Body)
 	case *ast.FuncLit:
 		if owner := v.testParameter(node.Type.Params); owner != nil {
 			v.owner = owner
+			v.enter(node.Body)
 		}
 	case *ast.CallExpr:
 		if v.seen[node] {
+			break
+		}
+		selector, selected := node.Fun.(*ast.SelectorExpr)
+		ownedTemp := false
+		if selected && v.owner != nil {
+			id, ok := selector.X.(*ast.Ident)
+			ownedTemp = ok && id.Obj == v.owner.Obj && selector.Sel.Name == "TempDir"
+		}
+		mkdir := v.packageMember(node.Fun, "os", "MkdirTemp")
+		if ownedTemp || mkdir {
+			if v.owner == nil {
+				*v.problems = append(*v.problems, fmt.Errorf("%s: temporary directory has no testing owner", v.files.Position(node.Pos())))
+				return nil
+			}
+			inner := *node
+			v.seen[&inner] = true
+			if mkdir {
+				node.Fun = ast.NewIdent("evalLifetimeMkdirTemp")
+				node.Args = append([]ast.Expr{ast.NewIdent(v.owner.Name)}, node.Args...)
+			} else {
+				*node = ast.CallExpr{Fun: ast.NewIdent("evalLifetimeTempDir"),
+					Args: []ast.Expr{ast.NewIdent(v.owner.Name), &inner}}
+			}
+			*v.count++
+			break
+		}
+		if id, ok := node.Fun.(*ast.Ident); ok && id.Name == "Download" && len(node.Args) == 3 {
+			if v.owner == nil {
+				*v.problems = append(*v.problems, fmt.Errorf("%s: Download has no testing owner", v.files.Position(node.Pos())))
+				return nil
+			}
+			node.Args[2] = &ast.CallExpr{Fun: ast.NewIdent("evalLifetimeDestination"),
+				Args: []ast.Expr{ast.NewIdent(v.owner.Name), node.Args[2]}}
+			*v.count++
 			break
 		}
 		for _, factory := range []string{"NewServer", "NewTLSServer", "NewUnstartedServer"} {
@@ -94,12 +131,25 @@ func (v rewriter) Visit(node ast.Node) ast.Visitor {
 	return v
 }
 
+func (v rewriter) enter(body *ast.BlockStmt) {
+	if body != nil && v.owner != nil {
+		body.List = append([]ast.Stmt{&ast.ExprStmt{X: &ast.CallExpr{
+			Fun: ast.NewIdent("evalLifetimeOwner"), Args: []ast.Expr{ast.NewIdent(v.owner.Name)},
+		}}}, body.List...)
+		*v.count++
+	}
+}
+
 const probe = `
 package %s
 
 import (
     "net"
     "net/http/httptest"
+    "os"
+    "path/filepath"
+    "strings"
+    "sync"
     "sync/atomic"
     "testing"
 )
@@ -115,18 +165,97 @@ func (l *evalLifetimeListener) Close() error {
     return err
 }
 
+type evalLifetimeState struct {
+    sync.Mutex
+    listeners map[*evalLifetimeListener]*httptest.Server
+    locations map[*evalLifetimeListener]string
+    directories []string
+}
+
+var evalLifetimeOwners sync.Map
+
+func evalLifetimeOwner(t testing.TB) *evalLifetimeState {
+    state := &evalLifetimeState{
+        listeners: make(map[*evalLifetimeListener]*httptest.Server),
+        locations: make(map[*evalLifetimeListener]string),
+    }
+    actual, loaded := evalLifetimeOwners.LoadOrStore(t, state)
+    if loaded { return actual.(*evalLifetimeState) }
+    // Registered at owner entry, so this runs after user cleanup (LIFO).
+    t.Cleanup(func() {
+        defer evalLifetimeOwners.Delete(t)
+        state.Lock()
+        defer state.Unlock()
+        for listener, server := range state.listeners {
+            if !listener.closed.Load() {
+                t.Errorf("GO_SERVER_LIFETIME: unclosed server at %%s", state.locations[listener])
+                server.Close()
+            } else {
+                t.Logf("GO_SERVER_LIFETIME: verified %%s", state.locations[listener])
+            }
+        }
+        for _, directory := range state.directories {
+            if _, err := os.Lstat(directory); !os.IsNotExist(err) {
+                t.Errorf("GO_DIRECTORY_LIFETIME: directory not cleaned: %%s (%%v)", directory, err)
+            }
+        }
+    })
+    return state
+}
+
+func evalLifetimeTempDir(t testing.TB, directory string) string {
+    t.Helper()
+    absolute, err := filepath.EvalSymlinks(directory)
+    if err != nil { t.Fatal(err) }
+    absolute, err = filepath.Abs(absolute)
+    if err != nil { t.Fatal(err) }
+    state := evalLifetimeOwner(t)
+    state.Lock()
+    state.directories = append(state.directories, absolute)
+    state.Unlock()
+    return directory
+}
+
+func evalLifetimeMkdirTemp(t testing.TB, directory, pattern string) (string, error) {
+    result, err := os.MkdirTemp(directory, pattern)
+    if err == nil { evalLifetimeTempDir(t, result) }
+    return result, err
+}
+
+func evalLifetimeDestination(t testing.TB, destination string) string {
+    t.Helper()
+    parent, err := filepath.EvalSymlinks(filepath.Dir(destination))
+    if err != nil { t.Fatalf("GO_DIRECTORY_LIFETIME: unresolved destination parent: %%v", err) }
+    parent, err = filepath.Abs(parent)
+    if err != nil { t.Fatal(err) }
+    owned := false
+    evalLifetimeOwners.Range(func(_, value any) bool {
+        state := value.(*evalLifetimeState)
+        state.Lock()
+        defer state.Unlock()
+        for _, directory := range state.directories {
+            relative, err := filepath.Rel(directory, parent)
+            if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative) {
+                owned = true
+                return false
+            }
+        }
+        return true
+    })
+    if !owned { t.Fatalf("GO_DIRECTORY_LIFETIME: destination is outside owned temporary directories: %%s", destination) }
+    t.Log("GO_DIRECTORY_LIFETIME: verified destination")
+    return destination
+}
+
 func evalLifetimeServer(t testing.TB, server *httptest.Server, factory, location string) *httptest.Server {
     t.Helper()
     listener := &evalLifetimeListener{Listener: server.Listener}
     server.Listener = listener
-    t.Cleanup(func() {
-        if !listener.closed.Load() {
-            t.Errorf("GO_SERVER_LIFETIME: unclosed server at %%s", location)
-            server.Close()
-        } else {
-            t.Logf("GO_SERVER_LIFETIME: verified %%s", location)
-        }
-    })
+    state := evalLifetimeOwner(t)
+    state.Lock()
+    state.listeners[listener] = server
+    state.locations[listener] = location
+    state.Unlock()
     switch factory {
     case "NewServer":
         server.Start()
@@ -146,7 +275,32 @@ func run(root string) error {
 	packages := map[string]bool{}
 	for _, filename := range files {
 		fset := token.NewFileSet()
-		tree, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
+		source, err := os.ReadFile(filename)
+		if err != nil {
+			return err
+		}
+		source = bytes.ReplaceAll(source, []byte("\r\n"), []byte("\n"))
+		// Ordinary comment positions become invalid when adding AST wrappers.
+		// Keep compiler/build directives; comments do not prove resource ownership.
+		var scan scanner.Scanner
+		positions := token.NewFileSet()
+		file := positions.AddFile(filename, -1, len(source))
+		scan.Init(file, source, nil, scanner.ScanComments)
+		for {
+			pos, kind, text := scan.Scan()
+			if kind == token.EOF {
+				break
+			}
+			if kind == token.COMMENT && !strings.HasPrefix(text, "//go:") && !strings.HasPrefix(text, "// +build") {
+				start := file.Offset(pos)
+				for i := start; i < start+len(text); i++ {
+					if source[i] != '\n' && source[i] != '\r' {
+						source[i] = ' '
+					}
+				}
+			}
+		}
+		tree, err := parser.ParseFile(fset, filename, source, parser.ParseComments)
 		if err != nil {
 			return err
 		}
@@ -205,7 +359,7 @@ func run(root string) error {
 			return closeErr
 		}
 	}
-	fmt.Printf("GO_SERVER_LIFETIME: instrumented %d factories\n", count)
+	fmt.Printf("GO_RESOURCE_LIFETIME: instrumented %d ownership sites\n", count)
 	return nil
 }
 
